@@ -30,8 +30,8 @@ export function SideNav() {
   const [recipeCount, setRecipeCount] = useState(0);
 
   useEffect(() => {
-    setRecipeCount(loadRecipes().length);
-    const update = () => setRecipeCount(loadRecipes().length);
+    (async () => { const r = await loadRecipes(); setRecipeCount(r.length); })();
+    const update = async () => { const r = await loadRecipes(); setRecipeCount(r.length); };
     window.addEventListener(RECIPE_CHANGE_EVENT, update);
     return () => window.removeEventListener(RECIPE_CHANGE_EVENT, update);
   }, []);
@@ -97,17 +97,6 @@ export function SideNav() {
         })}
       </nav>
 
-      {/* New chat */}
-      <button style={{
-        display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-        padding: "14px 16px", borderRadius: 16,
-        background: "var(--bg)", boxShadow: "var(--shadow-raised)",
-        cursor: "pointer", transition: "all 0.25s ease",
-        border: "none", fontFamily: "inherit", fontSize: 14, fontWeight: 500,
-        color: "var(--accent)", width: "100%", flexShrink: 0, marginTop: 12,
-      }}>
-        ＋ 新对话
-      </button>
     </aside>
   );
 }
@@ -117,8 +106,8 @@ export function BottomNav() {
   const [recipeCount, setRecipeCount] = useState(0);
 
   useEffect(() => {
-    setRecipeCount(loadRecipes().length);
-    const update = () => setRecipeCount(loadRecipes().length);
+    (async () => { const r = await loadRecipes(); setRecipeCount(r.length); })();
+    const update = async () => { const r = await loadRecipes(); setRecipeCount(r.length); };
     window.addEventListener(RECIPE_CHANGE_EVENT, update);
     return () => window.removeEventListener(RECIPE_CHANGE_EVENT, update);
   }, []);

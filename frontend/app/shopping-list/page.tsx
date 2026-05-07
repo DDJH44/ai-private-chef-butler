@@ -17,7 +17,10 @@ export default function ShoppingListPage() {
     const [customTitle, setCustomTitle] = useState("");
     const [customInput, setCustomInput] = useState("");
 
-    const load = useCallback(() => setLists(loadShoppingLists()), []);
+    const load = useCallback(async () => {
+        const data = await loadShoppingLists();
+        setLists(data);
+    }, []);
 
     useEffect(() => {
         load();
@@ -26,14 +29,15 @@ export default function ShoppingListPage() {
         return () => window.removeEventListener(SHOPPING_LIST_CHANGE_EVENT, handler);
     }, [load]);
 
-    const handleToggle = useCallback((listId: string, itemId: string) => {
-        toggleItemChecked(listId, itemId);
-        setLists(loadShoppingLists());
+    const handleToggle = useCallback(async (listId: string, itemId: string) => {
+        await toggleItemChecked(listId, itemId);
+        const data = await loadShoppingLists();
+        setLists(data);
     }, []);
 
-    const handleDelete = useCallback((list: ShoppingList, e: React.MouseEvent) => {
+    const handleDelete = useCallback(async (list: ShoppingList, e: React.MouseEvent) => {
         e.stopPropagation();
-        deleteShoppingList(list.id);
+        await deleteShoppingList(list.id);
         showToast("清单已删除", "success");
     }, []);
 
@@ -54,7 +58,7 @@ export default function ShoppingListPage() {
         navigator.clipboard.writeText(text).then(() => showToast("已复制", "success"));
     }, []);
 
-    const handleCreateList = useCallback(() => {
+    const handleCreateList = useCallback(async () => {
         const lines = customInput.trim().split("\n").filter(Boolean);
         if (lines.length === 0) {
             showToast("请输入至少一种食材", "error");
@@ -100,8 +104,9 @@ export default function ShoppingListPage() {
             status: "pending",
         };
 
-        addShoppingList(list);
-        setLists(loadShoppingLists());
+        await addShoppingList(list);
+        const data = await loadShoppingLists();
+        setLists(data);
         setShowCreate(false);
         setCustomTitle("");
         setCustomInput("");

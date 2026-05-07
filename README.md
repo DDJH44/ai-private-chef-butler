@@ -1,193 +1,158 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/AI-私人厨师-6c5ce7?style=for-the-badge&labelColor=e4e8ed&color=6c5ce7" alt="AI Private Chef Butler" />
-</p>
+# AI 私人厨师 - AI Private Chef Butler
 
-<p align="center">
-  <strong>你的 AI 私人厨师管家 — 智能菜谱推荐 · 食材管理 · 膳食规划</strong>
-</p>
+一个基于 AI 的智能食谱推荐系统，支持图片识别食材并生成个性化菜谱。
 
-<p align="center">
-  <a href="https://github.com/DDJH44/ai-private-chef-butler/stargazers"><img src="https://img.shields.io/github/stars/DDJH44/ai-private-chef-butler?style=social" alt="Stars"></a>
-  <a href="https://github.com/DDJH44/ai-private-chef-butler/network/members"><img src="https://img.shields.io/github/forks/DDJH44/ai-private-chef-butler?style=social" alt="Forks"></a>
-  <a href="https://github.com/DDJH44/ai-private-chef-butler/issues"><img src="https://img.shields.io/github/issues/DDJH44/ai-private-chef-butler?style=social" alt="Issues"></a>
-</p>
+## 功能特性
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white" alt="FastAPI">
-  <img src="https://img.shields.io/badge/Next.js-16-000000?logo=next.js&logoColor=white" alt="Next.js">
-  <img src="https://img.shields.io/badge/LangGraph-0.3-1C3C3C?logo=langchain&logoColor=white" alt="LangGraph">
-  <img src="https://img.shields.io/badge/TypeScript-5.0-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
-  <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
-</p>
+- 🖼️ **图片识别**: 上传食材图片，AI 自动识别食材
+- 💬 **智能对话**: 通过聊天描述需求，获取个性化菜谱推荐
+- 📚 **菜谱管理**: 保存、搜索、管理您的菜谱收藏
+- 🍳 **详细步骤**: 提供详细的烹饪步骤和食材清单
 
-<br>
+## 项目结构
 
-<!-- 视频演示占位 - 替换为你的实际视频链接 -->
-<p align="center">
-  <em>在这里放置演示视频或截图</em>
-</p>
-
-<br>
-
-## 一句话介绍
-
-> **用自然语言和冰箱对话，AI 帮你从食材到上桌全搞定。**
-
-拍一张冰箱照片 → AI 识别食材 → 推荐菜谱 → 生成购物清单 → 规划一周膳食 → 记录烹饪历史，全程对话式交互。
-
-<br>
-
-## 核心功能
-
-| 功能 | 说明 |
-|:---:|:---|
-| 🤖 **AI 对话** | 自然语言描述需求，AI 实时推荐菜谱，支持流式输出 |
-| 📷 **图片识别** | 拍照上传食材，AI 自动识别并推荐可做的菜 |
-| 🧊 **冰箱管理** | 录入食材库存，自动追踪保质期，临期提醒 |
-| 📖 **菜谱收藏** | 一键保存 AI 推荐的菜谱，支持搜索和筛选 |
-| 📅 **膳食规划** | AI 一键生成一周三餐计划，营养数据可视化 |
-| 🛒 **购物清单** | 根据菜谱自动生成购物清单，分类管理 |
-| 🕐 **烹饪历史** | 记录做菜次数、评分和心得，追溯烹饪轨迹 |
-| ⚙️ **个人偏好** | 设置忌口、口味偏好、过敏原，AI 个性化推荐 |
-
-<br>
-
-## 界览
-
-<p align="center">
-  <em>新拟态 2.0 (Neumorphism 2.0) 设计风格 — 柔和光影 · 紫色强调 · 沉浸交互</em>
-</p>
-
-<!-- 在这里放置截图 -->
-<!-- <p align="center">
-  <img src="screenshots/chat.png" width="250" alt="对话">
-  <img src="screenshots/recipe.png" width="250" alt="菜谱">
-  <img src="screenshots/fridge.png" width="250" alt="冰箱">
-</p> -->
-
-<br>
+```
+AI Private Chef Butler/
+├── app/                    # 后端应用 (FastAPI)
+│   ├── api/               # API 路由
+│   │   └── v1/           # API v1 版本
+│   │       ├── chat.py   # 聊天 API
+│   │       ├── oss.py    # 文件上传 API
+│   │       └── recipes.py # 菜谱 API
+│   ├── agents/           # AI 代理
+│   ├── common/           # 通用工具
+│   ├── db/               # 数据库文件
+│   ├── models/           # 数据模型
+│   ├── static/           # 前端构建产物 (生产模式)
+│   └── main.py           # FastAPI 主入口
+├── frontend/              # 前端应用 (Next.js)
+│   ├── app/              # Next.js 页面
+│   ├── components/       # React 组件
+│   ├── lib/              # 工具库
+│   ├── public/           # 静态资源
+│   └── types/            # TypeScript 类型
+├── docs/                  # 项目文档
+├── start-dev.bat          # Windows 开发模式启动脚本
+├── start-dev.ps1          # PowerShell 开发模式启动脚本
+├── start-prod.bat         # Windows 生产模式启动脚本
+└── start-prod.ps1         # PowerShell 生产模式启动脚本
+```
 
 ## 快速开始
 
 ### 环境要求
 
-- Python 3.13+
+- Python 3.12+
 - Node.js 18+
-- [uv](https://docs.astral.sh/uv/) (Python 包管理器)
+- uv (Python 包管理器)
 
-### 1. 克隆项目
+### 开发模式
 
-```bash
-git clone https://github.com/DDJH44/ai-private-chef-butler.git
-cd ai-private-chef-butler
-```
+开发模式下，前端和后端分别运行：
+- 后端 API: http://localhost:8001
+- 前端界面: http://localhost:3000
 
-### 2. 配置环境变量
-
-```bash
-cp .env.example .env  # 或手动创建 .env
-```
-
-```env
-# 豆包大模型 API
-DOUBAO_API_KEY=your_api_key
-DOUBAO_BASE_URL=https://ark.cn-beijing.volces.com/api/v1
-DOUBAO_MODEL_NAME=doubao-seed-code-preview-251028
-
-# 图片搜索 (Pexels)
-PEXELS_API_KEY=your_pexels_key
-
-# 阿里云 OSS (可选)
-OSS_ACCESS_KEY_ID=your_key
-OSS_ACCESS_KEY_SECRET=your_secret
-OSS_ENDPOINT=oss-cn-beijing.aliyuncs.com
-OSS_BUCKET=your_bucket
-```
-
-### 3. 一键启动
-
-**Windows:**
+**Windows (批处理):**
 ```bash
 start-dev.bat
 ```
 
+**Windows (PowerShell):**
+```powershell
+.\start-dev.ps1
+```
+
 **手动启动:**
 ```bash
-# 终端 1: 后端 (端口 8001)
+# 终端 1: 启动后端
 uv run python main.py
 
-# 终端 2: 前端 (端口 3000)
-cd frontend && npm install && npm run dev
+# 终端 2: 启动前端
+cd frontend
+npm run dev
 ```
 
-访问 http://localhost:3000 即可使用。
+### 生产模式
 
-<br>
+生产模式下，前端会被构建为静态文件并由后端服务：
+- 访问地址: http://localhost:8001
 
-## 技术架构
-
+**Windows (批处理):**
+```bash
+start-prod.bat
 ```
-┌─────────────────────────────────────────────┐
-│                  Frontend                    │
-│         Next.js 16 · React 19 · CSS         │
-│          Neumorphism 2.0 Design              │
-└──────────────────┬──────────────────────────┘
-                   │ HTTP
-┌──────────────────▼──────────────────────────┐
-│                  Backend                     │
-│           FastAPI · LangGraph                │
-│      AI Agent · SQLite · OSS Storage         │
-└──────────────────┬──────────────────────────┘
-                   │ API
-┌──────────────────▼──────────────────────────┐
-│              AI Models                       │
-│       豆包 (Doubao) · OpenAI Compatible      │
-└─────────────────────────────────────────────┘
+
+**Windows (PowerShell):**
+```powershell
+.\start-prod.ps1
 ```
+
+**手动构建和启动:**
+```bash
+# 1. 构建前端
+cd frontend
+npm run build:prod
+cd ..
+
+# 2. 启动服务器
+uv run python main.py
+```
+
+## 环境变量
+
+在项目根目录创建 `.env` 文件：
+
+```env
+# 阿里云 OSS 配置 (可选，用于图片存储)
+OSS_ACCESS_KEY_ID=your_access_key_id
+OSS_ACCESS_KEY_SECRET=your_access_key_secret
+OSS_ENDPOINT=your_oss_endpoint
+OSS_BUCKET_NAME=your_bucket_name
+
+# OpenAI API 配置
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_BASE_URL=https://api.openai.com/v1
+```
+
+## 技术栈
 
 ### 后端
-
-| 技术 | 用途 |
-|:---|:---|
-| FastAPI | Web 框架，提供 REST API |
-| LangGraph | AI Agent 编排框架 |
-| SQLAlchemy | ORM，数据持久化 |
-| Aliyun OSS | 图片云存储 |
+- **FastAPI**: 高性能 Python Web 框架
+- **LangChain**: AI 应用开发框架
+- **SQLite**: 轻量级数据库
 
 ### 前端
+- **Next.js**: React 框架
+- **Tailwind CSS**: 实用优先的 CSS 框架
+- **Lucide React**: 图标库
 
-| 技术 | 用途 |
-|:---|:---|
-| Next.js 16 | React 框架，App Router |
-| React 19 | UI 框架 |
-| TypeScript | 类型安全 |
-| Neumorphism 2.0 | 自研设计系统，纯 CSS 实现 |
+## 开发指南
 
-<br>
+### 添加新 API
 
-## 项目结构
+1. 在 `app/api/v1/` 目录下创建新的路由文件
+2. 在 `app/main.py` 中注册路由
 
-```
-.
-├── app/                        # 后端
-│   ├── agents/                 #   AI Agent (LangGraph)
-│   ├── api/v1/                 #   API 路由
-│   ├── common/                 #   通用工具
-│   ├── models/                 #   数据模型
-│   └── main.py                 #   FastAPI 入口
-├── frontend/                   # 前端
-│   ├── app/                    #   页面 (App Router)
-│   ├── components/             #   React 组件
-│   ├── lib/                    #   工具库 & Store
-│   └── types/                  #   TypeScript 类型
-├── main.py                     # 启动入口
-├── pyproject.toml              # Python 依赖
-└── langgraph.json              # LangGraph 配置
-```
+### 添加新组件
 
-<br>
+1. 在 `frontend/components/` 目录下创建新组件
+2. 使用 TypeScript 和 Tailwind CSS
+3. 遵循现有组件的代码风格
+
+## 常见问题
+
+### Q: 为什么看到两个前端网页？
+
+A: 这是因为同时运行了前端开发服务器 (端口 3000) 和后端服务器 (端口 8001)。
+- 开发时使用 http://localhost:3000
+- 生产环境使用 http://localhost:8001
+
+### Q: 如何只运行一个服务？
+
+A: 使用生产模式：
+1. 运行 `start-prod.bat` 或 `.\start-prod.ps1`
+2. 访问 http://localhost:8001
 
 ## 许可证
 
-[MIT](LICENSE) © DDJH44
+MIT License

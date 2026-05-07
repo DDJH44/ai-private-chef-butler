@@ -1,8 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Noto_Sans_SC, Noto_Serif_SC } from "next/font/google";
 import "./globals.css";
-import { SideNav, BottomNav } from "@/components/ResponsiveNav";
-import { ToastContainer } from "@/components/Toast";
+import { ClientLayout } from "@/components/ClientLayout";
 
 const notoSansSC = Noto_Sans_SC({
   variable: "--font-noto-sans-sc",
@@ -32,16 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="zh-CN">
       <body className={`${notoSansSC.variable} ${notoSerifSC.variable} antialiased`}>
-        <div className="h-[100dvh] flex overflow-hidden" style={{ background: "var(--bg)" }}>
-          <SideNav />
-          <main className="flex-1 flex flex-col min-w-0 h-full">
-            <div className="flex-1 min-h-0 overflow-hidden">
-              {children}
-            </div>
-            <BottomNav />
-          </main>
-          <ToastContainer />
-        </div>
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   );

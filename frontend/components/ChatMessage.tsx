@@ -3,12 +3,15 @@
 import { Message } from "@/types/chat";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { memo } from "react";
+import { memo, useState } from "react";
+import { useSpeechSynthesis } from "@/hooks/useSpeechSynthesis";
 
 interface ChatMessageProps {
   message: Message;
   isStreaming?: boolean;
 }
+
+import { apiOrigin, apiPort } from '@/lib/env';
 
 function proxyImageUrl(url: string): string {
   if (!url) return url;
@@ -16,8 +19,49 @@ function proxyImageUrl(url: string): string {
   return `/api/v1/oss/proxy?url=${encodeURIComponent(url)}`;
 }
 
+function getBackendOrigin(): string {
+  if (typeof window === "undefined") return apiOrigin() || "";
+  const base = apiOrigin();
+  if (!base) return "";  // production: same origin
+  return `${window.location.protocol}//${window.location.hostname}:${apiPort()}`;
+}
+
+function rewriteRelativeUrls(markdown: string): string {
+  const origin = getBackendOrigin();
+  if (!origin) return markdown;
+  return markdown.replace(/!\[([^\]]*)\]\(\/api\//g, `![$1](${origin}/api/`);
+}
+
 function stripSaveBlocks(content: string): string {
   return content.replace(/\[SAVE_RECIPE_START\][\s\S]*?\[SAVE_RECIPE_END\]/g, "").trim();
+}
+
+function SpeakButton({ text }: { text: string }) {
+  const { speak, stop, speaking } = useSpeechSynthesis();
+  return (
+    <button
+      onClick={() => (speaking ? stop() : speak(text))}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        padding: "4px 10px",
+        border: "none",
+        borderRadius: 10,
+        background: speaking ? "var(--rose-bg)" : "var(--bg)",
+        color: speaking ? "var(--rose)" : "var(--text-muted)",
+        fontSize: 11,
+        fontWeight: 600,
+        cursor: "pointer",
+        boxShadow: "var(--shadow-raised-xs)",
+        transition: "all 0.25s ease",
+        marginTop: 4,
+      }}
+      title={speaking ? "停止朗读" : "朗读此消息"}
+    >
+      {speaking ? "⏹ 停止" : "🔊 朗读"}
+    </button>
+  );
 }
 
 export const ChatMessage = memo(function ChatMessage({ message, isStreaming }: ChatMessageProps) {
@@ -73,10 +117,11 @@ export const ChatMessage = memo(function ChatMessage({ message, isStreaming }: C
         )}
         <div className="prose-chat">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {rawContent}
+            {rewriteRelativeUrls(rawContent)}
           </ReactMarkdown>
           {isStreaming && <span className="streaming-cursor" />}
         </div>
+        {!isStreaming && rawContent.length > 30 && <SpeakButton text={rawContent} />}
       </div>
     </div>
   );

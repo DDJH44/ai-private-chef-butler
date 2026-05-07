@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Recipe } from "@/types/recipe";
 import { loadRecipes as getRecipesList, RECIPE_CHANGE_EVENT } from "@/lib/recipeStore";
 import { RecipeCard } from "./RecipeCard";
+import { Loading } from "./Loading";
 
 interface RecipePanelProps {
   className?: string;
@@ -15,9 +16,9 @@ export function RecipePanel({ className, onRecipeSelect }: RecipePanelProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const loadRecipes = useCallback(() => {
+  const loadRecipes = useCallback(async () => {
     try {
-      const data = getRecipesList();
+      const data = await getRecipesList();
       setRecipes(data);
     } catch (error) {
       console.error("加载菜谱失败:", error);
@@ -87,14 +88,8 @@ export function RecipePanel({ className, onRecipeSelect }: RecipePanelProps) {
 
       <div style={{ flex: 1, overflowY: "auto", padding: "4px 16px 16px" }}>
         {loading ? (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", textAlign: "center" }}>
-            <div style={{
-              width: 48, height: 48, borderRadius: 16,
-              background: "var(--bg)", boxShadow: "var(--shadow-raised)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              marginBottom: 12, fontSize: 24, animation: "pulse 2s ease infinite",
-            }}>✨</div>
-            <p style={{ fontSize: 14, color: "var(--text-muted)" }}>加载菜谱中...</p>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
+            <Loading text="加载菜谱中..." />
           </div>
         ) : filteredRecipes.length === 0 ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", textAlign: "center", padding: 16 }}>

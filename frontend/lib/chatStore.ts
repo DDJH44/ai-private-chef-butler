@@ -76,12 +76,25 @@ export async function initChat(resumeThreadId?: string): Promise<void> {
         const history = await getChatHistory(state.threadId);
         if (Array.isArray(history) && history.length > 0) {
             state.messages = history.map(
-                (msg: { role: string; content: string }) => ({
-                    id: generateUUID(),
-                    role: (msg.role === "human" ? "user" : msg.role === "ai" ? "assistant" : msg.role) as "user" | "assistant",
-                    content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content),
-                    timestamp: Date.now(),
-                })
+                (msg: { role: string; content: unknown }) => {
+                    let text: string;
+                    if (typeof msg.content === "string") {
+                        text = msg.content;
+                    } else if (Array.isArray(msg.content)) {
+                        text = (msg.content as Array<{type?: string; text?: string}>)
+                            .filter(item => item.type === "text" && item.text)
+                            .map(item => item.text)
+                            .join(" ");
+                    } else {
+                        text = String(msg.content || "");
+                    }
+                    return {
+                        id: generateUUID(),
+                        role: (msg.role === "human" ? "user" : msg.role === "ai" ? "assistant" : msg.role) as "user" | "assistant",
+                        content: text,
+                        timestamp: Date.now(),
+                    };
+                }
             );
         }
     } catch (e) {
@@ -167,6 +180,7 @@ export async function sendMessage(content: string, imageUrl?: string): Promise<v
             () => {
                 const final = state.messages.find((m) => m.id === assistantId);
                 const reply = final?.content || "";
+                window.dispatchEvent(new CustomEvent('autoSpeak', { detail: reply }));
                 if (containsRecipe(reply)) {
                     const parsed = parseAllRecipesFromMessage(reply);
                     if (parsed.length > 0) {
@@ -207,9 +221,13 @@ export function dismissRecipes() {
     notify();
 }
 
-export function confirmSaveRecipes(selected: Recipe[]) {
-    addRecipesBatch(selected);
-    showToast(`已添加 ${selected.length} 道菜品到菜谱栏`, "success");
+export async function confirmSaveRecipes(selected: Recipe[]) {
+    try {
+      await addRecipesBatch(selected);
+      showToast(`已添加 ${selected.length} 道菜品到菜谱栏`, "success");
+    } catch {
+      showToast("保存失败，请重试", "error");
+    }
     state.recipesToSave = null;
     notify();
 }

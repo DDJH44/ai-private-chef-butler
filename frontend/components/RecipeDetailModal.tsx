@@ -6,6 +6,7 @@ import { Recipe } from "@/types/recipe";
 import { proxyImageUrl } from "@/lib/imageUtils";
 import { generateShoppingListFromRecipes } from "@/lib/shoppingListGenerator";
 import { recordView, addCookRecord, loadCookHistory } from "@/lib/historyStore";
+import { deleteRecipe as deleteRecipeFromStore } from "@/lib/recipeStore";
 import { showToast } from "@/components/Toast";
 import { generateUUID } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
@@ -73,6 +74,8 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
   const [showCookModal, setShowCookModal] = useState(false);
   const [cookRating, setCookRating] = useState(5);
   const [cookNotes, setCookNotes] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => { if (recipe) recordView(recipe.id, recipe.title); }, [recipe]);
   useEffect(() => {
@@ -117,10 +120,22 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
     else { handleCopy(); }
   };
 
-  const handleGenerateShoppingList = () => {
-    generateShoppingListFromRecipes([recipe]);
+  const handleGenerateShoppingList = async () => {
+    await generateShoppingListFromRecipes([recipe]);
     showToast(`已为「${recipe.title}」生成购物清单`, "success");
     router.push("/shopping-list");
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    const deleted = await deleteRecipeFromStore(recipe.id);
+    if (deleted) {
+      showToast(`「${recipe.title}」已从菜谱栏移除`, "success");
+      onClose();
+    } else {
+      showToast("删除失败，请重试", "error");
+    }
+    setDeleting(false);
   };
 
   const handleSaveCookRecord = () => {
@@ -175,6 +190,11 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
               onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
             >📤</button>
+            <button onClick={() => setShowDeleteConfirm(true)} style={{ ...circleBtn(), color: "var(--rose)" }}
+              onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
+              onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
+            >🗑</button>
           </div>
         </div>
 
@@ -417,6 +437,63 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
           </button>
         </div>
       </div>
+
+      {/* Delete confirmation modal */}
+      {showDeleteConfirm && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 60,
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
+          background: "rgba(0,0,0,0.25)", backdropFilter: "blur(4px)",
+          animation: "fadeIn 0.2s ease",
+        }} onClick={() => setShowDeleteConfirm(false)}>
+          <div style={{
+            background: "var(--bg)", borderRadius: 24, width: "100%", maxWidth: 380,
+            padding: 24, boxShadow: "var(--shadow-raised-lg)",
+            animation: "scaleIn 0.2s ease both", textAlign: "center",
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{
+              width: 56, height: 56, borderRadius: 18, margin: "0 auto 16px",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              background: "var(--bg)", boxShadow: "var(--shadow-raised)", fontSize: 24,
+            }}>
+              🗑
+            </div>
+            <h3 style={{
+              fontSize: 17, fontWeight: 700, color: "var(--text)", marginBottom: 8,
+              fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif",
+            }}>移除菜谱</h3>
+            <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 24, lineHeight: 1.6 }}>
+              确定要从菜谱栏中移除<br/>「{recipe.title}」吗？<br/>
+              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>此操作可以撤销，你仍然可以通过对话重新获取这道菜谱。</span>
+            </p>
+            <div style={{ display: "flex", gap: 12 }}>
+              <button onClick={() => setShowDeleteConfirm(false)}
+                style={{
+                  flex: 1, padding: "10px 0", borderRadius: 12,
+                  background: "var(--bg)", color: "var(--text-secondary)",
+                  fontSize: 14, fontWeight: 500, border: "none", cursor: "pointer",
+                  boxShadow: "var(--shadow-raised-sm)", transition: "all 0.25s ease",
+                }}
+                onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
+                onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
+              >保留</button>
+              <button onClick={handleDelete} disabled={deleting}
+                style={{
+                  flex: 1, padding: "10px 0", borderRadius: 12,
+                  background: "var(--rose)", color: "#fff",
+                  fontSize: 14, fontWeight: 700, border: "none", cursor: deleting ? "not-allowed" : "pointer",
+                  boxShadow: "var(--shadow-raised-sm)", transition: "all 0.25s ease",
+                  opacity: deleting ? 0.6 : 1,
+                }}
+                onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
+                onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
+              >{deleting ? "删除中..." : "确认移除"}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Cook record modal */}
       {showCookModal && (

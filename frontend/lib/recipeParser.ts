@@ -80,9 +80,9 @@ function parseAllRecipesFromText(content: string): Array<{index: number; content
     ['difficulty', /难度[：:]\s*(简单|中等|困难)/i, v => v.trim()],
     ['cookingTime', /时间[：:]\s*(\d+\s*(?:分钟|小时))/i, v => v.trim()],
     ['score', /评分[：:]\s*(\d+(?:\.\d+)?)/i, v => { const s = parseFloat(v); return s >= 0 && s <= 5 ? s : undefined; }],
-    ['ingredients', /###?\s*(?:食材|所需食材|材料).*?\n([\s\S]*?)(?=###?|$)/i, v => parseList(v)],
-    ['seasonings', /###?\s*(?:调味料|调料).*?\n([\s\S]*?)(?=###?|$)/i, v => parseList(v)],
-    ['steps', /###?\s*(?:步骤|做法|制作步骤|烹饪步骤).*?\n([\s\S]*?)(?=###?|$)/i, v => parseList(v)],
+    ['ingredients', /###?\s*(?:食材(?:清单|列表)?|所需食材|材料(?:清单)?)\s*[：:]?\s*\n([\s\S]*?)(?=###?|$)/i, v => parseList(v)],
+    ['seasonings', /###?\s*(?:调味料|调料)\s*[：:]?\s*\n([\s\S]*?)(?=###?|$)/i, v => parseList(v)],
+    ['steps', /###?\s*(?:制作步骤|烹饪步骤|(?<!\S)步骤|做法)\s*[：:]?\s*\n([\s\S]*?)(?=###?|$)/i, v => parseList(v)],
   ];
 
   const sections = content.split(/(?=^##\s+)/m);
@@ -90,7 +90,13 @@ function parseAllRecipesFromText(content: string): Array<{index: number; content
 
   for (const section of sections) {
     if (!section.trim() || section.trim().length < 50) continue;
-    if (!/(食材|做法|步骤)/.test(section)) continue;
+    const recipeSignals = [
+      /食材(?!选择|搭配|储存|保鲜|技巧|小窍门|购买|挑选)/i,
+      /步骤(?!详解|说明|建议|分析|解析|指南|总结|回顾|补充|注意|关键)/i,
+      /调味料|调料/i,
+      /^\d+\.\s+/m,
+    ];
+    if (recipeSignals.filter(r => r.test(section)).length < 2) continue;
 
     const recipe: Partial<Recipe> = {};
     for (const [key, regex, transform] of extraPatterns) {
@@ -128,7 +134,9 @@ function parseAllRecipesFromText(content: string): Array<{index: number; content
     const imgMatch = content.match(/!\[.*?\]\((https?:\/\/[^)]+)\)/i);
     if (imgMatch) recipe.imageUrl = imgMatch[1];
     recipe.content = content;
-    if (recipe.title) {
+    const hasIngredients = recipe.ingredients && recipe.ingredients.length > 0;
+    const hasSteps = recipe.steps && recipe.steps.length > 0;
+    if (recipe.title && (hasIngredients || hasSteps)) {
       recipes.push({ index: 0, content, recipe });
     }
   }
@@ -190,11 +198,19 @@ export function containsRecipe(content: string): boolean {
   if (content.includes('[SAVE_RECIPE_START]')) return true;
 
   const hasHeaders = /^##\s+/m.test(content);
-  const hasLists = /^[-*•]\s+/m.test(content) || /^\d+\.\s+/m.test(content);
-  if (hasHeaders && hasLists) return true;
+  const hasNumberedList = /^\d+\.\s+/m.test(content);
 
-  const keywords = ['食谱', '菜谱', '做法', '步骤', '食材', '调味料', '烹饪', '制作'];
-  return keywords.filter(k => content.includes(k)).length >= 2;
+  if (hasHeaders && hasNumberedList) {
+    const keywords = ['食谱', '菜谱', '做法', '步骤', '食材', '调味料', '烹饪', '制作'];
+    return keywords.filter(k => content.includes(k)).length >= 3;
+  }
+
+  const hasBullets = /^[-*•]\s+/m.test(content);
+  if (hasHeaders && hasBullets) {
+    return /食材/.test(content) && /步骤/.test(content);
+  }
+
+  return false;
 }
 
 /** 提取菜谱标题 */

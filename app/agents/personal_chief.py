@@ -98,9 +98,9 @@ def _build_preference_context(preference: dict) -> str:
     
     parts = []
     
-    allergies = preference.get("allergies", []) + preference.get("custom_allergies", [])
+    allergies = [a for a in (preference.get("allergies", []) + preference.get("custom_allergies", [])) if a and isinstance(a, str) and a.strip()]
     if allergies:
-        parts.append(f"忌口/过敏源（必须排除）：{', '.join(allergies)}")
+        parts.append(f"🚫 过敏源（严禁使用，违反将危害健康）：{', '.join(allergies)}")
     
     diet_type = preference.get("diet_type", "")
     diet_map = {
@@ -217,14 +217,29 @@ def get_messages(thread_id: str) -> list[dict[str, str]]:
     if not messages:
         return []
     
+    def _extract_text(content) -> str:
+        """从消息内容中提取纯文本，兼容字符串和列表两种格式"""
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts = []
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    parts.append(str(item.get("text", "")))
+                elif isinstance(item, str):
+                    parts.append(item)
+            return " ".join(parts)
+        return str(content)
+
     result = []
     for msg in messages:
-        if not msg.content:
+        text = _extract_text(msg.content)
+        if not text:
             continue
-        
+
         if isinstance(msg, HumanMessage):
-            result.append({"role": "user", "content": msg.content})
+            result.append({"role": "user", "content": text})
         elif isinstance(msg, AIMessage):
-            result.append({"role": "assistant", "content": msg.content})
-    
+            result.append({"role": "assistant", "content": text})
+
     return result

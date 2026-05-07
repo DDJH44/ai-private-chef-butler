@@ -5,7 +5,9 @@ import {useRouter} from "next/navigation";
 import {Recipe} from "@/types/recipe";
 import {RecipeCard} from "@/components/RecipeCard";
 import {RecipeDetailModal} from "@/components/RecipeDetailModal";
-import {loadRecipes, RECIPE_CHANGE_EVENT, searchRecipes} from "@/lib/recipeStore";
+import { Loading } from "@/components/Loading";
+import { showToast } from "@/components/Toast";
+import {loadRecipes, RECIPE_CHANGE_EVENT, deleteRecipesBatch} from "@/lib/recipeStore";
 
 export default function RecipesPage() {
     const router = useRouter();
@@ -13,10 +15,17 @@ export default function RecipesPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
     const [searchFocused, setSearchFocused] = useState(false);
+    const [selectMode, setSelectMode] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [activeTag, setActiveTag] = useState<string | null>(null);
+    const [batchDeleting, setBatchDeleting] = useState(false);
 
-    const loadRecipeList = useCallback(() => {
-        const allRecipes = loadRecipes();
+    const [loading, setLoading] = useState(true);
+
+    const loadRecipeList = useCallback(async () => {
+        const allRecipes = await loadRecipes();
         setRecipes(allRecipes);
+        setLoading(false);
     }, []);
 
     useEffect(() => {
@@ -29,9 +38,48 @@ export default function RecipesPage() {
         return () => window.removeEventListener(RECIPE_CHANGE_EVENT, handleRecipeChange);
     }, [loadRecipeList]);
 
-    const filteredRecipes = searchQuery.trim()
-        ? searchRecipes(searchQuery)
-        : recipes;
+    const allTags = [...new Set(recipes.flatMap(r => r.tags || []))].sort();
+
+    const filteredRecipes = (() => {
+      let result = recipes;
+      if (activeTag) result = result.filter(r => (r.tags || []).includes(activeTag));
+      if (searchQuery.trim()) {
+        const q = searchQuery.trim().toLowerCase();
+        result = result.filter(r => r.title.toLowerCase().includes(q) || r.content.toLowerCase().includes(q));
+      }
+      return result;
+    })();
+
+    const toggleSelect = (id: string) => {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        next.has(id) ? next.delete(id) : next.add(id);
+        return next;
+      });
+    };
+
+    const handleBatchDelete = async () => {
+      if (selectedIds.size === 0) return;
+      setBatchDeleting(true);
+      const ok = await deleteRecipesBatch([...selectedIds]);
+      setBatchDeleting(false);
+      if (ok) {
+        showToast(`已删除 ${selectedIds.size} 道菜谱`, "success");
+        setSelectedIds(new Set());
+        setSelectMode(false);
+        loadRecipeList();
+      } else {
+        showToast("批量删除失败", "error");
+      }
+    };
+
+    const toggleSelectAll = () => {
+      if (selectedIds.size === filteredRecipes.length) {
+        setSelectedIds(new Set());
+      } else {
+        setSelectedIds(new Set(filteredRecipes.map(r => r.id)));
+      }
+    };
 
     return (
         <div style={{
@@ -170,6 +218,61 @@ export default function RecipesPage() {
                         </button>
                     )}
                 </div>
+            {/* Tag filters */}
+            {allTags.length > 0 && (
+              <div style={{
+                padding: "4px 16px 8px", maxWidth: 1280, width: "100%",
+                margin: "0 auto", display: "flex", gap: 6, flexWrap: "wrap",
+              }}>
+                {allTags.map(tag => (
+                  <button key={tag} onClick={() => setActiveTag(activeTag === tag ? null : tag)}
+                    style={{
+                      padding: "5px 12px", borderRadius: 999, border: "none", cursor: "pointer",
+                      fontSize: 11, fontWeight: 600, transition: "all 0.25s ease",
+                      background: activeTag === tag ? "var(--accent)" : "var(--bg)",
+                      color: activeTag === tag ? "#fff" : "var(--text-secondary)",
+                      boxShadow: activeTag === tag ? "var(--shadow-accent)" : "var(--shadow-raised-xs)",
+                    }}
+                  >{tag}</button>
+                ))}
+              </div>
+            )}
+
+            {/* Batch controls */}
+            <div style={{
+              padding: "0 16px 8px", maxWidth: 1280, width: "100%", margin: "0 auto",
+              display: "flex", alignItems: "center", gap: 8,
+            }}>
+              <button onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
+                style={{
+                  padding: "5px 12px", borderRadius: 999, border: "none", cursor: "pointer",
+                  fontSize: 11, fontWeight: 600, transition: "all 0.25s ease",
+                  background: selectMode ? "var(--accent)" : "var(--bg)",
+                  color: selectMode ? "#fff" : "var(--text-secondary)",
+                  boxShadow: selectMode ? "var(--shadow-accent)" : "var(--shadow-raised-xs)",
+                }}
+              >{selectMode ? "退出选择" : "批量管理"}</button>
+              {selectMode && (
+                <>
+                  <button onClick={toggleSelectAll}
+                    style={{
+                      padding: "5px 12px", borderRadius: 999, border: "none", cursor: "pointer",
+                      fontSize: 11, fontWeight: 600, background: "var(--bg)", color: "var(--text-secondary)",
+                      boxShadow: "var(--shadow-raised-xs)",
+                    }}
+                  >{selectedIds.size === filteredRecipes.length ? "取消全选" : "全选"}</button>
+                  {selectedIds.size > 0 && (
+                    <button onClick={handleBatchDelete} disabled={batchDeleting}
+                      style={{
+                        padding: "5px 12px", borderRadius: 999, border: "none", cursor: "pointer",
+                        fontSize: 11, fontWeight: 600, background: "var(--rose)", color: "#fff",
+                        boxShadow: "var(--shadow-raised-xs)", opacity: batchDeleting ? 0.6 : 1,
+                      }}
+                    >{batchDeleting ? "删除中..." : `删除已选 (${selectedIds.size})`}</button>
+                  )}
+                </>
+              )}
+            </div>
             </div>
 
             {/* Content */}
@@ -182,7 +285,11 @@ export default function RecipesPage() {
                 marginLeft: "auto",
                 marginRight: "auto",
             }}>
-                {filteredRecipes.length === 0 ? (
+                {loading ? (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 64 }}>
+                        <Loading text="加载菜谱中..." />
+                    </div>
+                ) : filteredRecipes.length === 0 ? (
                     <div style={{
                         display: "flex",
                         flexDirection: "column",
@@ -231,7 +338,10 @@ export default function RecipesPage() {
                             <RecipeCard
                                 key={recipe.id}
                                 recipe={recipe}
-                                onClick={() => setSelectedRecipe(recipe)}
+                                onClick={selectMode ? undefined : () => setSelectedRecipe(recipe)}
+                                selectMode={selectMode}
+                                selected={selectedIds.has(recipe.id)}
+                                onToggleSelect={() => toggleSelect(recipe.id)}
                             />
                         ))}
                     </div>

@@ -34,6 +34,8 @@ export interface Recipe {
   createdAt: number;
   /** 更新时间戳 */
   updatedAt: number;
+  /** 标签（如：家常、川菜、快手） */
+  tags?: string[];
   /** 是否展开显示（UI 状态） */
   isExpanded?: boolean;
 }

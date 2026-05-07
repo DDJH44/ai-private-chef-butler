@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { uploadImageToOss } from "@/lib/api";
+import { Loading } from "@/components/Loading";
 import {
   getChatState, subscribeToChat, initChat, newChat,
   sendMessage, dismissRecipes, confirmSaveRecipes,
@@ -70,13 +71,7 @@ function Home() {
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
         <Header messagesLen={0} onNewChat={newChat} />
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ display: "flex", gap: 8 }}>
-            <div className="typing-dot" />
-            <div className="typing-dot" />
-            <div className="typing-dot" />
-          </div>
-        </div>
+        <Loading fullPage text="加载中..." />
       </div>
     );
   }

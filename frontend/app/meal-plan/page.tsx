@@ -7,7 +7,7 @@ import {getOrCreateWeekPlan, removeMealFromPlan, updateMealInPlan, MEAL_PLAN_CHA
 import {generateShoppingListFromRecipes} from "@/lib/shoppingListGenerator";
 import {showToast} from "@/components/Toast";
 import {generateMealPlan} from "@/lib/api";
-import {loadPreference} from "@/lib/preferenceStore";
+import { getPreference } from "@/lib/api";
 import {loadIngredients} from "@/lib/ingredientStore";
 
 /* ---------- inline style tokens ---------- */
@@ -534,7 +534,7 @@ export default function MealPlanPage() {
                 week_end: plan.week_end,
                 mode: genMode,
                 requirements: genRequirements || undefined,
-                preference: loadPreference() as unknown as Record<string, unknown>,
+                preference: getPreference() as unknown as Record<string, unknown>,
                 inventory,
             });
 
@@ -572,7 +572,7 @@ export default function MealPlanPage() {
         }
     }, [plan, genMode, genRequirements, refreshPlan]);
 
-    const handleGenerateWeekShoppingList = useCallback(() => {
+    const handleGenerateWeekShoppingList = useCallback(async () => {
         if (!plan) return;
         const recipesWithIngredients: { id: string; title: string; content: string; ingredients: string[]; createdAt: number; updatedAt: number }[] = [];
         for (const day of plan.days) {
@@ -594,7 +594,7 @@ export default function MealPlanPage() {
             showToast("本周还没有安排带食材的菜品，请先生成膳食计划", "info");
             return;
         }
-        generateShoppingListFromRecipes(recipesWithIngredients);
+        await generateShoppingListFromRecipes(recipesWithIngredients);
         showToast(`已为本周 ${recipesWithIngredients.length} 道菜生成购物清单`, "success");
         router.push("/shopping-list");
     }, [plan, router]);

@@ -1,6 +1,11 @@
-import {ShoppingList, ShoppingListStore, ShoppingListItem} from '@/types/shoppingList';
-
-const STORAGE_KEY = 'ai_chef_shopping_lists';
+import { ShoppingList } from '@/types/shoppingList';
+import {
+    fetchShoppingLists,
+    createShoppingList as apiCreate,
+    updateShoppingList as apiUpdate,
+    deleteShoppingList as apiDelete,
+    toggleShoppingItem as apiToggle,
+} from '@/lib/shoppingListApi';
 
 export const SHOPPING_LIST_CHANGE_EVENT = 'shoppingListChange';
 
@@ -10,56 +15,52 @@ function notifyChange() {
     }
 }
 
-export function loadShoppingLists(): ShoppingList[] {
+export async function loadShoppingLists(): Promise<ShoppingList[]> {
     try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (!stored) return [];
-        const store: ShoppingListStore = JSON.parse(stored);
-        return store.shopping_lists || [];
+        return await fetchShoppingLists();
     } catch (error) {
         console.error('加载购物清单失败:', error);
         return [];
     }
 }
 
-export function saveShoppingLists(lists: ShoppingList[]): void {
+export async function addShoppingList(list: ShoppingList): Promise<ShoppingList> {
+    const created = await apiCreate({
+        source_recipes: list.source_recipes,
+        source_recipe_names: list.source_recipe_names,
+        items: list.items,
+    });
+    notifyChange();
+    return created;
+}
+
+export async function updateShoppingList(id: string, updates: Partial<ShoppingList>): Promise<void> {
     try {
-        const store: ShoppingListStore = {shopping_lists: lists, lastUpdated: Date.now()};
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+        await apiUpdate(id, {
+            source_recipe_names: updates.source_recipe_names,
+            items: updates.items,
+            status: updates.status,
+        });
+        notifyChange();
     } catch (error) {
-        console.error('保存购物清单失败:', error);
+        console.error('更新购物清单失败:', error);
     }
 }
 
-export function addShoppingList(list: ShoppingList): void {
-    const lists = loadShoppingLists();
-    lists.unshift(list);
-    saveShoppingLists(lists);
-    notifyChange();
+export async function deleteShoppingList(id: string): Promise<void> {
+    try {
+        await apiDelete(id);
+        notifyChange();
+    } catch (error) {
+        console.error('删除购物清单失败:', error);
+    }
 }
 
-export function updateShoppingList(id: string, updates: Partial<ShoppingList>): void {
-    const lists = loadShoppingLists();
-    const index = lists.findIndex((l) => l.id === id);
-    if (index === -1) return;
-    lists[index] = {...lists[index], ...updates};
-    saveShoppingLists(lists);
-    notifyChange();
-}
-
-export function deleteShoppingList(id: string): void {
-    const lists = loadShoppingLists().filter((l) => l.id !== id);
-    saveShoppingLists(lists);
-    notifyChange();
-}
-
-export function toggleItemChecked(listId: string, itemId: string): void {
-    const lists = loadShoppingLists();
-    const list = lists.find((l) => l.id === listId);
-    if (!list) return;
-    const item = list.items.find((i) => i.id === itemId);
-    if (!item) return;
-    item.checked = !item.checked;
-    saveShoppingLists(lists);
-    notifyChange();
+export async function toggleItemChecked(listId: string, itemId: string): Promise<void> {
+    try {
+        await apiToggle(listId, itemId);
+        notifyChange();
+    } catch (error) {
+        console.error('切换项目勾选失败:', error);
+    }
 }

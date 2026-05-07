@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.v1 import chat, oss, recipes, meal_plan
+from app.api.v1 import chat, oss, recipes, meal_plan, shopping, speech
 from app.common.logger import setup_logging
 
 setup_logging()
@@ -26,6 +26,8 @@ app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
 app.include_router(oss.router, prefix="/api/v1", tags=["oss"])
 app.include_router(recipes.router, prefix="/api/v1/recipes", tags=["recipes"])
 app.include_router(meal_plan.router, prefix="/api/v1", tags=["meal-plan"])
+app.include_router(shopping.router, prefix="/api/v1/shopping", tags=["shopping"])
+app.include_router(speech.router, prefix="/api/v1", tags=["speech"])
 
 @app.get("/health")
 async def health():
@@ -52,4 +54,4 @@ async def serve_frontend(path: str):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host="127.0.0.1", port=8001, reload=True)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8001, reload=True)

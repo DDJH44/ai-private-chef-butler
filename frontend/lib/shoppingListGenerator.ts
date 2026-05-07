@@ -80,9 +80,9 @@ export function mergeIngredients(ingredientLists: string[][]): MergedIngredient[
 
 const IGNORE_NAMES = new Set(['盐', '糖', '味精', '鸡精', '料酒', '生抽', '老抽', '醋', '胡椒', '花椒', '姜', '蒜', '葱', '油', '淀粉']);
 
-export function generateShoppingListFromRecipes(
+export async function generateShoppingListFromRecipes(
     recipes: Recipe[],
-): ShoppingList {
+): Promise<ShoppingList> {
     const inventory = loadIngredients();
 
     const ingredientLists = recipes.map(r => r.ingredients || []);
@@ -122,6 +122,5 @@ export function generateShoppingListFromRecipes(
         status: 'pending',
     };
 
-    addShoppingList(list);
-    return list;
+    return await addShoppingList(list);
 }

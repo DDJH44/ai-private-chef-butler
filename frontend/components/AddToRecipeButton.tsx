@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { addRecipe } from "@/lib/recipeStore";
-import { addRecipeToPanel } from "@/lib/api";
 import { parseRecipeFromMessage } from "@/lib/recipeParser";
 
 interface AddToRecipeButtonProps {
@@ -22,14 +21,13 @@ export function AddToRecipeButton({ messageContent, onSuccess, onError }: AddToR
     try {
       const recipeData = parseRecipeFromMessage(messageContent);
       if (!recipeData || !recipeData.title) throw new Error("无法识别菜谱信息");
-      const newRecipe = addRecipe({
+      const newRecipe = await addRecipe({
         title: recipeData.title, content: recipeData.content || messageContent,
         imageUrl: recipeData.imageUrl, difficulty: recipeData.difficulty, cookingTime: recipeData.cookingTime,
         ingredients: recipeData.ingredients, seasonings: recipeData.seasonings, steps: recipeData.steps,
         score: recipeData.score, reason: recipeData.reason, isExpanded: false
       });
-      try { await addRecipeToPanel({ title: newRecipe.title, content: newRecipe.content, image_url: newRecipe.imageUrl, difficulty: newRecipe.difficulty, cooking_time: newRecipe.cookingTime }); }
-      catch (apiError) { console.warn("后端同步失败:", apiError); }
+      if (!newRecipe) throw new Error("保存失败");
       setAdded(true); onSuccess?.();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "添加失败";

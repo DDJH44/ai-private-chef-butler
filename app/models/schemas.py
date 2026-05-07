@@ -44,6 +44,7 @@ class RecipeCreate(BaseModel):
     cooking_time: Optional[str] = None
     ingredients: Optional[List[str]] = []
     seasonings: Optional[List[str]] = []
+    tags: Optional[List[str]] = []
     score: Optional[float] = None
     reason: Optional[str] = None
     source_url: Optional[str] = None
@@ -58,6 +59,7 @@ class RecipeUpdate(BaseModel):
     cooking_time: Optional[str] = None
     ingredients: Optional[List[str]] = None
     seasonings: Optional[List[str]] = None
+    tags: Optional[List[str]] = None
     score: Optional[float] = None
     reason: Optional[str] = None
     source_url: Optional[str] = None
@@ -74,6 +76,7 @@ class RecipeResponse(BaseModel):
     cooking_time: Optional[str] = None
     ingredients: Optional[List[str]] = []
     seasonings: Optional[List[str]] = []
+    tags: Optional[List[str]] = []
     score: Optional[float] = None
     reason: Optional[str] = None
     source_url: Optional[str] = None
@@ -97,3 +100,57 @@ class RecipeOperationResponse(BaseModel):
     message: Optional[str] = None
     recipe: Optional[RecipeResponse] = None
     error: Optional[str] = None
+
+
+# ========================================
+# 购物清单管理相关模型
+# ========================================
+
+class ShoppingListItemCreate(BaseModel):
+    ingredient_name: str
+    required_amount: float = 1
+    unit: str = "份"
+    in_stock: bool = False
+    stock_amount: float = 0
+    checked: bool = False
+
+
+class ShoppingListCreate(BaseModel):
+    source_recipes: List[str] = []
+    source_recipe_names: List[str] = []
+    items: List[ShoppingListItemCreate]
+
+
+class ShoppingListUpdate(BaseModel):
+    source_recipe_names: Optional[List[str]] = None
+    items: Optional[List[ShoppingListItemCreate]] = None
+    status: Optional[str] = None
+
+
+class ShoppingListItemResponse(BaseModel):
+    id: str
+    ingredient_name: str
+    required_amount: float
+    unit: str
+    in_stock: bool
+    stock_amount: float
+    checked: bool
+
+
+class ShoppingListResponse(BaseModel):
+    id: str
+    created_at: int
+    source_recipes: List[str]
+    source_recipe_names: List[str]
+    items: List[ShoppingListItemResponse]
+    status: str
+
+
+class ShoppingListListResponse(BaseModel):
+    shopping_lists: List[ShoppingListResponse]
+    total: int
+
+
+class ShoppingListOperationResponse(BaseModel):
+    success: bool
+    message: Optional[str] = None

@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Body
 from app.models.schemas import RecipeCreate, RecipeUpdate, RecipeResponse, RecipeListResponse, RecipeOperationResponse
 import sqlite3
 import json
 from datetime import datetime
+from typing import List
 import uuid
 from app.common.logger import logger
 from typing import Optional
@@ -24,7 +25,7 @@ def get_db():
     finally:
         conn.close()
 
-_JSON_FIELDS = {"ingredients", "seasonings"}
+_JSON_FIELDS = {"ingredients", "seasonings", "tags"}
 _BOOL_FIELDS = {"is_expanded"}
 
 
@@ -69,6 +70,7 @@ def init_db():
                     score REAL,
                     reason TEXT,
                     source_url TEXT,
+                    tags TEXT DEFAULT '[]',
                     is_expanded INTEGER DEFAULT 0,
                     created_at INTEGER NOT NULL,
                     updated_at INTEGER NOT NULL
@@ -98,15 +100,16 @@ async def create_recipe(recipe: RecipeCreate):
                 INSERT INTO recipes (
                     id, thread_id, title, content, image_url,
                     difficulty, cooking_time, ingredients,
-                    seasonings, score, reason, source_url,
+                    seasonings, tags, score, reason, source_url,
                     is_expanded, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 recipe_id, None,
                 recipe.title, recipe.content, recipe.image_url,
                 recipe.difficulty, recipe.cooking_time,
                 json.dumps(recipe.ingredients or []),
                 json.dumps(recipe.seasonings or []),
+                json.dumps(recipe.tags or []),
                 recipe.score, recipe.reason, recipe.source_url,
                 0, now, now
             ))
@@ -147,6 +150,22 @@ async def get_recipes(
         return {"recipes": [row_to_dict(row) for row in rows], "total": total}
     except Exception as e:
         logger.error(f"获取菜谱列表失败：{e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/batch-delete", response_model=RecipeOperationResponse)
+async def batch_delete_recipes(ids: List[str] = Body(...)):
+    """批量删除菜谱"""
+    try:
+        with get_db() as conn:
+            placeholders = ','.join(['?'] * len(ids))
+            conn.execute(f'DELETE FROM recipes WHERE id IN ({placeholders})', ids)
+            affected = conn.total_changes
+            conn.commit()
+        logger.info(f"批量删除菜谱成功，删除数量：{affected}")
+        return {'success': True, 'message': f'已删除 {affected} 道菜谱'}
+    except Exception as e:
+        logger.error(f"批量删除菜谱失败：{e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

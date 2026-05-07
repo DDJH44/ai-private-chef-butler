@@ -2,13 +2,29 @@
  * API 调用封装
  */
 import { Recipe, AddRecipeRequest, RecipeListResponse, RecipeOperationResponse } from '@/types/recipe';
-import { loadPreference } from './preferenceStore';
+import { loadPreference, PREFERENCE_CHANGE_EVENT } from './preferenceStore';
 import { loadIngredients } from './ingredientStore';
 import { loadCookHistory } from './historyStore';
+import type { Preference } from '@/types/preference';
 
+import { apiPath } from './env';
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
-const INVENTORY_KEYWORDS = ["冰箱", "食材", "有什么", "库存", "现有", "家里有", "还有什么"];
+// Preference cache — read once, refresh only on explicit change
+let _prefCache: Preference | null = null;
+let _prefDirty = true;
+if (typeof window !== 'undefined') {
+  window.addEventListener(PREFERENCE_CHANGE_EVENT, () => { _prefDirty = true; });
+}
+export function getPreference(): Preference {
+  if (_prefDirty || !_prefCache) {
+    _prefCache = loadPreference();
+    _prefDirty = false;
+  }
+  return _prefCache;
+}
+
+const INVENTORY_KEYWORDS = ["冰箱", "食材", "有什么", "库存", "现有", "家里有", "还有什么", "看看冰箱", "还剩什么", "还有哪些", "推荐菜", "吃什么", "能做", "做菜", "推荐"];
 
 /** 通用 JSON API 请求封装 */
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -66,14 +82,36 @@ export async function streamChat(
             ? loadIngredients().map((i) => ({name: i.name, quantity: i.quantity, unit: i.unit, status: i.status}))
             : undefined;
 
-        // 烹饪历史 — 高分菜作为偏好参考
+        // 记忆学习 — 根据烹饪历史个性化推荐
         const cookHistory = loadCookHistory();
-        const favoriteDishes = [...new Set(
-            cookHistory.filter(c => c.rating >= 4).map(c => c.recipe_name)
+        const parts: string[] = [];
+        // 喜爱的菜（≥4星）
+        const favorites = [...new Set(
+          cookHistory.filter(c => c.rating >= 4).map(c => c.recipe_name)
+        )].slice(0, 8);
+        if (favorites.length > 0) {
+          parts.push(`用户喜爱的菜品：${favorites.join('、')}。优先推荐类似风味、烹饪方式的菜品。`);
+        }
+        // 不喜欢的菜（≤2星），避免推荐
+        const dislikes = [...new Set(
+          cookHistory.filter(c => c.rating <= 2).map(c => c.recipe_name)
         )].slice(0, 5);
-        const cookContext = favoriteDishes.length > 0
-            ? `\n[用户偏好的菜品口味参考] 用户评分≥4星的菜品：${favoriteDishes.join('、')}。推荐时优先考虑类似风味。`
-            : "";
+        if (dislikes.length > 0) {
+          parts.push(`用户不喜欢的菜品：${dislikes.join('、')}。请避免推荐这类菜或类似风格。`);
+        }
+        // 最近常做的菜（近5条），避免重复推荐
+        const recent = cookHistory.slice(0, 5).map(c => c.recipe_name);
+        if (recent.length > 0) {
+          parts.push(`用户最近做过的菜：${recent.join('、')}。如果用户没有明确要求，尽量不重复推荐。`);
+        }
+        // 口味分析 — 高频菜推断偏好
+        if (cookHistory.length >= 3) {
+          const avgRating = (cookHistory.reduce((s, c) => s + c.rating, 0) / cookHistory.length).toFixed(1);
+          parts.push(`用户共记录 ${cookHistory.length} 次烹饪，平均评分 ${avgRating}/5。根据评分历史调整推荐策略。`);
+        }
+        const cookContext = parts.length > 0
+          ? `\n【用户烹饪记忆 — 请据此个性化推荐】\n${parts.map(p => `- ${p}`).join('\n')}\n`
+          : "";
 
         const response = await fetch(`${API_BASE}/api/v1/chat/stream`, {
             method: "POST",
@@ -81,7 +119,7 @@ export async function streamChat(
                 message: message + cookContext,
                 image_url: image_url,
                 thread_id: threadId,
-                preference: loadPreference(),
+                preference: getPreference(),
                 inventory,
             }),
             headers: {
@@ -174,6 +212,19 @@ export async function deleteRecipeFromPanel(recipeId: string): Promise<RecipeOpe
         return { success: true };
     } catch (error) {
         console.error("删除菜谱失败:", error);
+        return { success: false, error: error instanceof Error ? error.message : "未知错误" };
+    }
+}
+
+export async function batchDeleteRecipes(ids: string[]): Promise<RecipeOperationResponse> {
+    try {
+        await request("/api/v1/recipes/batch-delete", {
+            method: "POST",
+            body: JSON.stringify(ids),
+        });
+        return { success: true };
+    } catch (error) {
+        console.error("批量删除菜谱失败:", error);
         return { success: false, error: error instanceof Error ? error.message : "未知错误" };
     }
 }

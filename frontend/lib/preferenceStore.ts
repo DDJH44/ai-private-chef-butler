@@ -10,13 +10,27 @@ function notifyPreferenceChange() {
     }
 }
 
+function sanitize(pref: Preference): Preference {
+  return {
+    ...pref,
+    allergies: (pref.allergies || []).filter(a => a && a.trim()),
+    custom_allergies: (pref.custom_allergies || []).filter(a => a && a.trim()),
+  };
+}
+
 export function loadPreference(): Preference {
     try {
         const stored = localStorage.getItem(STORAGE_KEY);
         if (!stored) return {...DEFAULT_PREFERENCE};
 
         const store: PreferenceStore = JSON.parse(stored);
-        return store.preference || {...DEFAULT_PREFERENCE};
+        const pref = store.preference || {...DEFAULT_PREFERENCE};
+        const cleaned = sanitize(pref);
+        // Auto-fix stale data
+        if (JSON.stringify(cleaned) !== JSON.stringify(pref)) {
+          savePreference(cleaned);
+        }
+        return cleaned;
     } catch (error) {
         console.error('加载偏好设置失败:', error);
         return {...DEFAULT_PREFERENCE};

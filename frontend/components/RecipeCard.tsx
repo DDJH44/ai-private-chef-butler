@@ -32,9 +32,12 @@ interface RecipeCardProps {
   recipe: Recipe;
   onClick?: () => void;
   className?: string;
+  selectMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }
 
-export function RecipeCard({ recipe, onClick, className }: RecipeCardProps) {
+export function RecipeCard({ recipe, onClick, className, selectMode, selected, onToggleSelect }: RecipeCardProps) {
   const difficultyColor = (d?: string) => {
     switch (d) {
       case "简单": return "var(--green)";
@@ -52,19 +55,32 @@ export function RecipeCard({ recipe, onClick, className }: RecipeCardProps) {
 
   return (
     <div
-      onClick={onClick}
+      onClick={selectMode ? onToggleSelect : onClick}
       className={className}
       style={{
         background: "var(--bg)",
         borderRadius: 20,
-        boxShadow: "var(--shadow-raised)",
+        boxShadow: selected ? "var(--shadow-accent)" : "var(--shadow-raised)",
         overflow: "hidden",
         cursor: "pointer",
         transition: "all 0.25s ease",
+        position: "relative",
+        border: selected ? "2px solid var(--accent)" : "none",
       }}
       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-lg)"; }}
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised)"; }}
     >
+      {selectMode && (
+        <div style={{
+          position: "absolute", top: 10, right: 10, zIndex: 10,
+          width: 24, height: 24, borderRadius: "50%",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          background: selected ? "var(--accent)" : "var(--bg)",
+          boxShadow: "var(--shadow-raised-sm)",
+          color: selected ? "#fff" : "transparent", fontSize: 12, fontWeight: 700,
+          transition: "all 0.2s ease",
+        }}>✓</div>
+      )}
       {recipe.imageUrl && (
         <div style={{ position: "relative", height: 180, overflow: "hidden" }}>
           <img
