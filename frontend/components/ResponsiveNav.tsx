@@ -8,6 +8,7 @@ import { loadRecipes, RECIPE_CHANGE_EVENT } from "@/lib/recipeStore";
 const sidebarItems = [
   { id: "chat", icon: "💬", label: "对话", href: "/" },
   { id: "recipes", icon: "📖", label: "菜谱", href: "/recipes" },
+  { id: "nutrition", icon: "📊", label: "饮食", href: "/nutrition" },
   { id: "meal-plan", icon: "📅", label: "膳食", href: "/meal-plan" },
   { id: "shopping-list", icon: "🛒", label: "购物清单", href: "/shopping-list" },
   { id: "fridge", icon: "🧊", label: "冰箱", href: "/fridge" },
@@ -18,6 +19,7 @@ const sidebarItems = [
 const bottomItems = [
   { id: "chat", icon: "💬", label: "对话", href: "/" },
   { id: "recipes", icon: "📖", label: "菜谱", href: "/recipes" },
+  { id: "nutrition", icon: "📊", label: "饮食", href: "/nutrition" },
   { id: "meal-plan", icon: "📅", label: "膳食", href: "/meal-plan" },
   { id: "shopping-list", icon: "🛒", label: "清单", href: "/shopping-list" },
   { id: "fridge", icon: "🧊", label: "冰箱", href: "/fridge" },

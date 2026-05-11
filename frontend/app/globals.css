@@ -51,13 +51,17 @@
 
   /* ── Transition ── */
   --transition: 0.25s ease;
+
+  /* ── Fonts ── */
+  --font-noto-sans-sc: 'Noto Sans SC', 'Microsoft YaHei', 'PingFang SC', system-ui, -apple-system, sans-serif;
+  --font-noto-serif-sc: 'Noto Serif SC', 'Noto Sans SC', 'Microsoft YaHei', serif;
 }
 
 /* ── Base ── */
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: 'Noto Sans SC', var(--font-noto-sans-sc), sans-serif;
+  font-family: var(--font-noto-sans-sc);
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
   letter-spacing: -0.01em;

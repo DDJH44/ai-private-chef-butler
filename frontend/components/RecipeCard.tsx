@@ -21,6 +21,7 @@ function formatContent(content: string): string {
           case "时间": formatted += `⏱${val}  `; break;
           case "食材": formatted += `🥬${val.replace(/，/g, "、")}`; break;
           case "步骤": formatted += `📝${val.replace(/[；;]/g, " → ")}`; break;
+          case "视频": break;
         }
       }
       return formatted.trim();
@@ -130,6 +131,11 @@ export function RecipeCard({ recipe, onClick, className, selectMode, selected, o
           {recipe.ingredients && recipe.ingredients.length > 0 && (
             <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span style={{ fontSize: 12 }}>👨‍🍳</span> {recipe.ingredients.length} 种食材
+            </span>
+          )}
+          {recipe.videoUrl && (
+            <span style={{ display: "flex", alignItems: "center", gap: 4, color: "#fb7299" }}>
+              <span style={{ fontSize: 12 }}>🎬</span> 视频
             </span>
           )}
         </div>

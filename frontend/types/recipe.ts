@@ -30,6 +30,8 @@ export interface Recipe {
   reason?: string;
   /** 原食谱链接 */
   sourceUrl?: string;
+  /** 视频教程链接（B站等） */
+  videoUrl?: string;
   /** 创建时间戳 */
   createdAt: number;
   /** 更新时间戳 */
@@ -67,6 +69,8 @@ export interface AddRecipeRequest {
   difficulty?: string;
   /** 烹饪时间 */
   cooking_time?: string;
+  /** 视频教程链接 */
+  video_url?: string;
 }
 
 /**

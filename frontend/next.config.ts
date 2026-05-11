@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
-  distDir: isProd ? "../app/static" : ".next",
+  distDir: ".next",
   async rewrites() {
     if (isProd) return [];
     return [

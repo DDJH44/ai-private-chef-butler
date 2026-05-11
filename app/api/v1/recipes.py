@@ -70,6 +70,7 @@ def init_db():
                     score REAL,
                     reason TEXT,
                     source_url TEXT,
+                    video_url TEXT,
                     tags TEXT DEFAULT '[]',
                     is_expanded INTEGER DEFAULT 0,
                     created_at INTEGER NOT NULL,
@@ -78,6 +79,16 @@ def init_db():
             ''')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_title ON recipes(title)')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_created_at ON recipes(created_at DESC)')
+            # Migration: add tags column if missing
+            try:
+                conn.execute('SELECT tags FROM recipes LIMIT 1')
+            except sqlite3.OperationalError:
+                conn.execute('ALTER TABLE recipes ADD COLUMN tags TEXT DEFAULT \'[]\'')
+            # Migration: add video_url column if missing
+            try:
+                conn.execute('SELECT video_url FROM recipes LIMIT 1')
+            except sqlite3.OperationalError:
+                conn.execute('ALTER TABLE recipes ADD COLUMN video_url TEXT')
             conn.commit()
         logger.info("菜谱数据库初始化成功（全局存储模式）")
     except Exception as e:
@@ -100,9 +111,9 @@ async def create_recipe(recipe: RecipeCreate):
                 INSERT INTO recipes (
                     id, thread_id, title, content, image_url,
                     difficulty, cooking_time, ingredients,
-                    seasonings, tags, score, reason, source_url,
+                    seasonings, tags, score, reason, source_url, video_url,
                     is_expanded, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 recipe_id, None,
                 recipe.title, recipe.content, recipe.image_url,
@@ -110,7 +121,7 @@ async def create_recipe(recipe: RecipeCreate):
                 json.dumps(recipe.ingredients or []),
                 json.dumps(recipe.seasonings or []),
                 json.dumps(recipe.tags or []),
-                recipe.score, recipe.reason, recipe.source_url,
+                recipe.score, recipe.reason, recipe.source_url, recipe.video_url,
                 0, now, now
             ))
             conn.commit()
@@ -135,8 +146,9 @@ async def get_recipes(
 ):
     try:
         with get_db() as conn:
-            query = 'SELECT * FROM recipes ORDER BY created_at DESC'
-            params = []
+            cols = 'id, title, image_url, difficulty, cooking_time, ingredients, seasonings, tags, score, reason, source_url, video_url, is_expanded, created_at, updated_at'
+            query = f'SELECT {cols} FROM recipes ORDER BY created_at DESC'
+            params: list = []
             if limit:
                 query += ' LIMIT ?'
                 params.append(limit)
@@ -150,6 +162,43 @@ async def get_recipes(
         return {"recipes": [row_to_dict(row) for row in rows], "total": total}
     except Exception as e:
         logger.error(f"获取菜谱列表失败：{e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/batch-create", response_model=RecipeListResponse)
+async def batch_create_recipes(recipes_data: List[RecipeCreate] = Body(...)):
+    """批量创建菜谱"""
+    try:
+        results = []
+        now = int(datetime.now().timestamp() * 1000)
+        with get_db() as conn:
+            for recipe in recipes_data:
+                recipe_id = f"recipe_{uuid.uuid4().hex[:12]}"
+                conn.execute('''
+                    INSERT INTO recipes (
+                        id, thread_id, title, content, image_url,
+                        difficulty, cooking_time, ingredients,
+                        seasonings, tags, score, reason, source_url, video_url,
+                        is_expanded, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    recipe_id, None,
+                    recipe.title, recipe.content, recipe.image_url,
+                    recipe.difficulty, recipe.cooking_time,
+                    json.dumps(recipe.ingredients or []),
+                    json.dumps(recipe.seasonings or []),
+                    json.dumps(recipe.tags or []),
+                    recipe.score, recipe.reason, recipe.source_url, recipe.video_url,
+                    0, now, now,
+                ))
+                row = conn.execute('SELECT * FROM recipes WHERE id = ?', (recipe_id,)).fetchone()
+                if row:
+                    results.append(row_to_dict(row))
+            conn.commit()
+        logger.info(f"批量创建菜谱成功，数量：{len(results)}")
+        return {"recipes": results, "total": len(results)}
+    except Exception as e:
+        logger.error(f"批量创建菜谱失败：{e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

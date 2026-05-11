@@ -80,12 +80,29 @@ export function mergeIngredients(ingredientLists: string[][]): MergedIngredient[
 
 const IGNORE_NAMES = new Set(['盐', '糖', '味精', '鸡精', '料酒', '生抽', '老抽', '醋', '胡椒', '花椒', '姜', '蒜', '葱', '油', '淀粉']);
 
+function extractIngredientsFromContent(content: string): string[] {
+  const match = content.match(/食材[：:]\s*([^\n]+)/);
+  if (match) return match[1].split(/[，,]/).map(s => s.trim()).filter(Boolean);
+  // Try markdown lists
+  const listMatch = content.match(/###?\s*🥬\s*食材\n([\s\S]*?)(?=###|$)/);
+  if (listMatch) {
+    return listMatch[1].split('\n')
+      .map(l => l.replace(/^[-*•]\s*/, '').trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
 export async function generateShoppingListFromRecipes(
     recipes: Recipe[],
 ): Promise<ShoppingList> {
     const inventory = loadIngredients();
 
-    const ingredientLists = recipes.map(r => r.ingredients || []);
+    const ingredientLists = recipes.map(r =>
+      (r.ingredients && r.ingredients.length > 0)
+        ? r.ingredients
+        : extractIngredientsFromContent(r.content || '')
+    );
     const merged = mergeIngredients(ingredientLists);
 
     const seasoningLists = recipes.map(r => r.seasonings || []);

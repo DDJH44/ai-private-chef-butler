@@ -22,32 +22,79 @@ def recipe_search(query: str):
 
     results = []
     try:
-        pexels_url = f"https://api.pexels.com/v1/search?query={query}+food&per_page=5&orientation=landscape&locale=zh-CN"
-        pexels_resp = requests.get(pexels_url, headers={"Authorization": pexels_key}, timeout=10)
-        if pexels_resp.status_code == 200:
-            for photo in pexels_resp.json().get("photos", []):
-                img_url = photo.get("src", {}).get("large", "")
-                if img_url:
-                    results.append({
-                        "title": f"{query}",
-                        "url": proxy_image_url(img_url),
-                        "content": photo.get("alt", query),
-                    })
+        search_queries = [
+            f"{query} chinese food",
+            f"{query} dish cooking",
+            f"{query} food",
+        ]
+        for search_query in search_queries:
+            pexels_url = f"https://api.pexels.com/v1/search?query={requests.utils.quote(search_query)}&per_page=3&orientation=landscape&locale=zh-CN"
+            pexels_resp = requests.get(pexels_url, headers={"Authorization": pexels_key}, timeout=10)
+            if pexels_resp.status_code == 200:
+                for photo in pexels_resp.json().get("photos", []):
+                    img_url = photo.get("src", {}).get("large", "")
+                    alt_text = photo.get("alt", "").lower()
+                    photographer = photo.get("photographer", "").lower()
+                    if img_url and img_url not in [r.get("url") for r in results]:
+                        results.append({
+                            "title": f"{query}",
+                            "url": proxy_image_url(img_url),
+                            "content": photo.get("alt", query),
+                            "photographer": photo.get("photographer", ""),
+                        })
+            if len(results) >= 5:
+                break
         if not results:
             return json.dumps([{"title": "无结果", "content": f"Pexels 未找到'{query}'的图片"}], ensure_ascii=False)
     except Exception as e:
         return json.dumps([{"title": "异常", "content": str(e)}], ensure_ascii=False)
 
-    return json.dumps(results, ensure_ascii=False)
+    return json.dumps(results[:5], ensure_ascii=False)
+
+
+@tool
+def bilibili_search(query: str):
+    """搜索B站烹饪教学视频。输入菜品名称如'番茄炒蛋'，返回B站上相关的高质量烹饪教学视频（标题、链接、播放量、UP主）"""
+    try:
+        import urllib.parse
+        encoded = urllib.parse.quote(f"{query} 做法 教程")
+        url = f"https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword={encoded}&page=1"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer": "https://www.bilibili.com",
+        }
+        resp = requests.get(url, headers=headers, timeout=8)
+        if resp.status_code != 200:
+            return json.dumps([{"title": "B站搜索失败", "content": f"HTTP {resp.status_code}"}], ensure_ascii=False)
+
+        data = resp.json()
+        videos = data.get("data", {}).get("result", [])
+        if not videos:
+            return json.dumps([{"title": "无结果", "content": f"B站未找到'{query}'的教学视频"}], ensure_ascii=False)
+
+        results = []
+        for v in videos[:3]:
+            results.append({
+                "title": v.get("title", "").replace("<em class=\"keyword\">", "").replace("</em>", ""),
+                "url": f"https://www.bilibili.com/video/{v.get('bvid', '')}",
+                "cover": v.get("pic", ""),
+                "author": v.get("author", ""),
+                "play": v.get("play", 0),
+                "duration": v.get("duration", ""),
+            })
+        return json.dumps(results, ensure_ascii=False)
+    except Exception as e:
+        return json.dumps([{"title": "异常", "content": str(e)}], ensure_ascii=False)
+
 
 model = init_chat_model(
     model=os.getenv("DOUBAO_MODEL_NAME", "doubao-seed-2-0-mini-260215"),
     model_provider="openai",
     base_url=os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v1"),
     api_key=os.getenv("DOUBAO_API_KEY")
-)
+).bind(extra_body={"reasoning_effort": "low"})
 
-model_with_tools = model.bind_tools([recipe_search])
+model_with_tools = model.bind_tools([recipe_search, bilibili_search])
 
 connection = sqlite3.connect("app/db/personal_chief.db", check_same_thread=False, timeout=10)
 connection.execute("PRAGMA journal_mode=WAL")
@@ -84,7 +131,7 @@ def should_continue(state: AgentState):
 
 workflow = StateGraph(AgentState)
 workflow.add_node("agent", agent_node)
-workflow.add_node("tools", ToolNode([recipe_search]))
+workflow.add_node("tools", ToolNode([recipe_search, bilibili_search]))
 workflow.add_edge(START, "agent")
 workflow.add_conditional_edges("agent", should_continue)
 workflow.add_edge("tools", "agent")
@@ -164,7 +211,7 @@ def search_recipes(prompt: str, image: str, thread_id: str, preference: dict = N
     if inventory:
         items = [f"{i.get('name', '')}({i.get('quantity', '')}{i.get('unit', '')})" for i in inventory if i.get('name')]
         if items:
-            inventory_context = f"\n【冰箱库存】\n当前冰箱中有：{', '.join(items)}\n可以根据这些食材推荐菜品，优先使用即将过期的食材。\n"
+            inventory_context = f"\n【冰箱库存】\n当前冰箱中有：{', '.join(items)}\n根据这些食材推荐菜品。如果食材不足以独立成菜，列出缺少的关键食材及完整菜名。\n"
     
     full_prompt = (preference_context + inventory_context + prompt).strip()
     

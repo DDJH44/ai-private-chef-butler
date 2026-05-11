@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.v1 import chat, oss, recipes, meal_plan, shopping, speech
+from app.api.v1 import chat, oss, recipes, meal_plan, shopping, speech, nutrition, feishu
 from app.common.logger import setup_logging
 
 setup_logging()
@@ -28,9 +28,15 @@ app.include_router(recipes.router, prefix="/api/v1/recipes", tags=["recipes"])
 app.include_router(meal_plan.router, prefix="/api/v1", tags=["meal-plan"])
 app.include_router(shopping.router, prefix="/api/v1/shopping", tags=["shopping"])
 app.include_router(speech.router, prefix="/api/v1", tags=["speech"])
+app.include_router(nutrition.router, prefix="/api/v1/nutrition", tags=["nutrition"])
+app.include_router(feishu.router, prefix="/api/v1/feishu", tags=["feishu"])
 
 @app.get("/health")
 async def health():
+    return {"status": "ok"}
+
+@app.get("/api/v1/health")
+async def api_health():
     return {"status": "ok"}
 
 static_dir = os.path.join(os.path.dirname(__file__), "static")

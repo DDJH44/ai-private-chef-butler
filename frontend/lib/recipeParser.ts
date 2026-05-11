@@ -17,9 +17,10 @@ function extractFieldsFromBlock(block: string): Partial<Recipe> {
     ['cookingTime', /时间[：:]\s*(.+?)(?:\n|$)/i, v => v.trim()],
     ['score', /评分[：:]\s*(\d+(?:\.\d+)?)/i, v => { const s = parseFloat(v); return s >= 0 && s <= 5 ? s : undefined; }],
     ['reason', /理由[：:]\s*(.+?)(?:\n|$)/i, v => v.trim()],
-    ['ingredients', /食材[：:]\s*([\s\S]*?)(?:调味料|步骤|做法|$)/i, v => parseList(v)],
-    ['seasonings', /调味料[：:]\s*([\s\S]*?)(?:步骤|做法|$)/i, v => parseList(v)],
-    ['steps', /步骤[：:]\s*([\s\S]*)/i, v => parseList(v)],
+    ['ingredients', /食材[：:]\s*([\s\S]*?)(?:调味料|步骤|做法|视频|$)/i, v => parseList(v)],
+    ['seasonings', /调味料[：:]\s*([\s\S]*?)(?:步骤|做法|视频|$)/i, v => parseList(v)],
+    ['steps', /步骤[：:]\s*([\s\S]*?)(?:视频|$)/i, v => parseList(v)],
+    ['videoUrl', /视频[：:]\s*(https?:\/\/[^\s]+)/i, v => v.trim()],
   ];
 
   for (const [key, regex, transform] of patterns) {
@@ -83,6 +84,7 @@ function parseAllRecipesFromText(content: string): Array<{index: number; content
     ['ingredients', /###?\s*(?:食材(?:清单|列表)?|所需食材|材料(?:清单)?)\s*[：:]?\s*\n([\s\S]*?)(?=###?|$)/i, v => parseList(v)],
     ['seasonings', /###?\s*(?:调味料|调料)\s*[：:]?\s*\n([\s\S]*?)(?=###?|$)/i, v => parseList(v)],
     ['steps', /###?\s*(?:制作步骤|烹饪步骤|(?<!\S)步骤|做法)\s*[：:]?\s*\n([\s\S]*?)(?=###?|$)/i, v => parseList(v)],
+    ['videoUrl', /视频[：:]\s*(https?:\/\/[^\s]+)/i, v => v.trim()],
   ];
 
   const sections = content.split(/(?=^##\s+)/m);
@@ -112,6 +114,10 @@ function parseAllRecipesFromText(content: string): Array<{index: number; content
     const imgMatch = section.match(/!\[.*?\]\((https?:\/\/[^)]+)\)/i);
     if (imgMatch) recipe.imageUrl = imgMatch[1];
 
+    const videoMatch = section.match(/###?\s*🎬\s*视频教程[\s\S]*?\[(?:[^\]]*)\]\((https?:\/\/[^)]+)\)/i)
+      || section.match(/\[.*?\]\((https?:\/\/(?:www\.)?bilibili\.com\/video\/[^)]+)\)/i);
+    if (videoMatch) recipe.videoUrl = videoMatch[1];
+
     recipe.content = section.trim();
 
     if (recipe.title) {
@@ -133,6 +139,9 @@ function parseAllRecipesFromText(content: string): Array<{index: number; content
     }
     const imgMatch = content.match(/!\[.*?\]\((https?:\/\/[^)]+)\)/i);
     if (imgMatch) recipe.imageUrl = imgMatch[1];
+    const videoMatch = content.match(/###?\s*🎬\s*视频教程[\s\S]*?\[(?:[^\]]*)\]\((https?:\/\/[^)]+)\)/i)
+      || content.match(/\[.*?\]\((https?:\/\/(?:www\.)?bilibili\.com\/video\/[^)]+)\)/i);
+    if (videoMatch) recipe.videoUrl = videoMatch[1];
     recipe.content = content;
     const hasIngredients = recipe.ingredients && recipe.ingredients.length > 0;
     const hasSteps = recipe.steps && recipe.steps.length > 0;

@@ -1,18 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import { Noto_Sans_SC, Noto_Serif_SC } from "next/font/google";
 import "./globals.css";
 import { ClientLayout } from "@/components/ClientLayout";
-
-const notoSansSC = Noto_Sans_SC({
-  variable: "--font-noto-sans-sc",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-});
-const notoSerifSC = Noto_Serif_SC({
-  variable: "--font-noto-serif-sc",
-  subsets: ["latin"],
-  weight: ["600", "700"],
-});
 
 export const metadata: Metadata = {
   title: "AI 私人厨师",
@@ -30,7 +18,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-CN">
-      <body className={`${notoSansSC.variable} ${notoSerifSC.variable} antialiased`}>
+      <body className="antialiased" style={{ fontFamily: '"Noto Sans SC", "Microsoft YaHei", "PingFang SC", system-ui, -apple-system, sans-serif' }}>
         <ClientLayout>{children}</ClientLayout>
       </body>
     </html>

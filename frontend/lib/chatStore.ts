@@ -194,6 +194,7 @@ export async function sendMessage(content: string, imageUrl?: string): Promise<v
                                 cookingTime: p.recipe.cookingTime,
                                 score: p.recipe.score,
                                 reason: p.recipe.reason,
+                                videoUrl: p.recipe.videoUrl,
                                 createdAt: p.recipe.createdAt || Date.now(),
                                 updatedAt: p.recipe.updatedAt || Date.now(),
                             })),

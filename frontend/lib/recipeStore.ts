@@ -7,15 +7,22 @@ import {
   getRecipes as apiGetRecipes,
   addRecipeToPanel,
   deleteRecipeFromPanel,
+  batchCreateRecipes,
   batchDeleteRecipes,
   updateRecipe as apiUpdateRecipe,
   searchRecipes as apiSearchRecipes,
 } from '@/lib/api';
+import type { AddRecipeRequest } from '@/types/recipe';
 
 export const RECIPE_CHANGE_EVENT = 'recipeChange';
 const MIGRATION_KEY = 'ai_chef_recipes_migrated_v2';
 
+// Memory cache — avoid redundant API calls from multiple components
+let _cache: Recipe[] | null = null;
+let _cacheDirty = true;
+
 function notify() {
+  _cacheDirty = true;
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(RECIPE_CHANGE_EVENT));
   }
@@ -36,6 +43,7 @@ function mapRecipe(api: Record<string, unknown>): Recipe {
     score: (api.score as number) || undefined,
     reason: (api.reason as string) || undefined,
     sourceUrl: (api.source_url as string) || undefined,
+    videoUrl: (api.video_url as string) || undefined,
     tags: (api.tags as string[]) || [],
     isExpanded: Boolean(api.is_expanded),
     createdAt: typeof api.created_at === 'number' ? api.created_at : Date.now(),
@@ -56,6 +64,7 @@ function toApiFields(recipe: Partial<Recipe>): Record<string, unknown> {
   if (recipe.score !== undefined) out.score = recipe.score;
   if (recipe.reason !== undefined) out.reason = recipe.reason;
   if (recipe.sourceUrl !== undefined) out.source_url = recipe.sourceUrl;
+  if (recipe.videoUrl !== undefined) out.video_url = recipe.videoUrl;
   return out;
 }
 
@@ -97,8 +106,11 @@ function ensureMigration() {
 
 export async function loadRecipes(): Promise<Recipe[]> {
   ensureMigration();
+  if (!_cacheDirty && _cache) return _cache;
   const recipes = await apiGetRecipes();
-  return recipes.map((r: unknown) => mapRecipe(r as Record<string, unknown>));
+  _cache = recipes.map((r: unknown) => mapRecipe(r as Record<string, unknown>));
+  _cacheDirty = false;
+  return _cache;
 }
 
 export async function getRecipeCount(): Promise<number> {
@@ -120,6 +132,7 @@ export async function addRecipe(
     image_url: recipe.imageUrl,
     difficulty: recipe.difficulty,
     cooking_time: recipe.cookingTime,
+    video_url: recipe.videoUrl,
   });
   if (res.success && res.recipe) {
     notify();
@@ -131,12 +144,17 @@ export async function addRecipe(
 export async function addRecipesBatch(
   recipesToAdd: Omit<Recipe, 'id' | 'createdAt' | 'updatedAt'>[]
 ): Promise<Recipe[]> {
-  const results: Recipe[] = [];
-  for (const r of recipesToAdd) {
-    const created = await addRecipe(r);
-    if (created) results.push(created);
-  }
-  notify();
+  const reqs: AddRecipeRequest[] = recipesToAdd.map(r => ({
+    title: r.title,
+    content: r.content,
+    image_url: r.imageUrl,
+    difficulty: r.difficulty,
+    cooking_time: r.cookingTime,
+    video_url: r.videoUrl,
+  }));
+  const created = await batchCreateRecipes(reqs);
+  const results = created.map((r: unknown) => mapRecipe(r as Record<string, unknown>));
+  if (results.length > 0) notify();
   return results;
 }
 

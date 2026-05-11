@@ -3,7 +3,7 @@
 import { Message } from "@/types/chat";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { memo, useState } from "react";
+import { memo, useState, ComponentPropsWithoutRef } from "react";
 import { useSpeechSynthesis } from "@/hooks/useSpeechSynthesis";
 
 interface ChatMessageProps {
@@ -34,6 +34,43 @@ function rewriteRelativeUrls(markdown: string): string {
 
 function stripSaveBlocks(content: string): string {
   return content.replace(/\[SAVE_RECIPE_START\][\s\S]*?\[SAVE_RECIPE_END\]/g, "").trim();
+}
+
+function BilibiliCard({ href, children }: { href: string; children: React.ReactNode }) {
+  const bvid = href.match(/\/video\/([A-Za-z0-9]+)/)?.[1];
+  if (!bvid) return <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{
+        display: "flex", alignItems: "center", gap: 12,
+        padding: 12, borderRadius: 14, marginTop: 8,
+        background: "var(--bg)", boxShadow: "var(--shadow-raised-sm)",
+        textDecoration: "none", transition: "all 0.25s ease",
+      }}
+    >
+      <span style={{
+        width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        background: "#fb7299", color: "#fff", fontSize: 18, fontWeight: 700,
+      }}>B</span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ fontSize: 13, color: "var(--text)", fontWeight: 600, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{children}</span>
+        <span style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2, display: "block" }}>点击在 B 站观看教学视频 →</span>
+      </span>
+    </a>
+  );
+}
+
+function customLink(props: ComponentPropsWithoutRef<'a'>) {
+  const { href, children } = props;
+  if (!href) return <a {...props}>{children}</a>;
+  if (href.includes("bilibili.com/video") || href.includes("b23.tv")) {
+    return <BilibiliCard href={href}>{children}</BilibiliCard>;
+  }
+  return <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>{children}</a>;
 }
 
 function SpeakButton({ text }: { text: string }) {
@@ -116,7 +153,7 @@ export const ChatMessage = memo(function ChatMessage({ message, isStreaming }: C
           </div>
         )}
         <div className="prose-chat">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: customLink }}>
             {rewriteRelativeUrls(rawContent)}
           </ReactMarkdown>
           {isStreaming && <span className="streaming-cursor" />}

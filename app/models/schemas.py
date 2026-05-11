@@ -48,6 +48,7 @@ class RecipeCreate(BaseModel):
     score: Optional[float] = None
     reason: Optional[str] = None
     source_url: Optional[str] = None
+    video_url: Optional[str] = None
 
 
 class RecipeUpdate(BaseModel):
@@ -63,6 +64,7 @@ class RecipeUpdate(BaseModel):
     score: Optional[float] = None
     reason: Optional[str] = None
     source_url: Optional[str] = None
+    video_url: Optional[str] = None
     is_expanded: Optional[bool] = None
 
 
@@ -70,7 +72,7 @@ class RecipeResponse(BaseModel):
     """菜谱响应"""
     id: str
     title: str
-    content: str
+    content: str = ""
     image_url: Optional[str] = None
     difficulty: Optional[str] = None
     cooking_time: Optional[str] = None
@@ -80,6 +82,7 @@ class RecipeResponse(BaseModel):
     score: Optional[float] = None
     reason: Optional[str] = None
     source_url: Optional[str] = None
+    video_url: Optional[str] = None
     is_expanded: Optional[bool] = False
     created_at: int
     updated_at: int

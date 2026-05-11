@@ -39,6 +39,10 @@ function formatContent(content: string): string {
             formatted += "\n";
             break;
           }
+          case "视频": {
+            if (val && val !== "无") formatted += `[🎬 观看视频教程](${val})\n\n`;
+            break;
+          }
         }
       }
       return formatted.trim();
@@ -70,6 +74,7 @@ interface RecipeDetailModalProps { recipe: Recipe; onClose: () => void; }
 
 export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
   const router = useRouter();
+  const [fullRecipe, setFullRecipe] = useState(recipe);
   const [copied, setCopied] = useState(false);
   const [showCookModal, setShowCookModal] = useState(false);
   const [cookRating, setCookRating] = useState(5);
@@ -77,7 +82,18 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => { if (recipe) recordView(recipe.id, recipe.title); }, [recipe]);
+  // Fetch full recipe content if the list view stripped it
+  useEffect(() => {
+    if (recipe.content) return;
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/v1/recipes/${encodeURIComponent(recipe.id)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.title) setFullRecipe(data);
+      })
+      .catch(() => {});
+  }, [recipe]);
+
+  useEffect(() => { if (recipe) recordView(fullRecipe.id, fullRecipe.title); }, [recipe]);
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", handleEsc);
@@ -102,7 +118,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
   };
 
   const handleCopy = async () => {
-    const text = recipe.steps?.join("\n\n") || recipe.content;
+    const text = fullRecipe.steps?.join("\n\n") || fullRecipe.content;
     try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }
     catch { /* noop */ }
   };
@@ -110,27 +126,45 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
   const handlePrint = () => {
     const pw = window.open("", "_blank");
     if (pw) {
-      pw.document.write(`<html><head><title>${recipe.title}</title><style>body{font-family:sans-serif;max-width:720px;margin:32px auto;padding:0 24px;line-height:1.8;color:#1F1D1A}h1{font-size:28px}h2{font-size:18px;margin:24px 0 12px}.step{display:flex;gap:12px;margin-bottom:16px;padding:14px;background:#e4e8ed;border-radius:12px;box-shadow:3px 3px 8px #c8ccd1,-3px -3px 8px #ffffff}.step-num{width:30px;height:30px;background:#6c5ce7;color:#fff;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0}img{max-width:100%;border-radius:16px;margin:16px 0}</style></head><body>${recipe.imageUrl?`<img src="${proxyImageUrl(recipe.imageUrl)}">`:""}<h1>${recipe.title}</h1>${recipe.steps?recipe.steps.map((s,i)=>`<div class="step"><div class="step-num">${i+1}</div><div>${s}</div></div>`).join(""):`<div>${formatContent(recipe.content)}</div>`}</body></html>`);
+      pw.document.write(`<html><head><title>${fullRecipe.title}</title><style>body{font-family:sans-serif;max-width:720px;margin:32px auto;padding:0 24px;line-height:1.8;color:#1F1D1A}h1{font-size:28px}h2{font-size:18px;margin:24px 0 12px}.step{display:flex;gap:12px;margin-bottom:16px;padding:14px;background:#e4e8ed;border-radius:12px;box-shadow:3px 3px 8px #c8ccd1,-3px -3px 8px #ffffff}.step-num{width:30px;height:30px;background:#6c5ce7;color:#fff;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0}img{max-width:100%;border-radius:16px;margin:16px 0}</style></head><body>${fullRecipe.imageUrl?`<img src="${proxyImageUrl(fullRecipe.imageUrl)}">`:""}<h1>${fullRecipe.title}</h1>${fullRecipe.steps?fullRecipe.steps.map((s,i)=>`<div class="step"><div class="step-num">${i+1}</div><div>${s}</div></div>`).join(""):`<div>${formatContent(fullRecipe.content)}</div>`}</body></html>`);
       pw.document.close(); pw.print();
     }
   };
 
   const handleShare = async () => {
-    if (navigator.share) { try { await navigator.share({ title: recipe.title, text: `推荐菜谱：${recipe.title}` }); } catch { handleCopy(); } }
+    if (navigator.share) { try { await navigator.share({ title: fullRecipe.title, text: `推荐菜谱：${fullRecipe.title}` }); } catch { handleCopy(); } }
     else { handleCopy(); }
   };
 
+  const handleShareToFeishu = async () => {
+    try {
+      const resp = await fetch(`${process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8001"}/api/v1/feishu/recipe-share`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(fullRecipe),
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        showToast("已分享到飞书", "success");
+      } else {
+        showToast(data.detail || "分享失败", "error");
+      }
+    } catch {
+      showToast("分享失败", "error");
+    }
+  };
+
   const handleGenerateShoppingList = async () => {
-    await generateShoppingListFromRecipes([recipe]);
-    showToast(`已为「${recipe.title}」生成购物清单`, "success");
+    await generateShoppingListFromRecipes([fullRecipe]);
+    showToast(`已为「${fullRecipe.title}」生成购物清单`, "success");
     router.push("/shopping-list");
   };
 
   const handleDelete = async () => {
     setDeleting(true);
-    const deleted = await deleteRecipeFromStore(recipe.id);
+    const deleted = await deleteRecipeFromStore(fullRecipe.id);
     if (deleted) {
-      showToast(`「${recipe.title}」已从菜谱栏移除`, "success");
+      showToast(`「${fullRecipe.title}」已从菜谱栏移除`, "success");
       onClose();
     } else {
       showToast("删除失败，请重试", "error");
@@ -139,7 +173,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
   };
 
   const handleSaveCookRecord = () => {
-    addCookRecord({ id: generateUUID(), recipe_id: recipe.id, recipe_name: recipe.title, cook_date: new Date().toISOString().split("T")[0], rating: cookRating, notes: cookNotes, photos: [], created_at: new Date().toISOString() });
+    addCookRecord({ id: generateUUID(), recipe_id: fullRecipe.id, recipe_name: fullRecipe.title, cook_date: new Date().toISOString().split("T")[0], rating: cookRating, notes: cookNotes, photos: [], created_at: new Date().toISOString() });
     showToast("烹饪记录已保存", "success");
     setShowCookModal(false); setCookRating(5); setCookNotes("");
   };
@@ -190,6 +224,12 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
               onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
             >📤</button>
+            <button onClick={handleShareToFeishu} style={{ ...circleBtn(), color: "#00d6b9" }}
+              onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
+              onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
+              title="分享到飞书"
+            >🪽</button>
             <button onClick={() => setShowDeleteConfirm(true)} style={{ ...circleBtn(), color: "var(--rose)" }}
               onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
               onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
@@ -201,9 +241,9 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
         {/* Scrollable body */}
         <div style={{ flex: 1, overflowY: "auto" }}>
           {/* Hero image */}
-          {recipe.imageUrl ? (
+          {fullRecipe.imageUrl ? (
             <div style={{ position: "relative", height: 220, overflow: "hidden" }}>
-              <img src={proxyImageUrl(recipe.imageUrl)} alt={recipe.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <img src={proxyImageUrl(fullRecipe.imageUrl)} alt={fullRecipe.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, var(--bg) 10%, transparent)" }} />
             </div>
           ) : (
@@ -216,7 +256,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
           )}
 
           {/* Content */}
-          <div style={{ padding: "0 24px 16px", marginTop: recipe.imageUrl ? -40 : 0, position: "relative", zIndex: 10 }}>
+          <div style={{ padding: "0 24px 16px", marginTop: fullRecipe.imageUrl ? -40 : 0, position: "relative", zIndex: 10 }}>
             {/* Title + info */}
             <div style={{ marginBottom: 20 }}>
               <h1 style={{
@@ -224,42 +264,42 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
                 fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif",
                 lineHeight: 1.3,
               }}>
-                {recipe.title}
+                {fullRecipe.title}
               </h1>
 
               <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                {recipe.difficulty && (
+                {fullRecipe.difficulty && (
                   <span style={{
                     fontSize: 11, padding: "4px 12px", borderRadius: 999, fontWeight: 600,
                     background: "var(--bg)", boxShadow: "var(--shadow-raised-xs)",
-                    color: difficultyColor(recipe.difficulty),
+                    color: difficultyColor(fullRecipe.difficulty),
                   }}>
-                    {recipe.difficulty}
+                    {fullRecipe.difficulty}
                   </span>
                 )}
-                {recipe.cookingTime && (
+                {fullRecipe.cookingTime && (
                   <span style={{
                     fontSize: 11, padding: "4px 12px", borderRadius: 999,
                     background: "var(--bg)", boxShadow: "var(--shadow-raised-xs)",
                     color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 4,
                   }}>
-                    <span style={{ fontSize: 11 }}>⏱</span> {recipe.cookingTime}
+                    <span style={{ fontSize: 11 }}>⏱</span> {fullRecipe.cookingTime}
                   </span>
                 )}
               </div>
 
-              {recipe.score !== undefined && recipe.score > 0 && (
+              {fullRecipe.score !== undefined && fullRecipe.score > 0 && (
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <StarRating score={recipe.score} />
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--golden)" }}>{recipe.score}/5</span>
-                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{scoreLabel(recipe.score)}</span>
+                  <StarRating score={fullRecipe.score} />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--golden)" }}>{fullRecipe.score}/5</span>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{scoreLabel(fullRecipe.score)}</span>
                 </div>
               )}
             </div>
 
             {/* Past cook records */}
             {(() => {
-              const pastCooks = loadCookHistory().filter(c => c.recipe_id === recipe.id);
+              const pastCooks = loadCookHistory().filter(c => c.recipe_id === fullRecipe.id);
               if (pastCooks.length === 0) return null;
               return (
                 <div style={{
@@ -293,19 +333,19 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
             })()}
 
             {/* Reason */}
-            {recipe.reason && (
+            {fullRecipe.reason && (
               <div style={{
                 marginBottom: 24, padding: 16, borderRadius: 16,
                 background: "var(--bg)", boxShadow: "var(--shadow-inset-sm)",
               }}>
                 <p style={{ fontSize: 13, color: "var(--accent)", lineHeight: 1.6 }}>
-                  💡 {recipe.reason}
+                  💡 {fullRecipe.reason}
                 </p>
               </div>
             )}
 
             {/* Ingredients */}
-            {recipe.ingredients && recipe.ingredients.length > 0 && (
+            {fullRecipe.ingredients && fullRecipe.ingredients.length > 0 && (
               <div style={{ marginBottom: 24 }}>
                 <h2 style={{
                   display: "flex", alignItems: "center", gap: 8,
@@ -316,7 +356,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
                   食材清单
                 </h2>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {recipe.ingredients.map((ing, i) => (
+                  {fullRecipe.ingredients.map((ing, i) => (
                     <span key={i} style={{
                       fontSize: 13, padding: "6px 14px", borderRadius: 12, fontWeight: 500,
                       background: "var(--bg)", boxShadow: "var(--shadow-raised-xs)",
@@ -326,9 +366,9 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
                     </span>
                   ))}
                 </div>
-                {recipe.seasonings && recipe.seasonings.length > 0 && (
+                {fullRecipe.seasonings && fullRecipe.seasonings.length > 0 && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
-                    {recipe.seasonings.map((s, i) => (
+                    {fullRecipe.seasonings.map((s, i) => (
                       <span key={`s-${i}`} style={{
                         fontSize: 12, padding: "4px 12px", borderRadius: 10,
                         background: "var(--bg)", boxShadow: "var(--shadow-raised-xs)",
@@ -352,9 +392,9 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
                 <span style={{ width: 4, height: 16, borderRadius: 2, background: "var(--green)" }} />
                 制作步骤
               </h2>
-              {recipe.steps && recipe.steps.length > 0 ? (
+              {fullRecipe.steps && fullRecipe.steps.length > 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {recipe.steps.map((step, i) => (
+                  {fullRecipe.steps.map((step, i) => (
                     <div key={i} style={{
                       display: "flex", gap: 12, padding: 14, borderRadius: 16,
                       background: "var(--bg)", boxShadow: "var(--shadow-raised-sm)",
@@ -381,15 +421,15 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
                   background: "var(--bg)", boxShadow: "var(--shadow-raised-sm)",
                 }}>
                   <div className="prose-chat">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{formatContent(recipe.content)}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{formatContent(fullRecipe.content)}</ReactMarkdown>
                   </div>
                 </div>
               )}
             </div>
 
             {/* Source link */}
-            {recipe.sourceUrl && (
-              <a href={recipe.sourceUrl} target="_blank" rel="noopener noreferrer"
+            {fullRecipe.sourceUrl && (
+              <a href={fullRecipe.sourceUrl} target="_blank" rel="noopener noreferrer"
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                   width: "100%", padding: "12px 0", marginBottom: 16,
@@ -399,6 +439,21 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
                 }}
               >
                 查看原始食谱 →
+              </a>
+            )}
+
+            {/* Video tutorial */}
+            {fullRecipe.videoUrl && (
+              <a href={fullRecipe.videoUrl} target="_blank" rel="noopener noreferrer"
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  width: "100%", padding: "14px 0", marginBottom: 16,
+                  fontSize: 14, fontWeight: 600, color: "#fff", textDecoration: "none",
+                  background: "linear-gradient(135deg, #fb7299, #f25d8e)", borderRadius: 16,
+                  boxShadow: "0 4px 14px rgba(251,114,153,0.3)", transition: "all 0.25s ease",
+                }}
+              >
+                <span style={{ fontSize: 18 }}>🎬</span> 观看视频教程
               </a>
             )}
           </div>
@@ -463,7 +518,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
               fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif",
             }}>移除菜谱</h3>
             <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 24, lineHeight: 1.6 }}>
-              确定要从菜谱栏中移除<br/>「{recipe.title}」吗？<br/>
+              确定要从菜谱栏中移除<br/>「{fullRecipe.title}」吗？<br/>
               <span style={{ fontSize: 11, color: "var(--text-muted)" }}>此操作可以撤销，你仍然可以通过对话重新获取这道菜谱。</span>
             </p>
             <div style={{ display: "flex", gap: 12 }}>
@@ -513,7 +568,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
               fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif",
             }}>记录烹饪</h3>
             <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 20 }}>
-              为「{recipe.title}」留下评价
+              为「{fullRecipe.title}」留下评价
             </p>
 
             <div style={{ marginBottom: 20 }}>

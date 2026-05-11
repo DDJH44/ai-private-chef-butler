@@ -24,7 +24,7 @@ export function getPreference(): Preference {
   return _prefCache;
 }
 
-const INVENTORY_KEYWORDS = ["冰箱", "食材", "有什么", "库存", "现有", "家里有", "还有什么", "看看冰箱", "还剩什么", "还有哪些", "推荐菜", "吃什么", "能做", "做菜", "推荐"];
+const INVENTORY_KEYWORDS = ["冰箱", "库存", "家里有", "看看冰箱", "还剩什么", "搭配", "缺什么", "能做啥", "还差", "可以做什么"];
 
 /** 通用 JSON API 请求封装 */
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -213,6 +213,19 @@ export async function deleteRecipeFromPanel(recipeId: string): Promise<RecipeOpe
     } catch (error) {
         console.error("删除菜谱失败:", error);
         return { success: false, error: error instanceof Error ? error.message : "未知错误" };
+    }
+}
+
+export async function batchCreateRecipes(reqs: AddRecipeRequest[]): Promise<Recipe[]> {
+    try {
+        const data = await request<RecipeListResponse>("/api/v1/recipes/batch-create", {
+            method: "POST",
+            body: JSON.stringify(reqs),
+        });
+        return data.recipes;
+    } catch (error) {
+        console.error("批量创建菜谱失败:", error);
+        return [];
     }
 }
 
