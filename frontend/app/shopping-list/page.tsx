@@ -9,6 +9,7 @@ import {
 } from "@/lib/shoppingListStore";
 import { generateUUID } from "@/lib/utils";
 import { showToast } from "@/components/Toast";
+import { AuthGuard } from "@/components/AuthGuard";
 
 export default function ShoppingListPage() {
     const router = useRouter();
@@ -116,6 +117,7 @@ export default function ShoppingListPage() {
     const [focusedInput, setFocusedInput] = useState<string | null>(null);
 
     return (
+        <AuthGuard>
         <div style={{
             display: "flex",
             flexDirection: "column",
@@ -545,11 +547,12 @@ export default function ShoppingListPage() {
                         inset: 0,
                         zIndex: 50,
                         display: "flex",
-                        alignItems: "center",
+                        alignItems: "flex-start",
                         justifyContent: "center",
                         background: "rgba(0, 0, 0, 0.35)",
                         backdropFilter: "blur(6px)",
-                        padding: 16,
+                        padding: "max(16px, 5vh)",
+                        overflowY: "auto",
                         animation: "fade-in 0.2s ease",
                     }}
                     onClick={() => setShowCreate(false)}
@@ -707,5 +710,6 @@ export default function ShoppingListPage() {
                 </div>
             )}
         </div>
+        </AuthGuard>
     );
 }

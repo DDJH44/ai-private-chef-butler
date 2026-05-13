@@ -5,18 +5,12 @@ import { useRouter } from "next/navigation";
 import {
     Preference, FamilyMember,
     ALLERGY_OPTIONS, DIET_TYPES, TASTE_DIMENSIONS, ROLE_OPTIONS,
+  DEFAULT_PREFERENCE,
 } from "@/types/preference";
 import { loadPreference, savePreference } from "@/lib/preferenceStore";
 import { generateUUID } from "@/lib/utils";
 import { showToast } from "@/components/Toast";
-
-const DEFAULT_PREFERENCE: Preference = {
-    allergies: [],
-    custom_allergies: [],
-    diet_type: "",
-    taste: { spice: 3, salt: 3, sweet: 3, oil: 3 },
-    family_members: [],
-};
+import { AuthGuard } from "@/components/AuthGuard";
 
 const styles = {
     page: {
@@ -72,7 +66,7 @@ const styles = {
     scrollArea: {
         flex: 1,
         overflowY: "auto" as const,
-        padding: "16px 16px 96px 16px",
+        padding: "16px 16px 152px 16px",
         display: "flex",
         flexDirection: "column" as const,
         gap: 16,
@@ -451,6 +445,7 @@ export default function PreferencesPage() {
     });
 
     return (
+        <AuthGuard>
         <div style={styles.page}>
             {/* Global range input styles */}
             <style>{`
@@ -789,5 +784,6 @@ export default function PreferencesPage() {
                 </button>
             </div>
         </div>
+        </AuthGuard>
     );
 }

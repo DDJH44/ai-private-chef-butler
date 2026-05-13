@@ -1,5 +1,7 @@
-from fastapi import APIRouter, HTTPException, Query, Body
+import os
+from fastapi import APIRouter, HTTPException, Query, Body, Depends
 from app.models.schemas import RecipeCreate, RecipeUpdate, RecipeResponse, RecipeListResponse, RecipeOperationResponse
+from app.auth import get_current_user
 import sqlite3
 import json
 from datetime import datetime
@@ -9,9 +11,9 @@ from app.common.logger import logger
 from typing import Optional
 from contextlib import contextmanager
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
-DB_PATH = "app/db/recipes.db"
+DB_PATH = os.getenv("RECIPES_DB_PATH", "data/recipes.db")
 
 
 @contextmanager
@@ -55,10 +57,12 @@ def _serialize(data: dict) -> dict:
 def init_db():
     """初始化数据库表"""
     try:
+        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
         with get_db() as conn:
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS recipes (
                     id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL DEFAULT '',
                     thread_id TEXT,
                     title TEXT NOT NULL,
                     content TEXT NOT NULL,
@@ -89,6 +93,11 @@ def init_db():
                 conn.execute('SELECT video_url FROM recipes LIMIT 1')
             except sqlite3.OperationalError:
                 conn.execute('ALTER TABLE recipes ADD COLUMN video_url TEXT')
+            # Migration: add user_id column if missing
+            try:
+                conn.execute('SELECT user_id FROM recipes LIMIT 1')
+            except sqlite3.OperationalError:
+                conn.execute('ALTER TABLE recipes ADD COLUMN user_id TEXT NOT NULL DEFAULT \'\'')
             conn.commit()
         logger.info("菜谱数据库初始化成功（全局存储模式）")
     except Exception as e:
@@ -101,21 +110,22 @@ init_db()
 
 
 @router.post("", response_model=RecipeResponse)
-async def create_recipe(recipe: RecipeCreate):
+async def create_recipe(recipe: RecipeCreate, current_user: dict = Depends(get_current_user)):
     try:
+        uid = current_user["user_id"]
         recipe_id = f"recipe_{uuid.uuid4().hex[:12]}"
         now = int(datetime.now().timestamp() * 1000)
 
         with get_db() as conn:
             conn.execute('''
                 INSERT INTO recipes (
-                    id, thread_id, title, content, image_url,
+                    id, user_id, thread_id, title, content, image_url,
                     difficulty, cooking_time, ingredients,
                     seasonings, tags, score, reason, source_url, video_url,
                     is_expanded, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
-                recipe_id, None,
+                recipe_id, uid, None,
                 recipe.title, recipe.content, recipe.image_url,
                 recipe.difficulty, recipe.cooking_time,
                 json.dumps(recipe.ingredients or []),
@@ -125,12 +135,12 @@ async def create_recipe(recipe: RecipeCreate):
                 0, now, now
             ))
             conn.commit()
-            row = conn.execute('SELECT * FROM recipes WHERE id = ?', (recipe_id,)).fetchone()
+            row = conn.execute('SELECT * FROM recipes WHERE id = ? AND user_id = ?', (recipe_id, uid)).fetchone()
 
         if not row:
             raise HTTPException(status_code=500, detail="创建菜谱失败")
 
-        logger.info(f"菜谱创建成功：{recipe_id}, 标题：{row['title']}")
+        logger.info(f"菜谱创建成功：{recipe_id}, 标题：{row['title']}, 用户：{uid}")
         return row_to_dict(row)
     except HTTPException:
         raise
@@ -143,12 +153,14 @@ async def create_recipe(recipe: RecipeCreate):
 async def get_recipes(
     limit: Optional[int] = Query(None),
     offset: Optional[int] = Query(None),
+    current_user: dict = Depends(get_current_user),
 ):
     try:
+        uid = current_user["user_id"]
         with get_db() as conn:
             cols = 'id, title, image_url, difficulty, cooking_time, ingredients, seasonings, tags, score, reason, source_url, video_url, is_expanded, created_at, updated_at'
-            query = f'SELECT {cols} FROM recipes ORDER BY created_at DESC'
-            params: list = []
+            query = f'SELECT {cols} FROM recipes WHERE user_id = ? ORDER BY created_at DESC'
+            params: list = [uid]
             if limit:
                 query += ' LIMIT ?'
                 params.append(limit)
@@ -156,7 +168,7 @@ async def get_recipes(
                 query += ' OFFSET ?'
                 params.append(offset)
             rows = conn.execute(query, params).fetchall()
-            total = conn.execute('SELECT COUNT(*) FROM recipes').fetchone()[0]
+            total = conn.execute('SELECT COUNT(*) FROM recipes WHERE user_id = ?', (uid,)).fetchone()[0]
 
         logger.info(f"获取菜谱列表成功，总数：{total}")
         return {"recipes": [row_to_dict(row) for row in rows], "total": total}
@@ -166,9 +178,11 @@ async def get_recipes(
 
 
 @router.post("/batch-create", response_model=RecipeListResponse)
-async def batch_create_recipes(recipes_data: List[RecipeCreate] = Body(...)):
+async def batch_create_recipes(recipes_data: List[RecipeCreate] = Body(...), current_user: dict = Depends(get_current_user)):
     """批量创建菜谱"""
     try:
+        uid = current_user["user_id"]
+        logger.info(f"[batch-create] 收到 {len(recipes_data)} 条菜谱: {[{ 'title': r.title, 'has_content': bool(r.content), 'difficulty': r.difficulty } for r in recipes_data]}")
         results = []
         now = int(datetime.now().timestamp() * 1000)
         with get_db() as conn:
@@ -176,13 +190,13 @@ async def batch_create_recipes(recipes_data: List[RecipeCreate] = Body(...)):
                 recipe_id = f"recipe_{uuid.uuid4().hex[:12]}"
                 conn.execute('''
                     INSERT INTO recipes (
-                        id, thread_id, title, content, image_url,
+                        id, user_id, thread_id, title, content, image_url,
                         difficulty, cooking_time, ingredients,
                         seasonings, tags, score, reason, source_url, video_url,
                         is_expanded, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
-                    recipe_id, None,
+                    recipe_id, uid, None,
                     recipe.title, recipe.content, recipe.image_url,
                     recipe.difficulty, recipe.cooking_time,
                     json.dumps(recipe.ingredients or []),
@@ -191,7 +205,7 @@ async def batch_create_recipes(recipes_data: List[RecipeCreate] = Body(...)):
                     recipe.score, recipe.reason, recipe.source_url, recipe.video_url,
                     0, now, now,
                 ))
-                row = conn.execute('SELECT * FROM recipes WHERE id = ?', (recipe_id,)).fetchone()
+                row = conn.execute('SELECT * FROM recipes WHERE id = ? AND user_id = ?', (recipe_id, uid)).fetchone()
                 if row:
                     results.append(row_to_dict(row))
             conn.commit()
@@ -203,12 +217,13 @@ async def batch_create_recipes(recipes_data: List[RecipeCreate] = Body(...)):
 
 
 @router.post("/batch-delete", response_model=RecipeOperationResponse)
-async def batch_delete_recipes(ids: List[str] = Body(...)):
+async def batch_delete_recipes(ids: List[str] = Body(...), current_user: dict = Depends(get_current_user)):
     """批量删除菜谱"""
     try:
+        uid = current_user["user_id"]
         with get_db() as conn:
             placeholders = ','.join(['?'] * len(ids))
-            conn.execute(f'DELETE FROM recipes WHERE id IN ({placeholders})', ids)
+            conn.execute(f'DELETE FROM recipes WHERE id IN ({placeholders}) AND user_id = ?', [*ids, uid])
             affected = conn.total_changes
             conn.commit()
         logger.info(f"批量删除菜谱成功，删除数量：{affected}")
@@ -218,11 +233,29 @@ async def batch_delete_recipes(ids: List[str] = Body(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/{recipe_id}", response_model=RecipeResponse)
-async def get_recipe(recipe_id: str):
+@router.get("/search", response_model=RecipeListResponse)
+async def search_recipes(q: str = Query(..., description="搜索关键词"), current_user: dict = Depends(get_current_user)):
     try:
+        uid = current_user["user_id"]
         with get_db() as conn:
-            row = conn.execute('SELECT * FROM recipes WHERE id = ?', (recipe_id,)).fetchone()
+            search_pattern = f"%{q}%"
+            rows = conn.execute('''
+                SELECT * FROM recipes
+                WHERE (title LIKE ? OR content LIKE ?) AND user_id = ?
+                ORDER BY created_at DESC
+            ''', [search_pattern, search_pattern, uid]).fetchall()
+        recipes = [row_to_dict(row) for row in rows]
+        return {'recipes': recipes, 'total': len(recipes)}
+    except Exception as e:
+        logger.error(f"搜索菜谱失败：{e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/{recipe_id}", response_model=RecipeResponse)
+async def get_recipe(recipe_id: str, current_user: dict = Depends(get_current_user)):
+    try:
+        uid = current_user["user_id"]
+        with get_db() as conn:
+            row = conn.execute('SELECT * FROM recipes WHERE id = ? AND user_id = ?', (recipe_id, uid)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="菜谱不存在")
         return row_to_dict(row)
@@ -234,10 +267,11 @@ async def get_recipe(recipe_id: str):
 
 
 @router.put("/{recipe_id}", response_model=RecipeResponse)
-async def update_recipe(recipe_id: str, updates: RecipeUpdate):
+async def update_recipe(recipe_id: str, updates: RecipeUpdate, current_user: dict = Depends(get_current_user)):
     try:
+        uid = current_user["user_id"]
         with get_db() as conn:
-            existing = conn.execute('SELECT * FROM recipes WHERE id = ?', (recipe_id,)).fetchone()
+            existing = conn.execute('SELECT * FROM recipes WHERE id = ? AND user_id = ?', (recipe_id, uid)).fetchone()
             if not existing:
                 raise HTTPException(status_code=404, detail="菜谱不存在")
 
@@ -257,10 +291,11 @@ async def update_recipe(recipe_id: str, updates: RecipeUpdate):
             values.append(now)
             values.append(recipe_id)
 
-            query = f"UPDATE recipes SET {', '.join(update_fields)} WHERE id = ?"
+            values.append(uid)
+            query = f"UPDATE recipes SET {', '.join(update_fields)} WHERE id = ? AND user_id = ?"
             conn.execute(query, values)
             conn.commit()
-            row = conn.execute('SELECT * FROM recipes WHERE id = ?', (recipe_id,)).fetchone()
+            row = conn.execute('SELECT * FROM recipes WHERE id = ? AND user_id = ?', (recipe_id, uid)).fetchone()
 
         if not row:
             raise HTTPException(status_code=500, detail="更新菜谱失败")
@@ -275,10 +310,11 @@ async def update_recipe(recipe_id: str, updates: RecipeUpdate):
 
 
 @router.delete("/{recipe_id}", response_model=RecipeOperationResponse)
-async def delete_recipe(recipe_id: str):
+async def delete_recipe(recipe_id: str, current_user: dict = Depends(get_current_user)):
     try:
+        uid = current_user["user_id"]
         with get_db() as conn:
-            conn.execute('DELETE FROM recipes WHERE id = ?', (recipe_id,))
+            conn.execute('DELETE FROM recipes WHERE id = ? AND user_id = ?', (recipe_id, uid))
             affected = conn.total_changes
             conn.commit()
         if affected == 0:
@@ -291,19 +327,3 @@ async def delete_recipe(recipe_id: str):
         logger.error(f"删除菜谱失败：{e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@router.get("/search", response_model=RecipeListResponse)
-async def search_recipes(q: str = Query(..., description="搜索关键词")):
-    try:
-        with get_db() as conn:
-            search_pattern = f"%{q}%"
-            rows = conn.execute('''
-                SELECT * FROM recipes
-                WHERE title LIKE ? OR content LIKE ?
-                ORDER BY created_at DESC
-            ''', [search_pattern, search_pattern]).fetchall()
-        recipes = [row_to_dict(row) for row in rows]
-        return {'recipes': recipes, 'total': len(recipes)}
-    except Exception as e:
-        logger.error(f"搜索菜谱失败：{e}")
-        raise HTTPException(status_code=500, detail=str(e))

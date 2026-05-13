@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState, useEffect } from "react";
 import { loadRecipes, RECIPE_CHANGE_EVENT } from "@/lib/recipeStore";
+import { useAuth } from "@/hooks/useAuth";
 
 const sidebarItems = [
   { id: "chat", icon: "💬", label: "对话", href: "/" },
@@ -24,19 +25,21 @@ const bottomItems = [
   { id: "shopping-list", icon: "🛒", label: "清单", href: "/shopping-list" },
   { id: "fridge", icon: "🧊", label: "冰箱", href: "/fridge" },
   { id: "history", icon: "🕐", label: "历史", href: "/history" },
-  { id: "preferences", icon: "⚙️", label: "偏好", href: "/preferences" },
+  { id: "profile", icon: "👤", label: "我的", href: "/profile" },
 ];
 
 export function SideNav() {
   const pathname = usePathname();
+  const { token } = useAuth();
   const [recipeCount, setRecipeCount] = useState(0);
 
   useEffect(() => {
+    if (!token) return;
     (async () => { const r = await loadRecipes(); setRecipeCount(r.length); })();
     const update = async () => { const r = await loadRecipes(); setRecipeCount(r.length); };
     window.addEventListener(RECIPE_CHANGE_EVENT, update);
     return () => window.removeEventListener(RECIPE_CHANGE_EVENT, update);
-  }, []);
+  }, [token]);
 
   const isActive = useMemo(() => {
     return (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
@@ -59,6 +62,17 @@ export function SideNav() {
         <div style={{ fontSize: 10, color: "var(--text-muted)", textAlign: "center", marginTop: 2, letterSpacing: 0.5 }}>
           AI Private Chef
         </div>
+        <Link href="/profile" style={{
+          marginTop: 10,
+          width: 32, height: 32,
+          borderRadius: "50%",
+          background: "var(--bg)",
+          boxShadow: "var(--shadow-raised-sm)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          textDecoration: "none", fontSize: 14,
+        }}>
+          👤
+        </Link>
       </div>
 
       {/* Nav */}
@@ -105,14 +119,16 @@ export function SideNav() {
 
 export function BottomNav() {
   const pathname = usePathname();
+  const { token } = useAuth();
   const [recipeCount, setRecipeCount] = useState(0);
 
   useEffect(() => {
+    if (!token) return;
     (async () => { const r = await loadRecipes(); setRecipeCount(r.length); })();
     const update = async () => { const r = await loadRecipes(); setRecipeCount(r.length); };
     window.addEventListener(RECIPE_CHANGE_EVENT, update);
     return () => window.removeEventListener(RECIPE_CHANGE_EVENT, update);
-  }, []);
+  }, [token]);
 
   const isActive = useMemo(() => {
     return (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
@@ -129,22 +145,22 @@ export function BottomNav() {
             href={item.href}
             style={{
               display: "flex", flexDirection: "column", alignItems: "center",
-              justifyContent: "center", padding: "10px 6px", minWidth: 0,
+              justifyContent: "center", padding: "6px 4px", minWidth: 0, flex: 1,
               textDecoration: "none", position: "relative",
             }}
           >
-            <span style={{ fontSize: 18, lineHeight: 1 }}>{item.icon}</span>
+            <span style={{ fontSize: 20, lineHeight: 1 }}>{item.icon}</span>
             <span style={{
-              fontSize: 9, marginTop: 3, lineHeight: 1,
+              fontSize: 10, marginTop: 3, lineHeight: 1,
               color: active ? "var(--accent)" : "var(--text-muted)",
               fontWeight: active ? 600 : 400,
             }}>{item.label}</span>
             {item.id === "recipes" && recipeCount > 0 && (
               <span style={{
-                position: "absolute", top: 4, right: 2,
-                fontSize: 8, fontWeight: 700, minWidth: 14, height: 14,
+                position: "absolute", top: 2, right: "50%", transform: "translateX(14px)",
+                fontSize: 10, fontWeight: 700, minWidth: 18, height: 18,
                 borderRadius: 999, display: "flex", alignItems: "center", justifyContent: "center",
-                background: "var(--accent)", color: "#fff", padding: "0 3px",
+                background: "var(--accent)", color: "#fff", padding: "0 4px",
               }}>
                 {recipeCount > 99 ? "99+" : recipeCount}
               </span>

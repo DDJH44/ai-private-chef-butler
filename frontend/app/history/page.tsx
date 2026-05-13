@@ -9,6 +9,7 @@ import {
     HISTORY_CHANGE_EVENT,
 } from "@/lib/historyStore";
 import {showToast} from "@/components/Toast";
+import { AuthGuard } from "@/components/AuthGuard";
 
 type TabKey = "chat" | "view" | "cook";
 
@@ -392,6 +393,7 @@ export default function HistoryPage() {
         : cookHistory;
 
     return (
+        <AuthGuard>
         <div style={styles.page}>
             {/* Header */}
             <header style={styles.header}>
@@ -596,5 +598,6 @@ export default function HistoryPage() {
                 )}
             </div>
         </div>
+        </AuthGuard>
     );
 }

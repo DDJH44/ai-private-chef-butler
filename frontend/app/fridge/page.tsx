@@ -13,6 +13,7 @@ import {
     INGREDIENT_CHANGE_EVENT,
 } from "@/lib/ingredientStore";
 import { showToast } from "@/components/Toast";
+import { AuthGuard } from "@/components/AuthGuard";
 
 export default function FridgePage() {
     const router = useRouter();
@@ -107,6 +108,7 @@ export default function FridgePage() {
     };
 
     return (
+        <AuthGuard>
         <div className="flex flex-col h-full" style={{ background: "var(--bg)" }}>
             {/* Header */}
             <header className="flex-shrink-0 px-4 lg:px-6 py-4" style={{ background: "var(--bg)" }}>
@@ -377,8 +379,8 @@ export default function FridgePage() {
             {showForm && (
                 <div style={{
                     position: "fixed", inset: 0, zIndex: 50,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    padding: 16,
+                    display: "flex", alignItems: "flex-start", justifyContent: "center",
+                    padding: "max(16px, 5vh)", overflowY: "auto",
                     background: "rgba(0,0,0,0.25)",
                     backdropFilter: "blur(4px)",
                     animation: "fadeIn 0.2s ease",
@@ -642,5 +644,6 @@ export default function FridgePage() {
                 </div>
             )}
         </div>
+        </AuthGuard>
     );
 }

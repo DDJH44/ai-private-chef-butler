@@ -5,7 +5,8 @@ import uuid
 import base64
 from datetime import datetime, date
 from typing import Optional, List
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
+from app.auth import get_current_user
 from pydantic import BaseModel
 from contextlib import contextmanager
 from langchain.chat_models import init_chat_model
@@ -14,9 +15,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "nutrition.db")
+DB_PATH = os.getenv("NUTRITION_DB_PATH", "data/nutrition.db")
 
 
 @contextmanager
@@ -35,6 +36,7 @@ def init_db():
         conn.execute('''
             CREATE TABLE IF NOT EXISTS nutrition_records (
                 id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL DEFAULT '',
                 date TEXT NOT NULL,
                 meal_type TEXT NOT NULL,
                 food_name TEXT NOT NULL,
@@ -50,6 +52,11 @@ def init_db():
             )
         ''')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_date ON nutrition_records(date)')
+        # Migration: add user_id column if missing
+        try:
+            conn.execute('SELECT user_id FROM nutrition_records LIMIT 1')
+        except sqlite3.OperationalError:
+            conn.execute('ALTER TABLE nutrition_records ADD COLUMN user_id TEXT NOT NULL DEFAULT \'\'')
         conn.commit()
 
 
@@ -121,17 +128,18 @@ class PhotoAnalysisResult(BaseModel):
 
 
 @router.post("/records", response_model=NutritionRecordResponse)
-async def create_record(record: NutritionRecordCreate):
+async def create_record(record: NutritionRecordCreate, current_user: dict = Depends(get_current_user)):
+    uid = current_user["user_id"]
     record_id = str(uuid.uuid4())
     now = int(datetime.now().timestamp())
 
     with get_db() as conn:
         conn.execute('''
             INSERT INTO nutrition_records (
-                id, date, meal_type, food_name, calories, protein, carbs, fat, fiber, sodium, image_url, notes, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                id, user_id, date, meal_type, food_name, calories, protein, carbs, fat, fiber, sodium, image_url, notes, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            record_id, record.date, record.meal_type, record.food_name,
+            record_id, uid, record.date, record.meal_type, record.food_name,
             record.calories, record.protein, record.carbs, record.fat, record.fiber, record.sodium,
             record.image_url, record.notes, now
         ))
@@ -145,17 +153,18 @@ async def create_record(record: NutritionRecordCreate):
 
 
 @router.get("/records", response_model=List[NutritionRecordResponse])
-async def get_records(date_str: Optional[str] = None, limit: int = 30):
+async def get_records(date_str: Optional[str] = None, limit: int = 30, current_user: dict = Depends(get_current_user)):
+    uid = current_user["user_id"]
     with get_db() as conn:
         if date_str:
             rows = conn.execute(
-                'SELECT * FROM nutrition_records WHERE date = ? ORDER BY created_at DESC',
-                (date_str,)
+                'SELECT * FROM nutrition_records WHERE date = ? AND user_id = ? ORDER BY created_at DESC',
+                (date_str, uid)
             ).fetchall()
         else:
             rows = conn.execute(
-                'SELECT * FROM nutrition_records ORDER BY date DESC, created_at DESC LIMIT ?',
-                (limit,)
+                'SELECT * FROM nutrition_records WHERE user_id = ? ORDER BY date DESC, created_at DESC LIMIT ?',
+                (uid, limit)
             ).fetchall()
 
     return [NutritionRecordResponse(
@@ -167,9 +176,10 @@ async def get_records(date_str: Optional[str] = None, limit: int = 30):
 
 
 @router.delete("/records/{record_id}")
-async def delete_record(record_id: str):
+async def delete_record(record_id: str, current_user: dict = Depends(get_current_user)):
+    uid = current_user["user_id"]
     with get_db() as conn:
-        conn.execute('DELETE FROM nutrition_records WHERE id = ?', (record_id,))
+        conn.execute('DELETE FROM nutrition_records WHERE id = ? AND user_id = ?', (record_id, uid))
         conn.commit()
     return {"status": "ok"}
 
@@ -178,8 +188,10 @@ async def delete_record(record_id: str):
 async def analyze_photo(
     file: UploadFile = File(...),
     meal_type: str = Form(...),
-    date: str = Form(...)
+    date: str = Form(...),
+    current_user: dict = Depends(get_current_user),
 ):
+    uid = current_user["user_id"]
     image_data = await file.read()
     if not image_data:
         raise HTTPException(status_code=400, detail="图片数据为空")
@@ -221,7 +233,7 @@ async def analyze_photo(
 
     try:
         model = init_chat_model(
-            model=os.getenv("DOUBAO_MODEL_NAME", "doubao-seed-2-0-lite-260428"),
+            model=os.getenv("DOUBAO_MODEL_NAME", "doubao-seed-1-8-251228"),
             model_provider="openai",
             base_url=os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v1"),
             api_key=os.getenv("DOUBAO_API_KEY")
@@ -257,10 +269,10 @@ async def analyze_photo(
             with get_db() as conn:
                 conn.execute('''
                     INSERT INTO nutrition_records (
-                        id, date, meal_type, food_name, calories, protein, carbs, fat, fiber, sodium, image_url, notes, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        id, user_id, date, meal_type, food_name, calories, protein, carbs, fat, fiber, sodium, image_url, notes, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
-                    record_id, date, meal_type, food_item.food_name,
+                    record_id, uid, date, meal_type, food_item.food_name,
                     food_item.calories, food_item.protein, food_item.carbs, food_item.fat,
                     food_item.fiber, food_item.sodium, image_url,
                     f"估算重量: {food_item.estimated_weight}" if food_item.estimated_weight else None,
@@ -284,11 +296,12 @@ async def analyze_photo(
 
 
 @router.get("/health-eval/{date_str}")
-async def health_evaluation(date_str: str):
+async def health_evaluation(date_str: str, current_user: dict = Depends(get_current_user)):
+    uid = current_user["user_id"]
     with get_db() as conn:
         rows = conn.execute(
-            'SELECT * FROM nutrition_records WHERE date = ? ORDER BY created_at',
-            (date_str,)
+            'SELECT * FROM nutrition_records WHERE date = ? AND user_id = ? ORDER BY created_at',
+            (date_str, uid)
         ).fetchall()
 
     if not rows:
@@ -336,7 +349,7 @@ async def health_evaluation(date_str: str):
 
     try:
         model = init_chat_model(
-            model=os.getenv("DOUBAO_MODEL_NAME", "doubao-seed-2-0-lite-260428"),
+            model=os.getenv("DOUBAO_MODEL_NAME", "doubao-seed-1-8-251228"),
             model_provider="openai",
             base_url=os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v1"),
             api_key=os.getenv("DOUBAO_API_KEY")
@@ -363,11 +376,12 @@ async def health_evaluation(date_str: str):
 
 
 @router.get("/summary/{date_str}", response_model=DailySummary)
-async def get_daily_summary(date_str: str):
+async def get_daily_summary(date_str: str, current_user: dict = Depends(get_current_user)):
+    uid = current_user["user_id"]
     with get_db() as conn:
         rows = conn.execute(
-            'SELECT * FROM nutrition_records WHERE date = ? ORDER BY created_at',
-            (date_str,)
+            'SELECT * FROM nutrition_records WHERE date = ? AND user_id = ? ORDER BY created_at',
+            (date_str, uid)
         ).fetchall()
 
     meals = [NutritionRecordResponse(

@@ -157,3 +157,31 @@ class ShoppingListListResponse(BaseModel):
 class ShoppingListOperationResponse(BaseModel):
     success: bool
     message: Optional[str] = None
+
+
+# ========================================
+# 用户认证相关模型
+# ========================================
+
+class UserRegister(BaseModel):
+    username: str
+    email: str
+    password: str
+
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+
+class UserResponse(BaseModel):
+    id: str
+    username: str
+    email: str
+    created_at: int
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse

@@ -1,7 +1,13 @@
 import { ShoppingList, ShoppingListItem } from '@/types/shoppingList';
+import { getToken } from './authStore';
 
 import { apiPath } from './env';
 const BASE = apiPath('/v1/shopping');
+
+function authHeaders(): Record<string, string> {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 interface ShoppingListFromAPI {
     id: string;
@@ -25,7 +31,7 @@ function mapLists(apiLists: ShoppingListFromAPI[]): ShoppingList[] {
 }
 
 export async function fetchShoppingLists(): Promise<ShoppingList[]> {
-    const resp = await fetch(BASE);
+    const resp = await fetch(BASE, { headers: authHeaders() });
     if (!resp.ok) throw new Error(`Failed to fetch shopping lists: ${resp.status}`);
     const data = await resp.json();
     return mapLists(data.shopping_lists || []);
@@ -38,7 +44,7 @@ export async function createShoppingList(data: {
 }): Promise<ShoppingList> {
     const resp = await fetch(BASE, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({
             source_recipes: data.source_recipes || [],
             source_recipe_names: data.source_recipe_names || [],
@@ -76,7 +82,7 @@ export async function updateShoppingList(
 
     const resp = await fetch(`${BASE}/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(body),
     });
     if (!resp.ok) throw new Error(`Failed to update shopping list: ${resp.status}`);
@@ -84,12 +90,12 @@ export async function updateShoppingList(
 }
 
 export async function deleteShoppingList(id: string): Promise<void> {
-    const resp = await fetch(`${BASE}/${id}`, { method: 'DELETE' });
+    const resp = await fetch(`${BASE}/${id}`, { method: 'DELETE', headers: authHeaders() });
     if (!resp.ok) throw new Error(`Failed to delete shopping list: ${resp.status}`);
 }
 
 export async function toggleShoppingItem(listId: string, itemId: string): Promise<ShoppingList> {
-    const resp = await fetch(`${BASE}/${listId}/items/${itemId}/toggle`, { method: 'PATCH' });
+    const resp = await fetch(`${BASE}/${encodeURIComponent(listId)}/items/${encodeURIComponent(itemId)}/toggle`, { method: 'PATCH', headers: authHeaders() });
     if (!resp.ok) throw new Error(`Failed to toggle item: ${resp.status}`);
     return mapList(await resp.json());
 }

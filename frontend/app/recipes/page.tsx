@@ -7,6 +7,7 @@ import {RecipeCard} from "@/components/RecipeCard";
 import {RecipeDetailModal} from "@/components/RecipeDetailModal";
 import { Loading } from "@/components/Loading";
 import { showToast } from "@/components/Toast";
+import { AuthGuard } from "@/components/AuthGuard";
 import {loadRecipes, RECIPE_CHANGE_EVENT, deleteRecipesBatch} from "@/lib/recipeStore";
 
 export default function RecipesPage() {
@@ -82,6 +83,7 @@ export default function RecipesPage() {
     };
 
     return (
+        <AuthGuard>
         <div style={{
             display: "flex",
             flexDirection: "column",
@@ -355,5 +357,6 @@ export default function RecipesPage() {
                 />
             )}
         </div>
+        </AuthGuard>
     );
 }

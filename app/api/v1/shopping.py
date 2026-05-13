@@ -1,20 +1,22 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from app.models.schemas import (
     ShoppingListCreate, ShoppingListUpdate,
     ShoppingListResponse, ShoppingListListResponse, ShoppingListOperationResponse,
     ShoppingListItemResponse,
 )
+from app.auth import get_current_user
 import sqlite3
 import json
 from datetime import datetime
 import uuid
 from app.common.logger import logger
 from typing import Optional
+import os
 from contextlib import contextmanager
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
-DB_PATH = "app/db/shopping.db"
+DB_PATH = os.getenv("SHOPPING_DB_PATH", "data/shopping.db")
 
 
 @contextmanager
@@ -47,10 +49,12 @@ def row_to_dict(row: sqlite3.Row) -> dict:
 
 def init_db():
     try:
+        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
         with get_db() as conn:
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS shopping_lists (
                     id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL DEFAULT '',
                     source_recipes TEXT DEFAULT '[]',
                     source_recipe_names TEXT DEFAULT '[]',
                     items TEXT DEFAULT '[]',
@@ -60,6 +64,11 @@ def init_db():
                 )
             ''')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_shopping_created_at ON shopping_lists(created_at DESC)')
+            # Migration: add user_id column if missing
+            try:
+                conn.execute('SELECT user_id FROM shopping_lists LIMIT 1')
+            except sqlite3.OperationalError:
+                conn.execute('ALTER TABLE shopping_lists ADD COLUMN user_id TEXT NOT NULL DEFAULT \'\'')
             conn.commit()
         logger.info("购物清单数据库初始化成功")
     except Exception as e:
@@ -78,25 +87,26 @@ def _ensure_item_ids(items: list) -> list:
 
 
 @router.post("", response_model=ShoppingListResponse)
-async def create_shopping_list(data: ShoppingListCreate):
+async def create_shopping_list(data: ShoppingListCreate, current_user: dict = Depends(get_current_user)):
     try:
+        uid = current_user["user_id"]
         list_id = f"sl_{uuid.uuid4().hex[:12]}"
         now = int(datetime.now().timestamp() * 1000)
         items = _ensure_item_ids([item.model_dump() for item in data.items])
 
         with get_db() as conn:
             conn.execute('''
-                INSERT INTO shopping_lists (id, source_recipes, source_recipe_names, items, status, created_at, updated_at)
-                VALUES (?, ?, ?, ?, 'pending', ?, ?)
+                INSERT INTO shopping_lists (id, user_id, source_recipes, source_recipe_names, items, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)
             ''', (
-                list_id,
+                list_id, uid,
                 json.dumps(data.source_recipes),
                 json.dumps(data.source_recipe_names),
                 json.dumps(items),
                 now, now,
             ))
             conn.commit()
-            row = conn.execute('SELECT * FROM shopping_lists WHERE id = ?', (list_id,)).fetchone()
+            row = conn.execute('SELECT * FROM shopping_lists WHERE id = ? AND user_id = ?', (list_id, uid)).fetchone()
 
         if not row:
             raise HTTPException(status_code=500, detail="创建购物清单失败")
@@ -111,11 +121,12 @@ async def create_shopping_list(data: ShoppingListCreate):
 
 
 @router.get("", response_model=ShoppingListListResponse)
-async def get_shopping_lists():
+async def get_shopping_lists(current_user: dict = Depends(get_current_user)):
     try:
+        uid = current_user["user_id"]
         with get_db() as conn:
-            rows = conn.execute('SELECT * FROM shopping_lists ORDER BY created_at DESC').fetchall()
-            total = conn.execute('SELECT COUNT(*) FROM shopping_lists').fetchone()[0]
+            rows = conn.execute('SELECT * FROM shopping_lists WHERE user_id = ? ORDER BY created_at DESC', (uid,)).fetchall()
+            total = conn.execute('SELECT COUNT(*) FROM shopping_lists WHERE user_id = ?', (uid,)).fetchone()[0]
 
         logger.info(f"获取购物清单列表成功，总数：{total}")
         return {"shopping_lists": [row_to_dict(row) for row in rows], "total": total}
@@ -125,10 +136,11 @@ async def get_shopping_lists():
 
 
 @router.get("/{list_id}", response_model=ShoppingListResponse)
-async def get_shopping_list(list_id: str):
+async def get_shopping_list(list_id: str, current_user: dict = Depends(get_current_user)):
     try:
+        uid = current_user["user_id"]
         with get_db() as conn:
-            row = conn.execute('SELECT * FROM shopping_lists WHERE id = ?', (list_id,)).fetchone()
+            row = conn.execute('SELECT * FROM shopping_lists WHERE id = ? AND user_id = ?', (list_id, uid)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="购物清单不存在")
         return row_to_dict(row)
@@ -140,10 +152,11 @@ async def get_shopping_list(list_id: str):
 
 
 @router.put("/{list_id}", response_model=ShoppingListResponse)
-async def update_shopping_list(list_id: str, updates: ShoppingListUpdate):
+async def update_shopping_list(list_id: str, updates: ShoppingListUpdate, current_user: dict = Depends(get_current_user)):
     try:
+        uid = current_user["user_id"]
         with get_db() as conn:
-            existing = conn.execute('SELECT * FROM shopping_lists WHERE id = ?', (list_id,)).fetchone()
+            existing = conn.execute('SELECT * FROM shopping_lists WHERE id = ? AND user_id = ?', (list_id, uid)).fetchone()
             if not existing:
                 raise HTTPException(status_code=404, detail="购物清单不存在")
 
@@ -171,11 +184,12 @@ async def update_shopping_list(list_id: str, updates: ShoppingListUpdate):
             update_fields.append("updated_at = ?")
             values.append(now)
             values.append(list_id)
+            values.append(uid)
 
-            query = f"UPDATE shopping_lists SET {', '.join(update_fields)} WHERE id = ?"
+            query = f"UPDATE shopping_lists SET {', '.join(update_fields)} WHERE id = ? AND user_id = ?"
             conn.execute(query, values)
             conn.commit()
-            row = conn.execute('SELECT * FROM shopping_lists WHERE id = ?', (list_id,)).fetchone()
+            row = conn.execute('SELECT * FROM shopping_lists WHERE id = ? AND user_id = ?', (list_id, uid)).fetchone()
 
         if not row:
             raise HTTPException(status_code=500, detail="更新购物清单失败")
@@ -190,10 +204,11 @@ async def update_shopping_list(list_id: str, updates: ShoppingListUpdate):
 
 
 @router.delete("/{list_id}", response_model=ShoppingListOperationResponse)
-async def delete_shopping_list(list_id: str):
+async def delete_shopping_list(list_id: str, current_user: dict = Depends(get_current_user)):
     try:
+        uid = current_user["user_id"]
         with get_db() as conn:
-            conn.execute('DELETE FROM shopping_lists WHERE id = ?', (list_id,))
+            conn.execute('DELETE FROM shopping_lists WHERE id = ? AND user_id = ?', (list_id, uid))
             affected = conn.total_changes
             conn.commit()
         if affected == 0:
@@ -208,10 +223,11 @@ async def delete_shopping_list(list_id: str):
 
 
 @router.patch("/{list_id}/items/{item_id}/toggle", response_model=ShoppingListResponse)
-async def toggle_shopping_item(list_id: str, item_id: str):
+async def toggle_shopping_item(list_id: str, item_id: str, current_user: dict = Depends(get_current_user)):
     try:
+        uid = current_user["user_id"]
         with get_db() as conn:
-            row = conn.execute('SELECT * FROM shopping_lists WHERE id = ?', (list_id,)).fetchone()
+            row = conn.execute('SELECT * FROM shopping_lists WHERE id = ? AND user_id = ?', (list_id, uid)).fetchone()
             if not row:
                 raise HTTPException(status_code=404, detail="购物清单不存在")
 
@@ -233,11 +249,11 @@ async def toggle_shopping_item(list_id: str, item_id: str):
             now = int(datetime.now().timestamp() * 1000)
 
             conn.execute(
-                'UPDATE shopping_lists SET items = ?, status = ?, updated_at = ? WHERE id = ?',
-                (json.dumps(items), status, now, list_id),
+                'UPDATE shopping_lists SET items = ?, status = ?, updated_at = ? WHERE id = ? AND user_id = ?',
+                (json.dumps(items), status, now, list_id, uid),
             )
             conn.commit()
-            row = conn.execute('SELECT * FROM shopping_lists WHERE id = ?', (list_id,)).fetchone()
+            row = conn.execute('SELECT * FROM shopping_lists WHERE id = ? AND user_id = ?', (list_id, uid)).fetchone()
 
         logger.info(f"购物清单项目切换成功：{list_id}/{item_id}")
         return row_to_dict(row)

@@ -20,6 +20,8 @@ dependencies = [
     "uvicorn>=0.32.0",
     "requests>=2.32.0",
     "langchain-tavily>=0.2.18",
+    "python-jose[cryptography]>=3.3.0",
+    "bcrypt>=4.0.0",
 ]
 
 [[tool.uv.index]]

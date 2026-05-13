@@ -1,0 +1,38 @@
+# Environment files with secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info
+dist/
+build/
+.venv/
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+app/db/
+data/
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Claude
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# SSL certs
+nginx/ssl/*.pem

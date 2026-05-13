@@ -86,3 +86,18 @@ export function removeMealFromPlan(planId: string, date: string, mealType: "brea
     };
     updateMealInPlan(planId, date, mealType, emptyMeal);
 }
+
+export function clearMealPlan(planId: string): void {
+    const plans = loadMealPlans();
+    const plan = plans.find((p) => p.id === planId);
+    if (!plan) return;
+    for (const day of plan.days) {
+        day.meals.breakfast = { recipe_id: null, recipe_name: null, ingredients: [], calories: 0, protein: 0, carbs: 0, fat: 0, status: "empty" };
+        day.meals.lunch = { recipe_id: null, recipe_name: null, ingredients: [], calories: 0, protein: 0, carbs: 0, fat: 0, status: "empty" };
+        day.meals.dinner = { recipe_id: null, recipe_name: null, ingredients: [], calories: 0, protein: 0, carbs: 0, fat: 0, status: "empty" };
+        day.daily_total = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+    }
+    plan.weekly_total = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+    saveMealPlans(plans);
+    notifyChange();
+}

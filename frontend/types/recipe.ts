@@ -59,18 +59,18 @@ export interface RecipeStore {
  * 字段名与后端 RecipeCreate 模型保持一致（snake_case）
  */
 export interface AddRecipeRequest {
-  /** 菜品名称 */
   title: string;
-  /** 完整做法内容 */
   content: string;
-  /** 菜品图片 URL */
   image_url?: string;
-  /** 难度等级 */
   difficulty?: string;
-  /** 烹饪时间 */
   cooking_time?: string;
-  /** 视频教程链接 */
   video_url?: string;
+  ingredients?: string[];
+  seasonings?: string[];
+  tags?: string[];
+  score?: number;
+  reason?: string;
+  source_url?: string;
 }
 
 /**

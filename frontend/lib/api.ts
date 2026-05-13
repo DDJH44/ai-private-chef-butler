@@ -8,7 +8,16 @@ import { loadCookHistory } from './historyStore';
 import type { Preference } from '@/types/preference';
 
 import { apiPath } from './env';
+import { getToken } from './authStore';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+
+function handleAuthExpired() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem("auth_token");
+  document.cookie = "auth_status=; path=/; max-age=0";
+  window.location.href = "/login";
+}
 
 // Preference cache — read once, refresh only on explicit change
 let _prefCache: Preference | null = null;
@@ -26,18 +35,47 @@ export function getPreference(): Preference {
 
 const INVENTORY_KEYWORDS = ["冰箱", "库存", "家里有", "看看冰箱", "还剩什么", "搭配", "缺什么", "能做啥", "还差", "可以做什么"];
 
+// 只有消息涉及这些主题时才注入烹饪记忆上下文
+const COOKING_CONTEXT_KEYWORDS = [
+  "推荐", "菜", "吃", "做", "煮", "炒", "炖", "蒸", "烤", "炸", "煎", "焖", "烧", "煲",
+  "食谱", "菜谱", "食材", "烹饪", "料理", "美食", "晚餐", "午餐", "早餐", "加餐",
+  "食谱", "做饭", "下厨", "厨房", "口味", "营养", "热量", "蛋白", "碳水", "脂肪",
+  "帮我", "建议", "规划", "安排", "搭配", "选", "换", "推荐一下",
+  ...INVENTORY_KEYWORDS,
+];
+
 /** 通用 JSON API 请求封装 */
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+export async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
+  const method = (options?.method || "GET").toUpperCase();
+  const hasBody = options?.body != null;
+  const headers: Record<string, string> = { ...(options?.headers as Record<string, string> || {}) };
+  // Only set Content-Type for requests with a body (avoids unnecessary CORS preflight on GET/HEAD)
+  if (hasBody && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
   const res = await fetch(url, {
-    headers: { "Content-Type": "application/json", ...options?.headers },
     ...options,
+    headers,
   });
   if (!res.ok) {
+    if (res.status === 401) { handleAuthExpired(); throw new Error("请先登录"); }
     const errorData = await res.json().catch(() => ({}));
-    throw new Error((errorData as { detail?: string }).detail || `请求失败: ${res.status}`);
+    throw new Error((errorData as { detail?: string }).detail || "请求失败，请稍后重试");
   }
   return res.json();
+}
+
+/** 带认证头的 API 请求 */
+export async function authRequest<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = getToken();
+  return request<T>(path, {
+    ...options,
+    headers: {
+      ...options?.headers,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
 }
 
 /**
@@ -74,9 +112,12 @@ export async function streamChat(
     image_url?: string,
     onError?: (error: Error) => void,
     onComplete?: () => void,
-    threadId?: string
+    threadId?: string,
+    signal?: AbortSignal,
 ): Promise<void> {
     try {
+        if (signal?.aborted) return;
+
         const shouldIncludeInventory = INVENTORY_KEYWORDS.some((kw) => message.includes(kw));
         const inventory = shouldIncludeInventory
             ? loadIngredients().map((i) => ({name: i.name, quantity: i.quantity, unit: i.unit, status: i.status}))
@@ -113,10 +154,15 @@ export async function streamChat(
           ? `\n【用户烹饪记忆 — 请据此个性化推荐】\n${parts.map(p => `- ${p}`).join('\n')}\n`
           : "";
 
+        // 只有消息涉及烹饪/食物主题时才注入上下文
+        const isFoodRelated = COOKING_CONTEXT_KEYWORDS.some((kw) => message.includes(kw));
+        const finalMessage = isFoodRelated ? message + cookContext : message;
+
+        const token = getToken();
         const response = await fetch(`${API_BASE}/api/v1/chat/stream`, {
             method: "POST",
             body: JSON.stringify({
-                message: message + cookContext,
+                message: finalMessage,
                 image_url: image_url,
                 thread_id: threadId,
                 preference: getPreference(),
@@ -124,11 +170,14 @@ export async function streamChat(
             }),
             headers: {
                 "Content-Type": "application/json",
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
+            signal,
         });
 
         if (!response.ok) {
-            throw new Error(`请求失败: ${response.status}`);
+            if (response.status === 401) { handleAuthExpired(); throw new Error("请先登录"); }
+            throw new Error("请求失败，请稍后重试");
         }
 
         const reader = response.body?.getReader();
@@ -140,6 +189,7 @@ export async function streamChat(
         let fullContent = "";
 
         while (true) {
+            if (signal?.aborted) break;
             const {done, value} = await reader.read();
             if (done) {
                 onComplete?.();
@@ -151,6 +201,7 @@ export async function streamChat(
             onChunk(fullContent);
         }
     } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
         onError?.(error as Error);
     }
 }
@@ -159,7 +210,7 @@ export async function streamChat(
  * 获取聊天历史
  */
 export async function getChatHistory(threadId: string): Promise<{ role: string; content: string }[]> {
-    const data = await request<{ messages: { role: string; content: string }[] }>(
+    const data = await authRequest<{ messages: { role: string; content: string }[] }>(
         `/api/v1/chat/messages?thread_id=${threadId}`
     );
     return data.messages;
@@ -169,7 +220,7 @@ export async function getChatHistory(threadId: string): Promise<{ role: string; 
  * 清空聊天历史
  */
 export async function clearChatHistory(threadId: string): Promise<void> {
-    await request(`/api/v1/chat/messages?thread_id=${threadId}`, { method: "DELETE" });
+    await authRequest(`/api/v1/chat/messages?thread_id=${threadId}`, { method: "DELETE" });
 }
 
 /**
@@ -185,7 +236,7 @@ export async function clearChatHistory(threadId: string): Promise<void> {
  */
 export async function addRecipeToPanel(req: AddRecipeRequest): Promise<RecipeOperationResponse> {
     try {
-        const recipe = await request<Recipe>("/api/v1/recipes", {
+        const recipe = await authRequest<Recipe>("/api/v1/recipes", {
             method: "POST",
             body: JSON.stringify(req),
         });
@@ -198,7 +249,7 @@ export async function addRecipeToPanel(req: AddRecipeRequest): Promise<RecipeOpe
 
 export async function getRecipes(): Promise<Recipe[]> {
     try {
-        const data = await request<RecipeListResponse>("/api/v1/recipes");
+        const data = await authRequest<RecipeListResponse>("/api/v1/recipes");
         return data.recipes;
     } catch (error) {
         console.error("获取菜谱失败:", error);
@@ -208,7 +259,7 @@ export async function getRecipes(): Promise<Recipe[]> {
 
 export async function deleteRecipeFromPanel(recipeId: string): Promise<RecipeOperationResponse> {
     try {
-        await request(`/api/v1/recipes/${encodeURIComponent(recipeId)}`, { method: "DELETE" });
+        await authRequest(`/api/v1/recipes/${encodeURIComponent(recipeId)}`, { method: "DELETE" });
         return { success: true };
     } catch (error) {
         console.error("删除菜谱失败:", error);
@@ -217,21 +268,16 @@ export async function deleteRecipeFromPanel(recipeId: string): Promise<RecipeOpe
 }
 
 export async function batchCreateRecipes(reqs: AddRecipeRequest[]): Promise<Recipe[]> {
-    try {
-        const data = await request<RecipeListResponse>("/api/v1/recipes/batch-create", {
-            method: "POST",
-            body: JSON.stringify(reqs),
-        });
-        return data.recipes;
-    } catch (error) {
-        console.error("批量创建菜谱失败:", error);
-        return [];
-    }
+    const data = await authRequest<RecipeListResponse>("/api/v1/recipes/batch-create", {
+        method: "POST",
+        body: JSON.stringify(reqs),
+    });
+    return data.recipes;
 }
 
 export async function batchDeleteRecipes(ids: string[]): Promise<RecipeOperationResponse> {
     try {
-        await request("/api/v1/recipes/batch-delete", {
+        await authRequest("/api/v1/recipes/batch-delete", {
             method: "POST",
             body: JSON.stringify(ids),
         });
@@ -247,7 +293,7 @@ export async function updateRecipe(
     updates: Partial<Recipe>
 ): Promise<RecipeOperationResponse> {
     try {
-        const recipe = await request<Recipe>(`/api/v1/recipes/${encodeURIComponent(recipeId)}`, {
+        const recipe = await authRequest<Recipe>(`/api/v1/recipes/${encodeURIComponent(recipeId)}`, {
             method: "PUT",
             body: JSON.stringify(updates),
         });
@@ -265,8 +311,9 @@ export async function generateMealPlan(params: {
     requirements?: string;
     preference?: Record<string, unknown>;
     inventory?: Array<Record<string, unknown>>;
+    existing_plan?: Record<string, unknown>;
 }): Promise<Record<string, unknown>> {
-    const data = await request<Record<string, unknown>>("/api/v1/meal-plan/generate", {
+    const data = await authRequest<Record<string, unknown>>("/api/v1/meal-plan/generate", {
         method: "POST",
         body: JSON.stringify(params),
     });
@@ -275,7 +322,7 @@ export async function generateMealPlan(params: {
 
 export async function searchRecipes(query: string): Promise<Recipe[]> {
     try {
-        const data = await request<RecipeListResponse>(
+        const data = await authRequest<RecipeListResponse>(
             `/api/v1/recipes/search?${new URLSearchParams({ q: query })}`
         );
         return data.recipes;

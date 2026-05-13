@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/useAuth";
+import { AuthGuard } from "@/components/AuthGuard";
+import { FeishuSettings } from "@/components/FeishuSettings";
 
 const menuItems = [
     {
@@ -26,8 +29,14 @@ const menuItems = [
 
 export default function ProfilePage() {
     const router = useRouter();
+    const { user, logout } = useAuth();
+
+    const formatDate = (ts: number) => {
+        return new Date(ts * 1000).toLocaleDateString("zh-CN");
+    };
 
     return (
+        <AuthGuard>
         <div
             style={{
                 display: "flex",
@@ -117,57 +126,89 @@ export default function ProfilePage() {
                 }}
             >
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                    {/* Brand Card */}
-                    <div
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "14px",
-                            padding: "18px 20px",
-                            borderRadius: "20px",
-                            background: "var(--bg)",
-                            boxShadow: "var(--shadow-raised-lg)",
-                            transition: "all 0.25s ease",
-                        }}
-                    >
+                    {/* User Card — when logged in */}
+                    {user ? (
                         <div
                             style={{
-                                width: "56px",
-                                height: "56px",
-                                borderRadius: "18px",
-                                background: "var(--accent)",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontSize: "28px",
-                                boxShadow: "var(--shadow-raised)",
+                                padding: "22px 20px",
+                                borderRadius: "20px",
+                                background: "var(--bg)",
+                                boxShadow: "var(--shadow-raised-lg)",
                             }}
                         >
-                            👨‍🍳
-                        </div>
-                        <div>
-                            <h2
+                            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16 }}>
+                                <div
+                                    style={{
+                                        width: 56, height: 56, borderRadius: 18,
+                                        background: "var(--accent)", display: "flex", alignItems: "center",
+                                        justifyContent: "center", fontSize: 28,
+                                        boxShadow: "var(--shadow-raised)",
+                                    }}
+                                >
+                                    👤
+                                </div>
+                                <div>
+                                    <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", margin: 0 }}>
+                                        {user.username}
+                                    </h2>
+                                    <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "2px 0 0" }}>
+                                        {user.email}
+                                    </p>
+                                    <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "2px 0 0" }}>
+                                        注册于 {formatDate(user.created_at)}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={logout}
                                 style={{
-                                    fontSize: "16px",
-                                    fontWeight: 700,
-                                    color: "var(--text)",
-                                    margin: 0,
-                                    fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif",
+                                    padding: "10px 18px", borderRadius: 12,
+                                    background: "var(--bg)", color: "var(--rose)",
+                                    boxShadow: "var(--shadow-raised-sm)", border: "none",
+                                    cursor: "pointer", fontSize: 13, fontWeight: 600,
+                                }}
+                                onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
+                                onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
+                            >
+                                退出登录
+                            </button>
+                        </div>
+                    ) : (
+                        /* Login/Register card — when not logged in */
+                        <div
+                            style={{
+                                display: "flex", alignItems: "center", gap: 14,
+                                padding: "18px 20px", borderRadius: "20px",
+                                background: "var(--bg)", boxShadow: "var(--shadow-raised-lg)",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    width: 56, height: 56, borderRadius: 18,
+                                    background: "var(--bg)", display: "flex", alignItems: "center",
+                                    justifyContent: "center", fontSize: 28,
+                                    boxShadow: "var(--shadow-inset)",
                                 }}
                             >
-                                AI 私人厨师
-                            </h2>
-                            <p
+                                👤
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <p style={{ fontSize: 14, color: "var(--text-secondary)", margin: 0 }}>
+                                    登录后可同步数据
+                                </p>
+                            </div>
+                            <Link
+                                href="/login"
                                 style={{
-                                    fontSize: "12px",
-                                    color: "var(--text-secondary)",
-                                    margin: "2px 0 0 0",
+                                    padding: "10px 20px", background: "var(--accent)", color: "#fff",
+                                    borderRadius: 14, fontSize: 14, fontWeight: 600, textDecoration: "none",
+                                    boxShadow: "var(--shadow-accent)",
                                 }}
                             >
-                                你的专属美食助手
-                            </p>
+                                登录
+                            </Link>
                         </div>
-                    </div>
+                    )}
 
                     {/* Menu Items */}
                     <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -241,8 +282,12 @@ export default function ProfilePage() {
                             </Link>
                         ))}
                     </div>
+
+                    {/* 飞书集成 — 仅登录后可见 */}
+                    {user && <FeishuSettings />}
                 </div>
             </div>
         </div>
+        </AuthGuard>
     );
 }

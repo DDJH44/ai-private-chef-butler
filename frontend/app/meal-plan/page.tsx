@@ -3,9 +3,10 @@
 import {useState, useEffect, useCallback} from "react";
 import {useRouter} from "next/navigation";
 import {MealPlan, MEAL_TYPES, WEEKDAYS, formatWeekRange, MealItem} from "@/types/mealPlan";
-import {getOrCreateWeekPlan, removeMealFromPlan, updateMealInPlan, MEAL_PLAN_CHANGE_EVENT} from "@/lib/mealPlanStore";
+import {getOrCreateWeekPlan, removeMealFromPlan, updateMealInPlan, clearMealPlan, MEAL_PLAN_CHANGE_EVENT} from "@/lib/mealPlanStore";
 import {generateShoppingListFromRecipes} from "@/lib/shoppingListGenerator";
 import {showToast} from "@/components/Toast";
+import { AuthGuard } from "@/components/AuthGuard";
 import {generateMealPlan} from "@/lib/api";
 import { getPreference } from "@/lib/api";
 import {loadIngredients} from "@/lib/ingredientStore";
@@ -230,7 +231,7 @@ const s = {
         transition,
     },
     mealName: {
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: 600,
         color: "var(--text)",
         lineHeight: 1.3,
@@ -240,7 +241,7 @@ const s = {
         overflow: "hidden",
     },
     mealKcal: {
-        fontSize: 9,
+        fontSize: 10,
         color: "var(--text-muted)",
         marginTop: 2,
     },
@@ -492,7 +493,64 @@ export default function MealPlanPage() {
     const [showGenerate, setShowGenerate] = useState(false);
     const [generating, setGenerating] = useState(false);
     const [genRequirements, setGenRequirements] = useState("");
-    const [genMode, setGenMode] = useState<"full" | "dinner_only">("full");
+    const [genMode, setGenMode] = useState<"full" | "breakfast_only" | "lunch_only" | "dinner_only">("full");
+
+    // Edit meal modal state
+    const [showEdit, setShowEdit] = useState(false);
+    const [editingDate, setEditingDate] = useState("");
+    const [editingMealType, setEditingMealType] = useState<"breakfast" | "lunch" | "dinner">("breakfast");
+    const [editName, setEditName] = useState("");
+    const [editIngredients, setEditIngredients] = useState("");
+    const [editCalories, setEditCalories] = useState("");
+    const [editProtein, setEditProtein] = useState("");
+    const [editCarbs, setEditCarbs] = useState("");
+    const [editFat, setEditFat] = useState("");
+
+    const openEdit = useCallback((date: string, mealType: "breakfast" | "lunch" | "dinner") => {
+        if (!plan) return;
+        const day = plan.days.find(d => d.date === date);
+        const meal = day?.meals[mealType];
+        setEditingDate(date);
+        setEditingMealType(mealType);
+        if (meal && meal.status === "planned") {
+            setEditName(meal.recipe_name || "");
+            setEditIngredients((meal.ingredients || []).join("、"));
+            setEditCalories(meal.calories ? String(meal.calories) : "");
+            setEditProtein(meal.protein ? String(meal.protein) : "");
+            setEditCarbs(meal.carbs ? String(meal.carbs) : "");
+            setEditFat(meal.fat ? String(meal.fat) : "");
+        } else {
+            setEditName("");
+            setEditIngredients("");
+            setEditCalories("");
+            setEditProtein("");
+            setEditCarbs("");
+            setEditFat("");
+        }
+        setShowEdit(true);
+    }, [plan]);
+
+    const handleSaveMeal = useCallback(() => {
+        if (!plan || !editName.trim()) return;
+        const meal: MealItem = {
+            recipe_id: null,
+            recipe_name: editName.trim(),
+            ingredients: editIngredients.split(/[,，、]/).map(s => s.trim()).filter(Boolean),
+            calories: Number(editCalories) || 0,
+            protein: Number(editProtein) || 0,
+            carbs: Number(editCarbs) || 0,
+            fat: Number(editFat) || 0,
+            status: "planned",
+        };
+        updateMealInPlan(plan.id, editingDate, editingMealType, meal);
+        setShowEdit(false);
+    }, [plan, editName, editIngredients, editCalories, editProtein, editCarbs, editFat, editingDate, editingMealType]);
+
+    const handleClearPlan = useCallback(() => {
+        if (!plan) return;
+        clearMealPlan(plan.id);
+        showToast("本周计划已清空", "info");
+    }, [plan]);
 
     const refreshPlan = useCallback(() => {
         const p = getOrCreateWeekPlan(currentDate);
@@ -529,6 +587,37 @@ export default function MealPlanPage() {
             const inventory = loadIngredients().map(i => ({
                 name: i.name, quantity: i.quantity, unit: i.unit, status: i.status,
             }));
+
+            // Pass existing plan so AI can preserve user-edited meals
+            const existingPlan = {
+                days: plan.days.map(d => ({
+                    date: d.date,
+                    meals: {
+                        breakfast: d.meals.breakfast.status === "planned" ? {
+                            recipe_name: d.meals.breakfast.recipe_name,
+                            calories: d.meals.breakfast.calories,
+                            protein: d.meals.breakfast.protein,
+                            carbs: d.meals.breakfast.carbs,
+                            fat: d.meals.breakfast.fat,
+                        } : null,
+                        lunch: d.meals.lunch.status === "planned" ? {
+                            recipe_name: d.meals.lunch.recipe_name,
+                            calories: d.meals.lunch.calories,
+                            protein: d.meals.lunch.protein,
+                            carbs: d.meals.lunch.carbs,
+                            fat: d.meals.lunch.fat,
+                        } : null,
+                        dinner: d.meals.dinner.status === "planned" ? {
+                            recipe_name: d.meals.dinner.recipe_name,
+                            calories: d.meals.dinner.calories,
+                            protein: d.meals.dinner.protein,
+                            carbs: d.meals.dinner.carbs,
+                            fat: d.meals.dinner.fat,
+                        } : null,
+                    },
+                })),
+            };
+
             const result = await generateMealPlan({
                 week_start: plan.week_start,
                 week_end: plan.week_end,
@@ -536,9 +625,10 @@ export default function MealPlanPage() {
                 requirements: genRequirements || undefined,
                 preference: getPreference() as unknown as Record<string, unknown>,
                 inventory,
-            });
+                existing_plan: existingPlan,
+            } as Parameters<typeof generateMealPlan>[0]);
 
-            const data = result as { plan?: { days?: Array<{ date: string; meals: Record<string, { recipe_name: string; ingredients?: string[]; calories: number; protein: number; carbs: number; fat: number }> }> }; error?: string; raw?: string };
+            const data = result as { plan?: { days?: Array<{ date: string; meals: Record<string, { recipe_name: string; ingredients?: string[]; calories: number; protein: number; carbs: number; fat: number } | null> }> }; error?: string; raw?: string };
             if (data.error || !data.plan?.days) {
                 showToast(data.error || "生成失败，请重试", "error");
                 return;
@@ -547,6 +637,8 @@ export default function MealPlanPage() {
             for (const day of data.plan.days) {
                 for (const mealType of MEAL_TYPES) {
                     const mealData = day.meals?.[mealType.key];
+                    // null means "not generated" — skip to preserve existing
+                    if (mealData === null || mealData === undefined) continue;
                     if (mealData?.recipe_name) {
                         const meal: MealItem = {
                             recipe_id: null,
@@ -614,6 +706,7 @@ export default function MealPlanPage() {
     };
 
     return (
+        <AuthGuard>
         <div style={s.page}>
             {/* ── header ── */}
             <header style={s.header}>
@@ -632,14 +725,31 @@ export default function MealPlanPage() {
                             <p style={s.headerSub}>AI 规划你的每周三餐</p>
                         </div>
                     </div>
-                    <button
-                        onClick={() => setShowGenerate(true)}
-                        style={s.aiBtn}
-                        onMouseEnter={(e) => { (e.currentTarget.style.boxShadow as any) = "var(--shadow-raised)"; }}
-                        onMouseLeave={(e) => { (e.currentTarget.style.boxShadow as any) = "var(--shadow-raised-sm)"; }}
-                    >
-                        ✨AI 生成
-                    </button>
+                    <div style={{display: "flex", gap: 8}}>
+                        {hasAnyMeal && (
+                            <button
+                                onClick={handleClearPlan}
+                                style={{
+                                    ...s.aiBtn,
+                                    background: "var(--bg)",
+                                    color: "var(--rose)",
+                                    boxShadow: "var(--shadow-raised-sm)",
+                                }}
+                                onMouseEnter={(e) => { (e.currentTarget.style.boxShadow as any) = "var(--shadow-raised)"; }}
+                                onMouseLeave={(e) => { (e.currentTarget.style.boxShadow as any) = "var(--shadow-raised-sm)"; }}
+                            >
+                                清空计划
+                            </button>
+                        )}
+                        <button
+                            onClick={() => setShowGenerate(true)}
+                            style={s.aiBtn}
+                            onMouseEnter={(e) => { (e.currentTarget.style.boxShadow as any) = "var(--shadow-raised)"; }}
+                            onMouseLeave={(e) => { (e.currentTarget.style.boxShadow as any) = "var(--shadow-raised-sm)"; }}
+                        >
+                            ✨AI 生成
+                        </button>
+                    </div>
                 </div>
             </header>
 
@@ -723,6 +833,7 @@ export default function MealPlanPage() {
                                                             <div
                                                                 className="meal-card-wrap"
                                                                 style={s.mealCard}
+                                                                onClick={() => openEdit(day.date, mealType.key)}
                                                             >
                                                                 <p style={s.mealName}>
                                                                     {meal.recipe_name}
@@ -731,7 +842,7 @@ export default function MealPlanPage() {
                                                                 <button
                                                                     className="meal-remove-btn"
                                                                     style={s.removeBtn}
-                                                                    onClick={() => handleRemove(day.date, mealType.key)}
+                                                                    onClick={(e) => { e.stopPropagation(); handleRemove(day.date, mealType.key); }}
                                                                 >
                                                                     ✕
                                                                 </button>
@@ -740,6 +851,7 @@ export default function MealPlanPage() {
                                                             <div
                                                                 className="empty-cell-wrap"
                                                                 style={s.emptyCell}
+                                                                onClick={() => openEdit(day.date, mealType.key)}
                                                             >
                                                                 ＋
                                                             </div>
@@ -803,32 +915,27 @@ export default function MealPlanPage() {
                             <div>
                                 <label style={s.modalLabel}>生成模式</label>
                                 <div style={{display: "flex", flexDirection: "column", gap: 8}}>
-                                    <button
-                                        type="button"
-                                        style={s.radioCard(genMode === "full")}
-                                        onClick={() => setGenMode("full")}
-                                    >
-                                        <div style={s.radioDot(genMode === "full")}>
-                                            {genMode === "full" && <div style={s.radioDotInner}/>}
-                                        </div>
-                                        <div>
-                                            <p style={s.radioTitle}>完整规划</p>
-                                            <p style={s.radioDesc}>三餐全部安排</p>
-                                        </div>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        style={s.radioCard(genMode === "dinner_only")}
-                                        onClick={() => setGenMode("dinner_only")}
-                                    >
-                                        <div style={s.radioDot(genMode === "dinner_only")}>
-                                            {genMode === "dinner_only" && <div style={s.radioDotInner}/>}
-                                        </div>
-                                        <div>
-                                            <p style={s.radioTitle}>仅规划晚餐</p>
-                                            <p style={s.radioDesc}>早午餐自行安排</p>
-                                        </div>
-                                    </button>
+                                    {([
+                                        { value: "full", title: "完整规划", desc: "三餐全部安排" },
+                                        { value: "breakfast_only", title: "仅规划早餐", desc: "午晚餐自行安排" },
+                                        { value: "lunch_only", title: "仅规划午餐", desc: "早晚餐自行安排" },
+                                        { value: "dinner_only", title: "仅规划晚餐", desc: "早午餐自行安排" },
+                                    ] as const).map((opt) => (
+                                        <button
+                                            key={opt.value}
+                                            type="button"
+                                            style={s.radioCard(genMode === opt.value)}
+                                            onClick={() => setGenMode(opt.value)}
+                                        >
+                                            <div style={s.radioDot(genMode === opt.value)}>
+                                                {genMode === opt.value && <div style={s.radioDotInner}/>}
+                                            </div>
+                                            <div>
+                                                <p style={s.radioTitle}>{opt.title}</p>
+                                                <p style={s.radioDesc}>{opt.desc}</p>
+                                            </div>
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
 
@@ -885,5 +992,127 @@ export default function MealPlanPage() {
                 </div>
             )}
         </div>
+            {/* ── Edit meal modal ── */}
+            {showEdit && (
+                <div
+                    style={s.overlay}
+                    onClick={() => setShowEdit(false)}
+                >
+                    <div style={s.modal} onClick={(e) => e.stopPropagation()}>
+                        <h3 style={s.modalTitle}>
+                            编辑 {MEAL_TYPES.find(m => m.key === editingMealType)?.icon} {MEAL_TYPES.find(m => m.key === editingMealType)?.label} · {editingDate}
+                        </h3>
+
+                        <div style={{display: "flex", flexDirection: "column", gap: 12}}>
+                            <div>
+                                <label style={s.modalLabel}>菜品名 *</label>
+                                <input
+                                    value={editName}
+                                    onChange={(e) => setEditName(e.target.value)}
+                                    placeholder="如：番茄炒蛋"
+                                    style={{
+                                        ...s.textarea, width: "100%", boxSizing: "border-box" as const,
+                                    }}
+                                    onFocus={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
+                                    onBlur={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
+                                    onKeyDown={(e) => e.key === "Enter" && handleSaveMeal()}
+                                />
+                            </div>
+                            <div>
+                                <label style={s.modalLabel}>食材（用、或逗号分隔）</label>
+                                <input
+                                    value={editIngredients}
+                                    onChange={(e) => setEditIngredients(e.target.value)}
+                                    placeholder="如：番茄、鸡蛋、葱"
+                                    style={{
+                                        ...s.textarea, width: "100%", boxSizing: "border-box" as const,
+                                    }}
+                                    onFocus={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
+                                    onBlur={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
+                                />
+                            </div>
+                            <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12}}>
+                                <div>
+                                    <label style={s.modalLabel}>热量 (kcal)</label>
+                                    <input
+                                        type="number"
+                                        value={editCalories}
+                                        onChange={(e) => setEditCalories(e.target.value)}
+                                        placeholder="500"
+                                        style={{
+                                            ...s.textarea, width: "100%", boxSizing: "border-box" as const,
+                                        }}
+                                        onFocus={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
+                                        onBlur={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={s.modalLabel}>蛋白质 (g)</label>
+                                    <input
+                                        type="number"
+                                        value={editProtein}
+                                        onChange={(e) => setEditProtein(e.target.value)}
+                                        placeholder="25"
+                                        style={{
+                                            ...s.textarea, width: "100%", boxSizing: "border-box" as const,
+                                        }}
+                                        onFocus={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
+                                        onBlur={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={s.modalLabel}>碳水 (g)</label>
+                                    <input
+                                        type="number"
+                                        value={editCarbs}
+                                        onChange={(e) => setEditCarbs(e.target.value)}
+                                        placeholder="60"
+                                        style={{
+                                            ...s.textarea, width: "100%", boxSizing: "border-box" as const,
+                                        }}
+                                        onFocus={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
+                                        onBlur={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={s.modalLabel}>脂肪 (g)</label>
+                                    <input
+                                        type="number"
+                                        value={editFat}
+                                        onChange={(e) => setEditFat(e.target.value)}
+                                        placeholder="15"
+                                        style={{
+                                            ...s.textarea, width: "100%", boxSizing: "border-box" as const,
+                                        }}
+                                        onFocus={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
+                                        onBlur={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style={{display: "flex", gap: 12, marginTop: 20}}>
+                            <button
+                                onClick={handleSaveMeal}
+                                disabled={!editName.trim()}
+                                style={{
+                                    ...s.genBtn,
+                                    opacity: editName.trim() ? 1 : 0.5,
+                                }}
+                            >
+                                保存
+                            </button>
+                            <button
+                                onClick={() => setShowEdit(false)}
+                                style={s.cancelBtn}
+                            >
+                                取消
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+        </AuthGuard>
     );
 }

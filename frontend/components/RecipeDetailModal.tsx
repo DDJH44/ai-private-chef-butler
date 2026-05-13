@@ -3,10 +3,12 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Recipe } from "@/types/recipe";
+import { useFeishuStatus } from "@/hooks/useFeishuStatus";
 import { proxyImageUrl } from "@/lib/imageUtils";
 import { generateShoppingListFromRecipes } from "@/lib/shoppingListGenerator";
 import { recordView, addCookRecord, loadCookHistory } from "@/lib/historyStore";
 import { deleteRecipe as deleteRecipeFromStore } from "@/lib/recipeStore";
+import { getToken } from "@/lib/authStore";
 import { showToast } from "@/components/Toast";
 import { generateUUID } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
@@ -64,8 +66,8 @@ function StarRating({ score }: { score: number }) {
 }
 
 const circleBtn = (): React.CSSProperties => ({
-  width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center",
-  fontSize: 15, borderRadius: "50%", border: "none", cursor: "pointer",
+  width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center",
+  fontSize: 16, borderRadius: "50%", border: "none", cursor: "pointer",
   background: "var(--bg)", color: "var(--text-secondary)",
   boxShadow: "var(--shadow-raised-sm)", transition: "all 0.25s ease",
 });
@@ -74,6 +76,7 @@ interface RecipeDetailModalProps { recipe: Recipe; onClose: () => void; }
 
 export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
   const router = useRouter();
+  const { configured: feishuConfigured } = useFeishuStatus();
   const [fullRecipe, setFullRecipe] = useState(recipe);
   const [copied, setCopied] = useState(false);
   const [showCookModal, setShowCookModal] = useState(false);
@@ -85,7 +88,10 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
   // Fetch full recipe content if the list view stripped it
   useEffect(() => {
     if (recipe.content) return;
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/v1/recipes/${encodeURIComponent(recipe.id)}`)
+    const token = getToken();
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/v1/recipes/${encodeURIComponent(recipe.id)}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
       .then(r => r.json())
       .then(data => {
         if (data.title) setFullRecipe(data);
@@ -138,7 +144,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
 
   const handleShareToFeishu = async () => {
     try {
-      const resp = await fetch(`${process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8001"}/api/v1/feishu/recipe-share`, {
+      const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ""}/api/v1/feishu/recipe-share`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(fullRecipe),
@@ -224,12 +230,21 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
               onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
             >📤</button>
-            <button onClick={handleShareToFeishu} style={{ ...circleBtn(), color: "#00d6b9" }}
-              onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-              onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
-              title="分享到飞书"
-            >🪽</button>
+            {feishuConfigured ? (
+              <button onClick={handleShareToFeishu} style={{ ...circleBtn(), color: "#00d6b9" }}
+                onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
+                onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
+                title="分享到飞书"
+              >🪽</button>
+            ) : (
+              <button onClick={() => router.push("/profile")} style={{ ...circleBtn(), color: "var(--text-muted)", opacity: 0.5 }}
+                onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
+                onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
+                title="连接飞书后可分享"
+              >🪽</button>
+            )}
             <button onClick={() => setShowDeleteConfirm(true)} style={{ ...circleBtn(), color: "var(--rose)" }}
               onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
               onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
@@ -242,7 +257,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
         <div style={{ flex: 1, overflowY: "auto" }}>
           {/* Hero image */}
           {fullRecipe.imageUrl ? (
-            <div style={{ position: "relative", height: 220, overflow: "hidden" }}>
+            <div style={{ position: "relative", aspectRatio: "16/9", maxHeight: 220, overflow: "hidden" }}>
               <img src={proxyImageUrl(fullRecipe.imageUrl)} alt={fullRecipe.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, var(--bg) 10%, transparent)" }} />
             </div>

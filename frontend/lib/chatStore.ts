@@ -28,7 +28,7 @@ interface ChatState {
     messages: Message[];
     threadId: string;
     loading: boolean;
-    recipesToSave: { recipes: Recipe[]; aiReply: string } | null;
+    recipesToSave: { recipes: Recipe[] } | null;
     initialLoading: boolean;
 }
 
@@ -44,6 +44,7 @@ const state: ChatState = {
 
 const listeners = new Set<Listener>();
 let initialized = false;
+let abortController: AbortController | null = null;
 
 if (typeof window !== "undefined") {
     window.addEventListener("beforeunload", () => {
@@ -138,6 +139,15 @@ export async function newChat(): Promise<void> {
     notify();
 }
 
+export function stopGeneration(): void {
+    if (abortController) {
+        abortController.abort();
+        abortController = null;
+    }
+    state.loading = false;
+    notify();
+}
+
 export async function sendMessage(content: string, imageUrl?: string): Promise<void> {
     if (state.loading) return;
 
@@ -159,6 +169,7 @@ export async function sendMessage(content: string, imageUrl?: string): Promise<v
 
     state.messages = [...state.messages, userMsg, assistantMsg];
     state.loading = true;
+    abortController = new AbortController();
     notify();
 
     try {
@@ -173,7 +184,7 @@ export async function sendMessage(content: string, imageUrl?: string): Promise<v
             imageUrl,
             (error: Error) => {
                 state.messages = state.messages.map((m) =>
-                    m.id === assistantId ? { ...m, content: `错误: ${error.message}` } : m
+                    m.id === assistantId ? { ...m, content: error.message === "请先登录" ? "" : `抱歉，${error.message}` } : m
                 );
                 notify();
             },
@@ -190,29 +201,33 @@ export async function sendMessage(content: string, imageUrl?: string): Promise<v
                                 title: p.recipe.title || `菜谱${i + 1}`,
                                 content: p.content,
                                 ingredients: p.recipe.ingredients || [],
+                                seasonings: p.recipe.seasonings || [],
                                 difficulty: p.recipe.difficulty,
                                 cookingTime: p.recipe.cookingTime,
                                 score: p.recipe.score,
                                 reason: p.recipe.reason,
                                 videoUrl: p.recipe.videoUrl,
+                                tags: p.recipe.tags || [],
                                 createdAt: p.recipe.createdAt || Date.now(),
                                 updatedAt: p.recipe.updatedAt || Date.now(),
                             })),
-                            aiReply: reply,
                         };
                     }
                 }
                 notify();
             },
-            state.threadId
+            state.threadId,
+            abortController.signal,
         );
     } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") return;
         state.messages = state.messages.map((m) =>
             m.id === assistantId ? { ...m, content: "抱歉，发生了错误" } : m
         );
         notify();
     } finally {
         state.loading = false;
+        abortController = null;
         notify();
     }
 }
@@ -223,9 +238,15 @@ export function dismissRecipes() {
 }
 
 export async function confirmSaveRecipes(selected: Recipe[]) {
+    let ok = false;
     try {
-      await addRecipesBatch(selected);
-      showToast(`已添加 ${selected.length} 道菜品到菜谱栏`, "success");
+      const saved = await addRecipesBatch(selected);
+      ok = saved.length > 0;
+      if (ok) {
+        showToast(`已添加 ${saved.length} 道菜品到菜谱栏`, "success");
+      } else {
+        showToast("保存失败，请重试", "error");
+      }
     } catch {
       showToast("保存失败，请重试", "error");
     }

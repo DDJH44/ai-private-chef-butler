@@ -13,6 +13,230 @@ from dotenv import load_dotenv
 from app.api.v1.oss import proxy_image_url
 load_dotenv()
 
+# 常见中餐菜品的中英对照，用于提升 Pexels 英文搜索准确度
+_DISH_NAME_MAP: dict[str, list[str]] = {
+    "宫保鸡丁": ["kung pao chicken", "spicy diced chicken with peanuts"],
+    "番茄炒蛋": ["tomato scrambled eggs", "tomato egg stir fry"],
+    "麻婆豆腐": ["mapo tofu", "spicy tofu with minced pork"],
+    "红烧肉": ["braised pork belly", "red braised pork"],
+    "糖醋里脊": ["sweet and sour pork", "sweet sour pork tenderloin"],
+    "水煮鱼": ["boiled fish in chili sauce", "sichuan boiled fish"],
+    "鱼香肉丝": ["yu xiang shredded pork", "fish fragrant pork"],
+    "回锅肉": ["twice cooked pork", "double cooked pork"],
+    "北京烤鸭": ["peking duck", "beijing roast duck"],
+    "烤鸭": ["roast duck", "peking duck"],
+    "饺子": ["chinese dumplings", "jiaozi dumplings"],
+    "炒面": ["chow mein", "stir fried noodles"],
+    "炒饭": ["fried rice", "egg fried rice"],
+    "蛋炒饭": ["egg fried rice", "fried rice"],
+    "扬州炒饭": ["yangzhou fried rice", "fried rice"],
+    "酸辣汤": ["hot and sour soup", "sour and spicy soup"],
+    "春卷": ["spring rolls", "chinese spring rolls"],
+    "火锅": ["hot pot", "chinese hotpot"],
+    "红烧排骨": ["braised spare ribs", "braised pork ribs"],
+    "清蒸鱼": ["steamed fish", "steamed whole fish"],
+    "椒盐虾": ["salt and pepper shrimp", "pepper salt prawns"],
+    "干煸四季豆": ["dry fried green beans", "stir fried string beans"],
+    "可乐鸡翅": ["cola chicken wings", "coca cola chicken wings"],
+    "蛋花汤": ["egg drop soup", "egg flower soup"],
+    "西红柿鸡蛋汤": ["tomato egg soup", "tomato and egg soup"],
+    "皮蛋豆腐": ["century egg tofu", "preserved egg tofu"],
+    "蒜蓉西兰花": ["garlic broccoli", "stir fried broccoli with garlic"],
+    "蚝油生菜": ["lettuce in oyster sauce", "oyster sauce lettuce"],
+    "锅包肉": ["guo bao rou", "sweet and sour pork"],
+    "地三鲜": ["di san xian", "sauteed potato green pepper and eggplant"],
+    "小鸡炖蘑菇": ["chicken with mushrooms", "braised chicken with mushroom"],
+    "西红柿牛腩": ["tomato beef brisket", "beef stew with tomato"],
+    "辣子鸡": ["spicy chicken", "chongqing spicy chicken"],
+    "葱油饼": ["scallion pancake", "green onion pancake"],
+    "小笼包": ["xiaolongbao", "soup dumplings"],
+    "烧卖": ["siu mai", "shumai"],
+    "叉烧": ["char siu", "bbq pork"],
+    "白切鸡": ["white cut chicken", "poached chicken"],
+}
+
+def _build_search_queries(query: str) -> list[str]:
+    """为中文菜品名构造最优的英文搜索词组合"""
+    queries: list[str] = []
+
+    # 1. 查中英对照表，用精确英文名优先
+    mapped = _DISH_NAME_MAP.get(query, [])
+    for en in mapped:
+        queries.append(f"{en} dish food photography")
+        queries.append(f"{en} authentic chinese")
+
+    # 2. 中文原词 + food/chinese food 作为兜底
+    queries.append(f"{query} food photography")
+    queries.append(f"{query} dish")
+
+    # 3. 如果 query 全中文，额外用拼音尝试
+    if all('一' <= c <= '鿿' or c == ' ' for c in query):
+        import pypinyin
+        try:
+            pinyin_name = ''.join(pypinyin.lazy_pinyin(query, style=pypinyin.Style.NORMAL))
+            queries.append(f"{pinyin_name} chinese food")
+        except Exception:
+            pass
+
+    return queries
+
+def _score_photo(photo: dict, query_keywords: list[str]) -> int:
+    """对 Pexels 图片进行相关性打分，越高越匹配"""
+    score = 0
+    alt = (photo.get("alt") or "").lower()
+    photographer = (photo.get("photographer") or "").lower()
+    photo_url = (photo.get("url") or "").lower()
+    combined = f"{alt} {photographer}"
+
+    for kw in query_keywords:
+        kw_lower = kw.lower()
+        parts = kw_lower.split()
+        for part in parts:
+            if len(part) < 3:
+                continue
+            if part in alt:
+                score += 5
+            if part in photographer:
+                score += 3
+            if part in photo_url:
+                score += 2
+
+    # 处罚泛化标签
+    generic_terms = ["restaurant", "table", "plate", "bowl", "kitchen", "interior", "people", "person", "woman", "man", "chef", "cook", "market", "store", "shop"]
+    for term in generic_terms:
+        if term in alt:
+            score -= 2
+
+    # 加分项：明确食物标签
+    food_terms = ["food", "dish", "cuisine", "meal", "dinner", "lunch", "cooking", "homemade", "traditional", "authentic", "chinese", "spicy", "soup", "sauce", "fried", "steamed", "boiled", "braised", "roast"]
+    for term in food_terms:
+        if term in alt:
+            score += 1
+
+    return score
+
+def _search_pexels_candidates(query: str, query_keywords: list[str]) -> list[dict]:
+    """从 Pexels 搜索候选图片，返回带原始 URL 和代理 URL 的列表"""
+    pexels_key = os.getenv("PEXELS_API_KEY", "")
+    results: list[dict] = []
+    seen_urls: set[str] = set()
+
+    queries = _build_search_queries(query)
+    for search_query in queries:
+        pexels_url = f"https://api.pexels.com/v1/search?query={requests.utils.quote(search_query)}&per_page=12&orientation=landscape&locale=zh-CN"
+        pexels_resp = requests.get(pexels_url, headers={"Authorization": pexels_key}, timeout=10)
+        if pexels_resp.status_code != 200:
+            continue
+
+        for photo in pexels_resp.json().get("photos", []):
+            original_url = photo.get("src", {}).get("large", "")
+            if not original_url or original_url in seen_urls:
+                continue
+            seen_urls.add(original_url)
+
+            score = _score_photo(photo, query_keywords)
+            results.append({
+                "original_url": original_url,       # 视觉验证用原始 URL
+                "url": proxy_image_url(original_url),  # 前端展示用代理 URL
+                "content": photo.get("alt", query),
+                "photographer": photo.get("photographer", ""),
+                "score": score,
+            })
+
+    results.sort(key=lambda r: r.get("score", 0), reverse=True)
+    return results
+
+
+def _verify_images_with_vision(query: str, candidates: list[dict]) -> list[dict]:
+    """用视觉模型验证候选图片，使用原始 URL"""
+    if not candidates:
+        return []
+
+    try:
+        content_parts: list[dict] = []
+        for c in candidates:
+            content_parts.append({
+                "type": "image_url",
+                "image_url": {"url": c["original_url"]},  # 用原始 Pexels URL
+            })
+
+        content_parts.append({
+            "type": "text",
+            "text": f"""上面有 {len(candidates)} 张图片，编号 0-{len(candidates)-1}。
+逐一判断每张是否确实是菜品「{query}」的成品照片：
+- 图片主体是该菜品的成品 → 匹配
+- 图片是其他菜/食材/厨房/人物/餐厅 → 不匹配
+- 不确定就判不匹配
+
+只返回 JSON：{{"matches":[编号],"reasons":{{"0":"理由"}}}}"""
+        })
+
+        vision_model = model.bind(extra_body={"reasoning_effort": "low"})
+        response = vision_model.invoke([HumanMessage(content=content_parts)])
+        response_text = response.content if isinstance(response.content, str) else str(response.content)
+
+        import re as _re
+        json_match = _re.search(r'\{[\s\S]*\}', response_text)
+        if not json_match:
+            return []
+
+        result = json.loads(json_match.group())
+        match_ids: list[int] = result.get("matches", [])
+
+        verified: list[dict] = []
+        for idx in match_ids:
+            if 0 <= idx < len(candidates):
+                c = candidates[idx]
+                verified.append({
+                    "title": f"{query}",
+                    "url": c["url"],
+                    "content": c["content"],
+                    "photographer": c.get("photographer", ""),
+                })
+
+        logger.info(f"[vision_verify] {query}: {len(candidates)}候选 → {len(verified)}通过")
+        return verified
+
+    except Exception as e:
+        logger.warning(f"[vision_verify] 异常: {e}")
+        return []
+
+
+def _search_unsplash_candidates(query: str, query_keywords: list[str]) -> list[dict]:
+    """从 Unsplash 搜索候选图片作为补充"""
+    access_key = os.getenv("UNSPLASH_ACCESS_KEY", "")
+    if not access_key:
+        return []
+
+    results: list[dict] = []
+    seen_urls: set[str] = set()
+
+    try:
+        queries = _build_search_queries(query)[:3]
+        for search_query in queries:
+            unsplash_url = f"https://api.unsplash.com/search/photos?query={requests.utils.quote(search_query)}&per_page=8&orientation=landscape"
+            resp = requests.get(unsplash_url, headers={"Authorization": f"Client-ID {access_key}"}, timeout=10)
+            if resp.status_code != 200:
+                continue
+            for photo in resp.json().get("results", []):
+                original_url = photo.get("urls", {}).get("regular", "")
+                if not original_url or original_url in seen_urls:
+                    continue
+                seen_urls.add(original_url)
+                score = _score_photo({"alt": (photo.get("alt_description") or "") + " " + (photo.get("description") or ""), "photographer": photo.get("user", {}).get("name", "")}, query_keywords)
+                results.append({
+                    "original_url": original_url,
+                    "url": proxy_image_url(original_url),
+                    "content": photo.get("alt_description") or query,
+                    "photographer": photo.get("user", {}).get("name", ""),
+                    "score": score,
+                })
+    except Exception:
+        pass
+
+    return results
+
+
 @tool
 def recipe_search(query: str):
     """搜索指定菜品的真实成品照片。输入准确的菜品名称如'宫保鸡丁'或'番茄炒蛋'，返回该菜品的高质量食物摄影图片URL"""
@@ -20,36 +244,36 @@ def recipe_search(query: str):
     if not pexels_key:
         return json.dumps([{"title": "错误", "content": "PEXELS_API_KEY 未配置"}], ensure_ascii=False)
 
-    results = []
     try:
-        search_queries = [
-            f"{query} chinese food",
-            f"{query} dish cooking",
-            f"{query} food",
-        ]
-        for search_query in search_queries:
-            pexels_url = f"https://api.pexels.com/v1/search?query={requests.utils.quote(search_query)}&per_page=3&orientation=landscape&locale=zh-CN"
-            pexels_resp = requests.get(pexels_url, headers={"Authorization": pexels_key}, timeout=10)
-            if pexels_resp.status_code == 200:
-                for photo in pexels_resp.json().get("photos", []):
-                    img_url = photo.get("src", {}).get("large", "")
-                    alt_text = photo.get("alt", "").lower()
-                    photographer = photo.get("photographer", "").lower()
-                    if img_url and img_url not in [r.get("url") for r in results]:
-                        results.append({
-                            "title": f"{query}",
-                            "url": proxy_image_url(img_url),
-                            "content": photo.get("alt", query),
-                            "photographer": photo.get("photographer", ""),
-                        })
-            if len(results) >= 5:
-                break
-        if not results:
-            return json.dumps([{"title": "无结果", "content": f"Pexels 未找到'{query}'的图片"}], ensure_ascii=False)
+        query_keywords = [query] + _DISH_NAME_MAP.get(query, [])
+
+        # 1. Pexels 搜索
+        pexels_results = _search_pexels_candidates(query, query_keywords)
+
+        # 2. Unsplash 补充搜索
+        unsplash_results = _search_unsplash_candidates(query, query_keywords)
+
+        # 3. 合并去重，按文本相关性排序
+        all_results = pexels_results + unsplash_results
+        all_results.sort(key=lambda r: r.get("score", 0), reverse=True)
+
+        if not all_results:
+            return json.dumps([{"title": "无结果", "content": f"未找到'{query}'的图片"}], ensure_ascii=False)
+
+        # 4. 视觉验证 top 8
+        candidates = all_results[:8]
+        verified = _verify_images_with_vision(query, candidates)
+
+        # 5. 验证通过的直接返回；否则退回文本 top 5
+        final = verified if verified else all_results[:5]
+        for r in final:
+            r.pop("score", None)
+            r.pop("original_url", None)
+
+        return json.dumps(final, ensure_ascii=False)
+
     except Exception as e:
         return json.dumps([{"title": "异常", "content": str(e)}], ensure_ascii=False)
-
-    return json.dumps(results[:5], ensure_ascii=False)
 
 
 @tool
@@ -88,7 +312,7 @@ def bilibili_search(query: str):
 
 
 model = init_chat_model(
-    model=os.getenv("DOUBAO_MODEL_NAME", "doubao-seed-2-0-mini-260215"),
+    model=os.getenv("DOUBAO_MODEL_NAME", "doubao-seed-1-8-251228"),
     model_provider="openai",
     base_url=os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v1"),
     api_key=os.getenv("DOUBAO_API_KEY")
@@ -96,7 +320,9 @@ model = init_chat_model(
 
 model_with_tools = model.bind_tools([recipe_search, bilibili_search])
 
-connection = sqlite3.connect("app/db/personal_chief.db", check_same_thread=False, timeout=10)
+_db_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
+os.makedirs(_db_dir, exist_ok=True)
+connection = sqlite3.connect(os.path.join(_db_dir, "personal_chief.db"), check_same_thread=False, timeout=10)
 connection.execute("PRAGMA journal_mode=WAL")
 checkpointer = SqliteSaver(connection)
 checkpointer.setup()

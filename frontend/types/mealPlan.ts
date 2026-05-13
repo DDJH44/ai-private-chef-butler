@@ -31,7 +31,7 @@ export interface MealPlan {
     id: string;
     week_start: string;
     week_end: string;
-    generation_mode: "full" | "dinner_only";
+    generation_mode: "full" | "breakfast_only" | "lunch_only" | "dinner_only";
     days: DayPlan[];
     weekly_total: MealNutrition;
     status: "active" | "archived";

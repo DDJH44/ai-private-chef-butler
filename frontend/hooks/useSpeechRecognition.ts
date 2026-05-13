@@ -5,15 +5,46 @@ import { useState, useRef, useCallback } from "react";
 import { apiPath } from '@/lib/env';
 const WhisperAPI = apiPath('/v1/speech/transcribe');
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyRecognition = any;
+interface SpeechRecognitionResultItem {
+  transcript: string;
+  confidence: number;
+}
+
+interface SpeechRecognitionResult {
+  isFinal: boolean;
+  length: number;
+  [index: number]: SpeechRecognitionResultItem;
+}
+
+interface SpeechRecognitionEvent {
+  resultIndex: number;
+  results: SpeechRecognitionResult[];
+}
+
+interface SpeechRecognitionErrorEvent {
+  error: string;
+}
+
+interface SpeechRecognitionInstance {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+}
+
+type SpeechRecognitionCtor = new () => SpeechRecognitionInstance;
 
 export function useSpeechRecognition() {
   const [transcript, setTranscript] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [isSupported, setIsSupported] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const recognitionRef = useRef<AnyRecognition | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const resolveRef = useRef<((t: string) => void) | null>(null);
@@ -24,9 +55,7 @@ export function useSpeechRecognition() {
 
   const startBrowser = useCallback(() => {
     const win = window as unknown as Record<string, unknown>;
-    const SR = (win.SpeechRecognition || win.webkitSpeechRecognition) as
-      | (new () => AnyRecognition)
-      | undefined;
+    const SR = (win.SpeechRecognition || win.webkitSpeechRecognition) as SpeechRecognitionCtor | undefined;
     if (!SR) {
       setIsSupported(false);
       return false;
@@ -37,7 +66,7 @@ export function useSpeechRecognition() {
     recognition.continuous = false;
     recognitionRef.current = recognition;
 
-    recognition.onresult = (event: AnyRecognition) => {
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
       let interim = "";
       let finalText = "";
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -53,7 +82,7 @@ export function useSpeechRecognition() {
       setTranscript(text);
     };
 
-    recognition.onerror = (event: AnyRecognition) => {
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.warn("Speech recognition error:", event.error);
       if (event.error === "not-allowed") {
         setIsSupported(true);

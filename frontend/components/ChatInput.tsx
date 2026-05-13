@@ -9,9 +9,10 @@ interface ChatInputProps {
   onImageUpload: (file: File) => Promise<string | null>;
   disabled?: boolean;
   defaultValue?: string;
+  onStop?: () => void;
 }
 
-export function ChatInput({ onSendMessage, onImageUpload, disabled, defaultValue }: ChatInputProps) {
+export function ChatInput({ onSendMessage, onImageUpload, disabled, defaultValue, onStop }: ChatInputProps) {
   const [message, setMessage] = useState("");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -158,8 +159,8 @@ export function ChatInput({ onSendMessage, onImageUpload, disabled, defaultValue
   const barBusy = disabled || uploading || voiceUploading;
 
   const btnBase: React.CSSProperties = {
-    width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center",
-    fontSize: 18, borderRadius: "50%", border: "none", cursor: "pointer",
+    width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center",
+    fontSize: 20, borderRadius: "50%", border: "none", cursor: "pointer",
     fontFamily: "inherit", flexShrink: 0, transition: "all 0.25s ease",
     background: "var(--bg)", color: "var(--text-secondary)",
     boxShadow: "var(--shadow-raised-sm)",
@@ -312,14 +313,28 @@ export function ChatInput({ onSendMessage, onImageUpload, disabled, defaultValue
           )}
         </button>
 
-        {/* Send button */}
-        <button
-          onClick={handleSend}
-          disabled={!canSend}
-          style={sendBtnStyle}
-          title={uploading ? "图片处理中..." : "发送"}
-          aria-label="发送"
-        >{uploading ? "⏳" : "➤"}</button>
+        {/* Stop / Send button */}
+        {disabled && !uploading && onStop ? (
+          <button
+            onClick={onStop}
+            style={{
+              ...btnBase,
+              background: "var(--rose)", color: "#fff",
+              boxShadow: "var(--shadow-raised-sm)",
+              animation: "pulse 0.8s ease-in-out infinite",
+            }}
+            title="停止生成"
+            aria-label="停止"
+          >■</button>
+        ) : (
+          <button
+            onClick={handleSend}
+            disabled={!canSend}
+            style={sendBtnStyle}
+            title={uploading ? "图片处理中..." : "发送"}
+            aria-label="发送"
+          >{uploading ? "⏳" : "➤"}</button>
+        )}
       </div>
 
     </div>

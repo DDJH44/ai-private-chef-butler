@@ -5,7 +5,6 @@ import { Recipe } from "@/types/recipe";
 
 interface MultiRecipeSaveProps {
   recipes: Recipe[];
-  aiReply: string;
   onConfirm: (selectedRecipes: Recipe[]) => void;
   onCancel: () => void;
 }

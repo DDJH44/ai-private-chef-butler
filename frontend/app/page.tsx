@@ -6,7 +6,7 @@ import { uploadImageToOss } from "@/lib/api";
 import { Loading } from "@/components/Loading";
 import {
   getChatState, subscribeToChat, initChat, newChat,
-  sendMessage, dismissRecipes, confirmSaveRecipes,
+  sendMessage, stopGeneration, dismissRecipes, confirmSaveRecipes,
 } from "@/lib/chatStore";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
@@ -94,7 +94,6 @@ function Home() {
               <div style={{ maxWidth: 640, margin: "0 auto" }}>
                 <MultiRecipeSave
                   recipes={s.recipesToSave.recipes}
-                  aiReply={s.recipesToSave.aiReply}
                   onConfirm={confirmSaveRecipes}
                   onCancel={dismissRecipes}
                 />
@@ -114,11 +113,11 @@ function Home() {
           <button
             onClick={() => scrollToBottom()}
             style={{
-              width: 36, height: 36, borderRadius: "50%",
+              width: 40, height: 40, borderRadius: "50%",
               background: "var(--bg)", boxShadow: "var(--shadow-raised-sm)",
               border: "none", cursor: "pointer", display: "flex",
               alignItems: "center", justifyContent: "center",
-              fontSize: 14, color: "var(--text-secondary)",
+              fontSize: 18, color: "var(--text-secondary)",
               transition: "all 0.25s ease",
             }}
           >↓</button>
@@ -130,6 +129,7 @@ function Home() {
           onSendMessage={handleSend}
           onImageUpload={handleImageUpload}
           disabled={s.loading}
+          onStop={stopGeneration}
         />
       </div>
     </div>

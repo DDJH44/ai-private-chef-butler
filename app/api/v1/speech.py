@@ -1,11 +1,12 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from app.auth import get_current_user
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from app.common.logger import logger
 import os
 import tempfile
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def _get_client():

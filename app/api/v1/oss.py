@@ -1,4 +1,5 @@
-from fastapi import APIRouter, UploadFile, File, Query
+from fastapi import APIRouter, UploadFile, File, Query, Depends
+from app.auth import get_current_user
 from fastapi.responses import JSONResponse, Response
 from app.models.schemas import OSSUploadRequest, OSSUploadResponse
 from app.common.logger import logger
@@ -11,7 +12,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 def _get_bucket():
     """延迟初始化 OSS Bucket，确保环境变量已加载"""

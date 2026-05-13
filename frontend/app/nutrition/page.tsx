@@ -3,8 +3,18 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { showToast } from "@/components/Toast";
+import { AuthGuard } from "@/components/AuthGuard";
+import { useFeishuStatus } from "@/hooks/useFeishuStatus";
+import { getToken } from "@/lib/authStore";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8001";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+
+function authHeaders(): Record<string, string> {
+  const token = getToken();
+  return token
+    ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
+    : { "Content-Type": "application/json" };
+}
 
 interface NutritionRecord {
   id: string;
@@ -83,6 +93,7 @@ const COMMON_FOODS: Record<string, { calories: number; protein: number; carbs: n
 
 export default function NutritionPage() {
   const router = useRouter();
+  const { configured: feishuConfigured } = useFeishuStatus();
   const today = new Date().toISOString().split("T")[0];
   const [selectedDate, setSelectedDate] = useState(today);
   const [summary, setSummary] = useState<DailySummary | null>(null);
@@ -108,7 +119,7 @@ export default function NutritionPage() {
   const fetchSummary = useCallback(async () => {
     setLoading(true);
     try {
-      const resp = await fetch(`${API_BASE}/api/v1/nutrition/summary/${selectedDate}`);
+      const resp = await fetch(`${API_BASE}/api/v1/nutrition/summary/${selectedDate}`, { headers: authHeaders() });
       if (resp.ok) setSummary(await resp.json());
     } catch (e) { console.error(e); }
     setLoading(false);
@@ -138,7 +149,7 @@ export default function NutritionPage() {
     try {
       const resp = await fetch(`${API_BASE}/api/v1/nutrition/records`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders(),
         body: JSON.stringify({
           date: selectedDate,
           meal_type: form.meal_type,
@@ -161,8 +172,9 @@ export default function NutritionPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      const resp = await fetch(`${API_BASE}/api/v1/nutrition/records/${id}`, { method: "DELETE" });
+      const resp = await fetch(`${API_BASE}/api/v1/nutrition/records/${id}`, { method: "DELETE", headers: authHeaders() });
       if (resp.ok) { showToast("已删除", "success"); fetchSummary(); }
+      else { showToast("删除失败", "error"); }
     } catch (e) { showToast("删除失败", "error"); }
   };
 
@@ -176,7 +188,7 @@ export default function NutritionPage() {
       }
       const resp = await fetch(`${API_BASE}/api/v1/feishu/daily-report`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders(),
         body: JSON.stringify(payload),
       });
       const data = await resp.json();
@@ -195,9 +207,11 @@ export default function NutritionPage() {
       formData.append("meal_type", mealType);
       formData.append("date", selectedDate);
 
+      const token = getToken();
       const resp = await fetch(`${API_BASE}/api/v1/nutrition/analyze-photo`, {
         method: "POST",
         body: formData,
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 
       if (resp.ok) {
@@ -218,7 +232,7 @@ export default function NutritionPage() {
   const handleHealthEval = async () => {
     setEvaluating(true);
     try {
-      const resp = await fetch(`${API_BASE}/api/v1/nutrition/health-eval/${selectedDate}`);
+      const resp = await fetch(`${API_BASE}/api/v1/nutrition/health-eval/${selectedDate}`, { headers: authHeaders() });
       if (resp.ok) {
         const result: HealthEval = await resp.json();
         setHealthEval(result);
@@ -258,6 +272,7 @@ export default function NutritionPage() {
   };
 
   return (
+    <AuthGuard>
     <div className="flex flex-col h-full" style={{ background: "var(--bg)" }}>
       {/* Header */}
       <header className="flex-shrink-0 px-6 sm:px-8 lg:px-12 xl:px-20 py-4" style={{ background: "var(--bg)" }}>
@@ -341,9 +356,9 @@ export default function NutritionPage() {
           <div className="empty-state pt-16">
             <div style={{ fontSize: 16, color: "var(--text-muted)" }}>加载中...</div>
           </div>
-        ) : summary ? (
+        ) : (
           <div className="space-y-6 pb-8">
-            {/* Photo Upload Section */}
+            {/* Photo Upload Section — always visible */}
             <div>
               <h3 style={{
                 fontSize: 16, fontWeight: 700, color: "var(--accent)", marginBottom: 16,
@@ -351,18 +366,17 @@ export default function NutritionPage() {
               }}>📸 拍照识别</h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {MEAL_TYPES.map((mt) => (
-                  <div key={mt}>
+                  <div key={mt} style={{ position: "relative" }}>
                     <input
                       type="file"
                       accept="image/*"
-                      capture="environment"
                       ref={el => { fileInputRefs.current[mt] = el; }}
-                      style={{ display: "none" }}
                       onChange={e => {
                         const file = e.target.files?.[0];
                         if (file) handlePhotoUpload(mt, file);
                         e.target.value = "";
                       }}
+                      style={{ display: "none" }}
                     />
                     <button
                       onClick={() => fileInputRefs.current[mt]?.click()}
@@ -442,33 +456,35 @@ export default function NutritionPage() {
               </div>
             )}
 
+            {summary && (
+            <>
             {/* Stats Card */}
             <div className="card-base" style={{ padding: 28 }}>
               <h3 style={{
                 fontSize: 16, fontWeight: 700, color: "var(--accent)", marginBottom: 20,
                 fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif",
-              }}>📊 今日摄入</h3>
-              <div className="grid grid-cols-4 gap-8">
+              }}>今日摄入</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-8">
                 <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 36, fontWeight: 700, color: "var(--golden)" }}>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: "var(--golden)" }} className="sm:text-[36px]">
                     {summary.total_calories.toFixed(0)}
                   </div>
                   <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6 }}>千卡</div>
                 </div>
                 <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 36, fontWeight: 700, color: "var(--green)" }}>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: "var(--green)" }} className="sm:text-[36px]">
                     {summary.total_protein.toFixed(0)}
                   </div>
                   <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6 }}>蛋白质</div>
                 </div>
                 <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 36, fontWeight: 700, color: "#3b82f6" }}>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: "#3b82f6" }} className="sm:text-[36px]">
                     {summary.total_carbs.toFixed(0)}
                   </div>
                   <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6 }}>碳水</div>
                 </div>
                 <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 36, fontWeight: 700, color: "var(--rose)" }}>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: "var(--rose)" }} className="sm:text-[36px]">
                     {summary.total_fat.toFixed(0)}
                   </div>
                   <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6 }}>脂肪</div>
@@ -497,6 +513,7 @@ export default function NutritionPage() {
                 >
                   {evaluating ? "⏳ AI评估中..." : "🏥 健康评估"}
                 </button>
+                {feishuConfigured ? (
                 <button onClick={handleShareToFeishu}
                   style={{
                     flex: 1, padding: "14px 0",
@@ -510,6 +527,20 @@ export default function NutritionPage() {
                 >
                   🪽 推送飞书
                 </button>
+                ) : (
+                <button onClick={() => router.push("/profile")}
+                  style={{
+                    flex: 1, padding: "14px 0",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                    background: "var(--bg)", color: "var(--text-muted)", borderRadius: 14,
+                    fontSize: 15, fontWeight: 600, border: "none", cursor: "pointer",
+                    boxShadow: "var(--shadow-raised-sm)", transition: "all 0.25s ease",
+                    opacity: 0.6,
+                  }}
+                >
+                  🪽 连接飞书
+                </button>
+                )}
               </div>
             </div>
 
@@ -645,8 +676,16 @@ export default function NutritionPage() {
                 </div>
               )}
             </div>
+            </>)}
+            {!summary && (
+              <div className="empty-state" style={{ padding: "4rem 2rem" }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>🍽️</div>
+                <p style={{ fontSize: 16, color: "var(--text-muted)" }}>今日暂无记录</p>
+                <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 8 }}>点击上方拍照或"手动添加"开始记录</p>
+              </div>
+            )}
           </div>
-        ) : null}
+        )}
       </div>
 
       {/* Manual Add Modal */}
@@ -778,5 +817,6 @@ export default function NutritionPage() {
         </div>
       )}
     </div>
+    </AuthGuard>
   );
 }

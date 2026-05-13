@@ -133,6 +133,12 @@ export async function addRecipe(
     difficulty: recipe.difficulty,
     cooking_time: recipe.cookingTime,
     video_url: recipe.videoUrl,
+    ingredients: recipe.ingredients,
+    seasonings: recipe.seasonings,
+    tags: recipe.tags,
+    score: recipe.score,
+    reason: recipe.reason,
+    source_url: recipe.sourceUrl,
   });
   if (res.success && res.recipe) {
     notify();
@@ -151,6 +157,12 @@ export async function addRecipesBatch(
     difficulty: r.difficulty,
     cooking_time: r.cookingTime,
     video_url: r.videoUrl,
+    ingredients: r.ingredients,
+    seasonings: r.seasonings,
+    tags: r.tags,
+    score: r.score,
+    reason: r.reason,
+    source_url: r.sourceUrl,
   }));
   const created = await batchCreateRecipes(reqs);
   const results = created.map((r: unknown) => mapRecipe(r as Record<string, unknown>));

@@ -1,10 +1,11 @@
 import os
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.v1 import chat, oss, recipes, meal_plan, shopping, speech, nutrition, feishu
-from app.common.logger import setup_logging
+from fastapi.exceptions import RequestValidationError
+from app.api.v1 import chat, oss, recipes, meal_plan, shopping, speech, nutrition, feishu, auth, preferences, ingredients, cook_history
+from app.common.logger import setup_logging, logger
 
 setup_logging()
 
@@ -14,9 +15,10 @@ app = FastAPI(
     version="0.1.0"
 )
 
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,6 +32,40 @@ app.include_router(shopping.router, prefix="/api/v1/shopping", tags=["shopping"]
 app.include_router(speech.router, prefix="/api/v1", tags=["speech"])
 app.include_router(nutrition.router, prefix="/api/v1/nutrition", tags=["nutrition"])
 app.include_router(feishu.router, prefix="/api/v1/feishu", tags=["feishu"])
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+app.include_router(preferences.router, prefix="/api/v1/preferences", tags=["preferences"])
+app.include_router(ingredients.router, prefix="/api/v1/ingredients", tags=["ingredients"])
+app.include_router(cook_history.router, prefix="/api/v1/cook-history", tags=["cook-history"])
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    body = await request.body()
+    logger.error(f"[422] {request.method} {request.url.path} — {exc.errors()}")
+    logger.error(f"[422] body: {body.decode()[:500]}")
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"未处理异常 {request.method} {request.url.path}: {exc}", exc_info=True)
+    return JSONResponse(status_code=500, content={"detail": "服务器内部错误"})
+
+
+@app.on_event("startup")
+async def startup():
+    auth.init_db()
+    recipes.init_db()
+    shopping.init_db()
+    nutrition.init_db()
+    preferences.init_db()
+    ingredients.init_db()
+    cook_history.init_db()
+    feishu.init_db()
 
 @app.get("/health")
 async def health():
