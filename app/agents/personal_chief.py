@@ -9,11 +9,13 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 import sqlite3
 import json
 import requests
+import hashlib
+import time
 from dotenv import load_dotenv
-from app.api.v1.oss import proxy_image_url
+from app.api.v1.oss import _get_bucket
 load_dotenv()
 
-# 常见中餐菜品的中英对照，用于提升 Pexels 英文搜索准确度
+# 常见中餐菜品的中英对照，用于 AI 图片生成提示词
 _DISH_NAME_MAP: dict[str, list[str]] = {
     "宫保鸡丁": ["kung pao chicken", "spicy diced chicken with peanuts"],
     "番茄炒蛋": ["tomato scrambled eggs", "tomato egg stir fry"],
@@ -55,221 +57,128 @@ _DISH_NAME_MAP: dict[str, list[str]] = {
     "白切鸡": ["white cut chicken", "poached chicken"],
 }
 
-def _build_search_queries(query: str) -> list[str]:
-    """为中文菜品名构造最优的英文搜索词组合"""
-    queries: list[str] = []
+# Seedream 图像生成提示词模板
+_IMAGE_PROMPT_PREFIX = "professional food photography of "
+_IMAGE_PROMPT_SUFFIX = """, authentic Chinese cuisine, served on a handcrafted ceramic plate,
+overhead angle, natural window lighting, shallow depth of field,
+garnished with fresh herbs, steam rising gently,
+4K resolution, Michelin quality, warm tones, sharp focus"""
 
-    # 1. 查中英对照表，用精确英文名优先
-    mapped = _DISH_NAME_MAP.get(query, [])
-    for en in mapped:
-        queries.append(f"{en} dish food photography")
-        queries.append(f"{en} authentic chinese")
-
-    # 2. 中文原词 + food/chinese food 作为兜底
-    queries.append(f"{query} food photography")
-    queries.append(f"{query} dish")
-
-    # 3. 如果 query 全中文，额外用拼音尝试
-    if all('一' <= c <= '鿿' or c == ' ' for c in query):
-        import pypinyin
-        try:
-            pinyin_name = ''.join(pypinyin.lazy_pinyin(query, style=pypinyin.Style.NORMAL))
-            queries.append(f"{pinyin_name} chinese food")
-        except Exception:
-            pass
-
-    return queries
-
-def _score_photo(photo: dict, query_keywords: list[str]) -> int:
-    """对 Pexels 图片进行相关性打分，越高越匹配"""
-    score = 0
-    alt = (photo.get("alt") or "").lower()
-    photographer = (photo.get("photographer") or "").lower()
-    photo_url = (photo.get("url") or "").lower()
-    combined = f"{alt} {photographer}"
-
-    for kw in query_keywords:
-        kw_lower = kw.lower()
-        parts = kw_lower.split()
-        for part in parts:
-            if len(part) < 3:
-                continue
-            if part in alt:
-                score += 5
-            if part in photographer:
-                score += 3
-            if part in photo_url:
-                score += 2
-
-    # 处罚泛化标签
-    generic_terms = ["restaurant", "table", "plate", "bowl", "kitchen", "interior", "people", "person", "woman", "man", "chef", "cook", "market", "store", "shop"]
-    for term in generic_terms:
-        if term in alt:
-            score -= 2
-
-    # 加分项：明确食物标签
-    food_terms = ["food", "dish", "cuisine", "meal", "dinner", "lunch", "cooking", "homemade", "traditional", "authentic", "chinese", "spicy", "soup", "sauce", "fried", "steamed", "boiled", "braised", "roast"]
-    for term in food_terms:
-        if term in alt:
-            score += 1
-
-    return score
-
-def _search_pexels_candidates(query: str, query_keywords: list[str]) -> list[dict]:
-    """从 Pexels 搜索候选图片，返回带原始 URL 和代理 URL 的列表"""
-    pexels_key = os.getenv("PEXELS_API_KEY", "")
-    results: list[dict] = []
-    seen_urls: set[str] = set()
-
-    queries = _build_search_queries(query)
-    for search_query in queries:
-        pexels_url = f"https://api.pexels.com/v1/search?query={requests.utils.quote(search_query)}&per_page=12&orientation=landscape&locale=zh-CN"
-        pexels_resp = requests.get(pexels_url, headers={"Authorization": pexels_key}, timeout=10)
-        if pexels_resp.status_code != 200:
-            continue
-
-        for photo in pexels_resp.json().get("photos", []):
-            original_url = photo.get("src", {}).get("large", "")
-            if not original_url or original_url in seen_urls:
-                continue
-            seen_urls.add(original_url)
-
-            score = _score_photo(photo, query_keywords)
-            results.append({
-                "original_url": original_url,       # 视觉验证用原始 URL
-                "url": proxy_image_url(original_url),  # 前端展示用代理 URL
-                "content": photo.get("alt", query),
-                "photographer": photo.get("photographer", ""),
-                "score": score,
-            })
-
-    results.sort(key=lambda r: r.get("score", 0), reverse=True)
-    return results
+_IMAGE_NEGATIVE = """no people, no hands, no chopsticks, no text, no watermark,
+no cartoon, no illustration, no plastic containers, no takeout boxes,
+no restaurant background, no blurry, no low quality, no distorted proportions"""
 
 
-def _verify_images_with_vision(query: str, candidates: list[dict]) -> list[dict]:
-    """用视觉模型验证候选图片，使用原始 URL"""
-    if not candidates:
-        return []
+def _build_image_prompt(query: str) -> str:
+    """从中文菜名构建英文图像生成提示词"""
+    mapped = _DISH_NAME_MAP.get(query, [query])
+    en_name = mapped[0] if mapped else query
+    return f"{_IMAGE_PROMPT_PREFIX}{en_name},{_IMAGE_PROMPT_SUFFIX}"
 
+
+def _init_image_cache_db():
+    """初始化图片缓存 SQLite 数据库"""
+    db_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
+    os.makedirs(db_dir, exist_ok=True)
+    conn = sqlite3.connect(os.path.join(db_dir, "image_cache.db"))
+    conn.execute("""CREATE TABLE IF NOT EXISTS image_cache (
+        dish_query TEXT PRIMARY KEY,
+        oss_url TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        hit_count INTEGER DEFAULT 1
+    )""")
+    conn.commit()
+    return conn
+
+
+def _generate_food_image(query: str) -> str | None:
+    """通过火山引擎 ARK Seedream 生成菜品图片，返回 OSS 公开 URL"""
+    api_key = os.getenv("DOUBAO_API_KEY")
+    base_url = os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v1")
+    model_name = os.getenv("IMAGE_GEN_MODEL", "doubao-seedream-3-0-t2i-250415")
+
+    prompt = _build_image_prompt(query)
+
+    resp = requests.post(
+        f"{base_url}/images/generations",
+        headers={"Authorization": f"Bearer {api_key}"},
+        json={
+            "model": model_name,
+            "prompt": prompt,
+            "n": 1,
+            "size": "1024x1024",
+        },
+        timeout=90
+    )
+    if resp.status_code != 200:
+        logger.warning(f"[image_gen] API {resp.status_code}: {resp.text[:200]}")
+        return None
+
+    data = resp.json()
+    image_url = data.get("data", [{}])[0].get("url", "")
+    if not image_url:
+        logger.warning(f"[image_gen] 无 URL: {resp.text[:200]}")
+        return None
+
+    img_resp = requests.get(image_url, timeout=30)
+    if img_resp.status_code != 200:
+        logger.warning(f"[image_gen] 下载失败 {img_resp.status_code}")
+        return None
+
+    image_bytes = img_resp.content
+    filename = f"ai-generated/{hashlib.md5(query.encode('utf-8')).hexdigest()[:12]}_{int(time.time())}.jpg"
     try:
-        content_parts: list[dict] = []
-        for c in candidates:
-            content_parts.append({
-                "type": "image_url",
-                "image_url": {"url": c["original_url"]},  # 用原始 Pexels URL
-            })
-
-        content_parts.append({
-            "type": "text",
-            "text": f"""上面有 {len(candidates)} 张图片，编号 0-{len(candidates)-1}。
-逐一判断每张是否确实是菜品「{query}」的成品照片：
-- 图片主体是该菜品的成品 → 匹配
-- 图片是其他菜/食材/厨房/人物/餐厅 → 不匹配
-- 不确定就判不匹配
-
-只返回 JSON：{{"matches":[编号],"reasons":{{"0":"理由"}}}}"""
+        bucket = _get_bucket()
+        bucket.put_object(filename, image_bytes, headers={
+            "Content-Type": "image/jpeg",
+            "x-oss-object-acl": "public-read"
         })
-
-        vision_model = model
-        response = vision_model.invoke([HumanMessage(content=content_parts)])
-        response_text = response.content if isinstance(response.content, str) else str(response.content)
-
-        json_match = _re.search(r'\{[\s\S]*\}', response_text)
-        if not json_match:
-            return []
-
-        result = json.loads(json_match.group())
-        match_ids: list[int] = result.get("matches", [])
-
-        verified: list[dict] = []
-        for idx in match_ids:
-            if 0 <= idx < len(candidates):
-                c = candidates[idx]
-                verified.append({
-                    "title": f"{query}",
-                    "url": c["url"],
-                    "content": c["content"],
-                    "photographer": c.get("photographer", ""),
-                })
-
-        logger.info(f"[vision_verify] {query}: {len(candidates)}候选 → {len(verified)}通过")
-        return verified
-
     except Exception as e:
-        logger.warning(f"[vision_verify] 异常: {e}")
-        return []
+        logger.warning(f"[image_gen] OSS 上传失败: {e}")
+        return None
 
-
-def _search_unsplash_candidates(query: str, query_keywords: list[str]) -> list[dict]:
-    """从 Unsplash 搜索候选图片作为补充"""
-    access_key = os.getenv("UNSPLASH_ACCESS_KEY", "")
-    if not access_key:
-        return []
-
-    results: list[dict] = []
-    seen_urls: set[str] = set()
-
-    try:
-        queries = _build_search_queries(query)[:3]
-        for search_query in queries:
-            unsplash_url = f"https://api.unsplash.com/search/photos?query={requests.utils.quote(search_query)}&per_page=8&orientation=landscape"
-            resp = requests.get(unsplash_url, headers={"Authorization": f"Client-ID {access_key}"}, timeout=10)
-            if resp.status_code != 200:
-                continue
-            for photo in resp.json().get("results", []):
-                original_url = photo.get("urls", {}).get("regular", "")
-                if not original_url or original_url in seen_urls:
-                    continue
-                seen_urls.add(original_url)
-                score = _score_photo({"alt": (photo.get("alt_description") or "") + " " + (photo.get("description") or ""), "photographer": photo.get("user", {}).get("name", "")}, query_keywords)
-                results.append({
-                    "original_url": original_url,
-                    "url": proxy_image_url(original_url),
-                    "content": photo.get("alt_description") or query,
-                    "photographer": photo.get("user", {}).get("name", ""),
-                    "score": score,
-                })
-    except Exception:
-        pass
-
-    return results
+    endpoint = os.getenv("OSS_ENDPOINT", "oss-cn-beijing.aliyuncs.com")
+    bucket_name = os.getenv("OSS_BUCKET")
+    logger.info(f"[image_gen] {query} 生成完成 → OSS")
+    return f"https://{bucket_name}.{endpoint}/{filename}"
 
 
 @tool
 def recipe_search(query: str):
     """搜索指定菜品的真实成品照片。输入准确的菜品名称如'宫保鸡丁'或'番茄炒蛋'，返回该菜品的高质量食物摄影图片URL"""
-    pexels_key = os.getenv("PEXELS_API_KEY", "")
-    if not pexels_key:
-        return json.dumps([{"title": "错误", "content": "PEXELS_API_KEY 未配置"}], ensure_ascii=False)
-
     try:
-        query_keywords = [query] + _DISH_NAME_MAP.get(query, [])
+        # 1. 查缓存
+        cache_conn = _init_image_cache_db()
+        row = cache_conn.execute(
+            "SELECT oss_url, hit_count FROM image_cache WHERE dish_query = ?",
+            (query,)
+        ).fetchone()
 
-        # 1. Pexels 搜索
-        pexels_results = _search_pexels_candidates(query, query_keywords)
+        if row:
+            cache_conn.execute(
+                "UPDATE image_cache SET hit_count = ? WHERE dish_query = ?",
+                (row[1] + 1, query)
+            )
+            cache_conn.commit()
+            cache_conn.close()
+            logger.info(f"[recipe_search] 缓存命中: {query}")
+            return json.dumps([{"title": query, "url": row[0], "content": query}], ensure_ascii=False)
 
-        # 2. Unsplash 补充搜索
-        unsplash_results = _search_unsplash_candidates(query, query_keywords)
+        # 2. AI 生成新图片
+        logger.info(f"[recipe_search] 生成新图片: {query}")
+        oss_url = _generate_food_image(query)
 
-        # 3. 合并去重，按文本相关性排序
-        all_results = pexels_results + unsplash_results
-        all_results.sort(key=lambda r: r.get("score", 0), reverse=True)
+        if oss_url:
+            cache_conn.execute(
+                "INSERT OR REPLACE INTO image_cache (dish_query, oss_url, created_at) VALUES (?, ?, ?)",
+                (query, oss_url, int(time.time()))
+            )
+            cache_conn.commit()
+            cache_conn.close()
+            return json.dumps([{"title": query, "url": oss_url, "content": query}], ensure_ascii=False)
 
-        if not all_results:
-            return json.dumps([{"title": "无结果", "content": f"未找到'{query}'的图片"}], ensure_ascii=False)
-
-        # 4. 视觉验证 top 8
-        candidates = all_results[:8]
-        verified = _verify_images_with_vision(query, candidates)
-
-        # 5. 验证通过的直接返回；否则退回文本 top 5
-        final = verified if verified else all_results[:5]
-        for r in final:
-            r.pop("score", None)
-            r.pop("original_url", None)
-
-        return json.dumps(final, ensure_ascii=False)
+        cache_conn.close()
+        return json.dumps([{"title": "无结果", "content": f"暂未找到'{query}'的图片"}], ensure_ascii=False)
 
     except Exception as e:
         return json.dumps([{"title": "异常", "content": str(e)}], ensure_ascii=False)
