@@ -171,11 +171,10 @@ def _verify_images_with_vision(query: str, candidates: list[dict]) -> list[dict]
 只返回 JSON：{{"matches":[编号],"reasons":{{"0":"理由"}}}}"""
         })
 
-        vision_model = model.bind(extra_body={"reasoning_effort": "low"})
+        vision_model = model
         response = vision_model.invoke([HumanMessage(content=content_parts)])
         response_text = response.content if isinstance(response.content, str) else str(response.content)
 
-        import re as _re
         json_match = _re.search(r'\{[\s\S]*\}', response_text)
         if not json_match:
             return []
@@ -316,7 +315,7 @@ model = init_chat_model(
     model_provider="openai",
     base_url=os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v1"),
     api_key=os.getenv("DOUBAO_API_KEY")
-).bind(extra_body={"reasoning_effort": "low"})
+)
 
 model_with_tools = model.bind_tools([recipe_search, bilibili_search])
 
@@ -427,20 +426,34 @@ def _build_preference_context(preference: dict) -> str:
     return "\n【用户饮食偏好】\n" + "\n".join(f"- {p}" for p in parts) + "\n请在推荐时严格遵守以上偏好要求。\n"
 
 
+import re as _re
+
+# 推理模型可能输出 奥... 或 <think>...</think> 标签包裹的思考内容
+# DeepSeek/豆包 格式: <|think|>...</|/think|> 或 <|response|>...</|/response|>
+_THINK_BLOCK_RE = _re.compile(
+    r'<\|?\s*(?:think|thinking|reasoning|response)\s*\|?\s*>[\s\S]*?<\|?\s*/\s*(?:think|thinking|reasoning|response)\s*\|?\s*>',
+    _re.IGNORECASE
+)
+
+def _filter_thinking(content: str) -> str:
+    """过滤推理模型的思考标签及内容"""
+    return _THINK_BLOCK_RE.sub('', content).lstrip()
+
+
 def search_recipes(prompt: str, image: str, thread_id: str, preference: dict = None, inventory: list = None):
     """调用Agent搜索食谱"""
     logger.info(f"[用户]: {prompt}, image: {image}, thread_id: {thread_id}")
-    
+
     preference_context = _build_preference_context(preference)
-    
+
     inventory_context = ""
     if inventory:
         items = [f"{i.get('name', '')}({i.get('quantity', '')}{i.get('unit', '')})" for i in inventory if i.get('name')]
         if items:
             inventory_context = f"\n【冰箱库存】\n当前冰箱中有：{', '.join(items)}\n根据这些食材推荐菜品。如果食材不足以独立成菜，列出缺少的关键食材及完整菜名。\n"
-    
+
     full_prompt = (preference_context + inventory_context + prompt).strip()
-    
+
     try:
         if not image or image.strip() == "":
             message = HumanMessage(content=full_prompt)
@@ -456,14 +469,18 @@ def search_recipes(prompt: str, image: str, thread_id: str, preference: dict = N
             stream_mode="messages"
         ):
             if isinstance(chunk, AIMessageChunk) and chunk.content:
+                # 跳过仅包含推理内容的 chunk（兼容新版 langchain-openai）
+                if chunk.additional_kwargs.get("reasoning_content") and not chunk.content:
+                    continue
+
                 if isinstance(chunk.content, str):
-                    yield chunk.content
+                    yield _filter_thinking(chunk.content)
                 elif isinstance(chunk.content, list):
                     for item in chunk.content:
                         if isinstance(item, str):
-                            yield item
+                            yield _filter_thinking(item)
                         elif isinstance(item, dict) and item.get("type") == "text":
-                            yield str(item.get("text", ""))
+                            yield _filter_thinking(str(item.get("text", "")))
 
     except Exception as e:
         logger.error(f"[错误]: {str(e)}")
