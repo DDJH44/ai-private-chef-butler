@@ -315,7 +315,7 @@ model = init_chat_model(
     model_provider="openai",
     base_url=os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v1"),
     api_key=os.getenv("DOUBAO_API_KEY")
-)
+).bind(extra_body={"thinking": {"type": "disabled"}})
 
 model_with_tools = model.bind_tools([recipe_search, bilibili_search])
 
@@ -434,10 +434,79 @@ _THINK_BLOCK_RE = _re.compile(
     r'<\|?\s*(?:think|thinking|reasoning|response)\s*\|?\s*>[\s\S]*?<\|?\s*/\s*(?:think|thinking|reasoning|response)\s*\|?\s*>',
     _re.IGNORECASE
 )
+# 检测可能开启 think 块的模式（跨 chunk 安全）
+_THINK_OPEN_RE = _re.compile(
+    r'<\|?\s*(?:think|thinking|reasoning|response)\s*\|?\s*>',
+    _re.IGNORECASE
+)
 
 def _filter_thinking(content: str) -> str:
     """过滤推理模型的思考标签及内容"""
     return _THINK_BLOCK_RE.sub('', content).lstrip()
+
+
+class _ThinkFilter:
+    """有状态流式过滤器：跨 chunk 正确移除思考块"""
+    def __init__(self):
+        self._buf = ""
+        self._in_think = False
+
+    def feed(self, chunk: str) -> str:
+        self._buf += chunk
+        out_parts: list[str] = []
+
+        while self._buf:
+            if self._in_think:
+                m = _THINK_CLOSE_RE.search(self._buf)
+                if m:
+                    self._buf = self._buf[m.end():]
+                    self._in_think = False
+                else:
+                    break  # 等待闭合标签
+            else:
+                m = _THINK_OPEN_RE.search(self._buf)
+                if m:
+                    out_parts.append(self._buf[:m.start()])
+                    self._buf = self._buf[m.end():]
+                    self._in_think = True
+                else:
+                    # 安全截断：保留可能是标签前缀的部分
+                    safe = _safe_cut(self._buf)
+                    out_parts.append(self._buf[:safe])
+                    self._buf = self._buf[safe:]
+                    break
+
+        return ''.join(out_parts)
+
+    def flush(self) -> str:
+        if self._in_think:
+            self._buf = ""
+            self._in_think = False
+            return ""
+        rest = self._buf
+        self._buf = ""
+        return rest
+
+
+_THINK_CLOSE_RE = _re.compile(
+    r'<\|?\s*/\s*(?:think|thinking|reasoning|response)\s*\|?\s*>',
+    _re.IGNORECASE
+)
+_THINK_PREFIXES = ('<|', '<think', '<thinking', '<reasoning', '<response', '</', '</|')
+
+def _safe_cut(text: str) -> int:
+    """返回可安全输出的前缀长度（不含可能的标签起始）"""
+    cut = len(text)
+    lo = text.lower()
+    for prefix in _THINK_PREFIXES:
+        # 查找 text 末尾可能匹配 prefix 的最长位置
+        for n in range(len(prefix), 0, -1):
+            if lo.endswith(prefix[:n]):
+                candidate = len(text) - n
+                if candidate < cut:
+                    cut = candidate
+                break
+    return max(cut, 0)
 
 
 def search_recipes(prompt: str, image: str, thread_id: str, preference: dict = None, inventory: list = None):
@@ -463,6 +532,8 @@ def search_recipes(prompt: str, image: str, thread_id: str, preference: dict = N
                 {"type": "text", "text": full_prompt}
             ])
 
+        filter = _ThinkFilter()
+
         for chunk, metadata in agent.stream(
             {"messages": [message]},
             {"configurable": {"thread_id": thread_id}},
@@ -474,13 +545,23 @@ def search_recipes(prompt: str, image: str, thread_id: str, preference: dict = N
                     continue
 
                 if isinstance(chunk.content, str):
-                    yield _filter_thinking(chunk.content)
+                    text = chunk.content
                 elif isinstance(chunk.content, list):
-                    for item in chunk.content:
-                        if isinstance(item, str):
-                            yield _filter_thinking(item)
-                        elif isinstance(item, dict) and item.get("type") == "text":
-                            yield _filter_thinking(str(item.get("text", "")))
+                    text = "".join(
+                        item if isinstance(item, str) else str(item.get("text", ""))
+                        for item in chunk.content
+                        if isinstance(item, (str, dict))
+                    )
+                else:
+                    continue
+
+                cleaned = filter.feed(text)
+                if cleaned:
+                    yield cleaned
+
+        rest = filter.flush()
+        if rest:
+            yield rest
 
     except Exception as e:
         logger.error(f"[错误]: {str(e)}")

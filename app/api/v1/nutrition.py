@@ -237,7 +237,7 @@ async def analyze_photo(
             model_provider="openai",
             base_url=os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v1"),
             api_key=os.getenv("DOUBAO_API_KEY")
-        )
+        ).bind(extra_body={"thinking": {"type": "disabled"}})
 
         message = HumanMessage(content=[
             {"type": "image_url", "image_url": {"url": data_uri}},
@@ -353,7 +353,7 @@ async def health_evaluation(date_str: str, current_user: dict = Depends(get_curr
             model_provider="openai",
             base_url=os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v1"),
             api_key=os.getenv("DOUBAO_API_KEY")
-        )
+        ).bind(extra_body={"thinking": {"type": "disabled"}})
 
         response = model.invoke([HumanMessage(content=prompt)])
         result_text = response.content if isinstance(response.content, str) else str(response.content)
