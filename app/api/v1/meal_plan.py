@@ -34,8 +34,8 @@ class MealPlanRequest(BaseModel):
 async def _call_llm(prompt: str) -> str:
     """Call the LLM (non-streaming) with JSON constraint and sufficient max_tokens."""
     msg = HumanMessage(content=prompt)
-    bound = model.bind(response_format={"type": "json_object"})
-    resp = await bound.ainvoke([msg], config={"max_tokens": 8192})
+    bound = model.bind(response_format={"type": "json_object"}, max_tokens=8192)
+    resp = await bound.ainvoke([msg])
     content = resp.content
     if isinstance(content, list):
         return "".join(str(c) for c in content)
