@@ -7,6 +7,7 @@ import { Loading } from "@/components/Loading";
 import {
   getChatState, subscribeToChat, initChat, newChat,
   sendMessage, stopGeneration, dismissRecipes, confirmSaveRecipes,
+  saveCurrentSession,
 } from "@/lib/chatStore";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
@@ -21,15 +22,22 @@ function Home() {
   const hasAutoSent = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
-  const initStarted = useRef(false);
+  const prevThread = useRef<string | null | undefined>(undefined);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
 
   useEffect(() => {
-    if (initStarted.current) return;
-    initStarted.current = true;
     const unsub = subscribeToChat(() => forceUpdate((n) => n + 1));
-    initChat(resumeThread || undefined);
-    return unsub;
+    return () => {
+      saveCurrentSession();
+      unsub();
+    };
+  }, []);
+
+  useEffect(() => {
+    const target = resumeThread || null;
+    if (prevThread.current === target) return;
+    prevThread.current = target;
+    initChat(target || undefined);
   }, [resumeThread]);
 
   const s = getChatState();

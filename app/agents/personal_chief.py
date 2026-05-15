@@ -314,8 +314,9 @@ model = init_chat_model(
     model=os.getenv("DOUBAO_MODEL_NAME", "doubao-seed-1-8-251228"),
     model_provider="openai",
     base_url=os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v1"),
-    api_key=os.getenv("DOUBAO_API_KEY")
-).bind(extra_body={"thinking": {"type": "disabled"}})
+    api_key=os.getenv("DOUBAO_API_KEY"),
+    extra_body={"thinking": {"type": "disabled"}},
+)
 
 model_with_tools = model.bind_tools([recipe_search, bilibili_search])
 
@@ -499,13 +500,18 @@ def _safe_cut(text: str) -> int:
     cut = len(text)
     lo = text.lower()
     for prefix in _THINK_PREFIXES:
-        # 查找 text 末尾可能匹配 prefix 的最长位置
         for n in range(len(prefix), 0, -1):
             if lo.endswith(prefix[:n]):
                 candidate = len(text) - n
                 if candidate < cut:
                     cut = candidate
                 break
+    # 也检查 buffer 内部可能被截断的标签起始符（如 "Hello<|thi" 中的 "<|"）
+    lt_pos = text.rfind('<')
+    if lt_pos >= 0:
+        remaining = len(text) - lt_pos
+        if remaining < 20 and lt_pos < cut:
+            cut = lt_pos
     return max(cut, 0)
 
 

@@ -1,8 +1,8 @@
 import { Message } from "@/types/chat";
 import { Recipe } from "@/types/recipe";
-import { streamChat as streamChatApi, getChatHistory, clearChatHistory } from "./api";
+import { streamChat as streamChatApi, getChatHistory } from "./api";
 import { generateUUID } from "./utils";
-import { saveChatSession } from "./historyStore";
+import { saveChatSession, loadChatHistory } from "./historyStore";
 import { addRecipesBatch } from "./recipeStore";
 import { containsRecipe, parseAllRecipesFromMessage } from "./recipeParser";
 import { showToast } from "@/components/Toast";
@@ -43,7 +43,6 @@ const state: ChatState = {
 };
 
 const listeners = new Set<Listener>();
-let initialized = false;
 let abortController: AbortController | null = null;
 
 if (typeof window !== "undefined") {
@@ -66,15 +65,36 @@ export function subscribeToChat(fn: Listener): () => void {
 }
 
 export async function initChat(resumeThreadId?: string): Promise<void> {
-    if (initialized) return;
-    initialized = true;
+    const targetId = resumeThreadId || getPersistedThreadId();
 
-    state.threadId = resumeThreadId || getPersistedThreadId();
+    // 同一 thread 已加载，跳过
+    if (state.threadId === targetId && !state.initialLoading) return;
+
+    // 切换前保存当前会话
+    if (state.threadId && state.threadId !== targetId) {
+        saveCurrentSession();
+    }
+
+    state.threadId = targetId;
+    persistThreadId(targetId);
+    state.messages = [];
+    state.recipesToSave = null;
     state.initialLoading = true;
     notify();
 
     try {
-        const history = await getChatHistory(state.threadId);
+        let history = await getChatHistory(state.threadId);
+        if (!Array.isArray(history) || history.length === 0) {
+            // 后端无记录时从 localStorage 恢复
+            const sessions = loadChatHistory();
+            const cached = sessions.find(s => s.session_id === state.threadId);
+            if (cached?.messages?.length) {
+                history = cached.messages.map(m => ({
+                    role: m.role === "ai" ? "assistant" : "user",
+                    content: m.content,
+                }));
+            }
+        }
         if (Array.isArray(history) && history.length > 0) {
             state.messages = history.map(
                 (msg: { role: string; content: unknown }) => {
@@ -106,7 +126,7 @@ export async function initChat(resumeThreadId?: string): Promise<void> {
     }
 }
 
-function saveCurrentSession() {
+export function saveCurrentSession() {
     if (state.messages.length === 0) return;
     const firstUser = state.messages.find((m) => m.role === "user");
     const preview = firstUser?.content?.toString().slice(0, 50) || "新对话";
@@ -126,16 +146,16 @@ function saveCurrentSession() {
 
 export async function newChat(): Promise<void> {
     saveCurrentSession();
-    try {
-        await clearChatHistory(state.threadId);
-    } catch {
-        /* ignore */
-    }
     const newId = generateUUID();
     persistThreadId(newId);
     state.threadId = newId;
     state.messages = [];
     state.recipesToSave = null;
+    if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("thread");
+        window.history.replaceState(null, "", url.toString());
+    }
     notify();
 }
 
