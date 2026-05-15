@@ -31,10 +31,29 @@ class MealPlanRequest(BaseModel):
     existing_plan: Optional[dict] = None  # 用户已编辑的计划，只替换生成部分
 
 
+def _repair_truncated_json(raw: str) -> str:
+    """尝试修复被截断的 JSON：补全缺失的闭合括号"""
+    # 移除模型可能输出的 markdown 代码块标记
+    raw = raw.strip()
+    if raw.startswith("```"):
+        raw = re.sub(r"^```\w*\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+    # 统计未闭合的括号
+    open_braces = raw.count("{") - raw.count("}")
+    open_brackets = raw.count("[") - raw.count("]")
+    # 移除末尾不完整的字符串（如 "recipe_name": "番茄）
+    if raw.rfind('"') > max(raw.rfind('}'), raw.rfind(']')):
+        raw = raw[:raw.rfind('"')] + '"'
+    # 补全缺失的闭合符号
+    raw += "]" * max(open_brackets, 0)
+    raw += "}" * max(open_braces, 0)
+    return raw
+
+
 async def _call_llm(prompt: str) -> str:
-    """Call the LLM (non-streaming) with JSON constraint and sufficient max_tokens."""
+    """Call the LLM (non-streaming) with sufficient max_tokens for 21 meals."""
     msg = HumanMessage(content=prompt)
-    bound = model.bind(response_format={"type": "json_object"}, max_tokens=8192)
+    bound = model.bind(max_tokens=8192)
     resp = await bound.ainvoke([msg])
     content = resp.content
     if isinstance(content, list):
@@ -143,7 +162,13 @@ async def generate_meal_plan(request: MealPlanRequest):
         if not json_match:
             raise HTTPException(status_code=500, detail="AI 返回的内容无法解析")
 
-        data = json.loads(json_match.group())
+        json_str = json_match.group()
+        try:
+            data = json.loads(json_str)
+        except json.JSONDecodeError:
+            # 尝试修复截断的 JSON
+            repaired = _repair_truncated_json(json_str)
+            data = json.loads(repaired)
 
         # 规范化：确保未生成餐次为 null
         days = data.get("days", [])
