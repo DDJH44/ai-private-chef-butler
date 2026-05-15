@@ -658,7 +658,11 @@ export default function MealPlanPage() {
             showToast("膳食计划已生成", "success");
             setShowGenerate(false);
         } catch (e) {
-            showToast("生成失败: " + (e instanceof Error ? e.message : "未知错误"), "error");
+            if (e instanceof DOMException && e.name === "AbortError") {
+                showToast("生成超时，请尝试分餐生成（早餐/午餐/晚餐单独生成）或稍后重试", "error");
+            } else {
+                showToast("生成失败: " + (e instanceof Error ? e.message : "未知错误"), "error");
+            }
         } finally {
             setGenerating(false);
         }

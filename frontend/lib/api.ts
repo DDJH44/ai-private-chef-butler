@@ -313,11 +313,18 @@ export async function generateMealPlan(params: {
     inventory?: Array<Record<string, unknown>>;
     existing_plan?: Record<string, unknown>;
 }): Promise<Record<string, unknown>> {
-    const data = await authRequest<Record<string, unknown>>("/api/v1/meal-plan/generate", {
-        method: "POST",
-        body: JSON.stringify(params),
-    });
-    return data;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
+    try {
+        const data = await authRequest<Record<string, unknown>>("/api/v1/meal-plan/generate", {
+            method: "POST",
+            body: JSON.stringify(params),
+            signal: controller.signal,
+        });
+        return data;
+    } finally {
+        clearTimeout(timeoutId);
+    }
 }
 
 export async function searchRecipes(query: string): Promise<Recipe[]> {
