@@ -30,6 +30,9 @@ def chat_endpoint(chat_request: ChatRequest, current_user: dict = Depends(get_cu
                 yield chunk_text
         except GeneratorExit:
             stop_event.set()
+        except Exception as e:
+            logger.error(f"流式生成异常: {isolated_thread}: {e}")
+            yield f"\n\n抱歉，生成回复时出现问题，请重试。"
         finally:
             gen.close()
             stop_event.set()
