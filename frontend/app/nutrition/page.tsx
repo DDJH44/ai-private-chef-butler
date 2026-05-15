@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { showToast } from "@/components/Toast";
 import { AuthGuard } from "@/components/AuthGuard";
+import DatePicker from "@/components/DatePicker";
 import { useFeishuStatus } from "@/hooks/useFeishuStatus";
 import { getToken } from "@/lib/authStore";
 
@@ -114,6 +115,7 @@ export default function NutritionPage() {
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [healthEval, setHealthEval] = useState<HealthEval | null>(null);
   const [evaluating, setEvaluating] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const fetchSummary = useCallback(async () => {
@@ -331,12 +333,17 @@ export default function NutritionPage() {
             onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
             onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
           >◀</button>
-          <div style={{
-            padding: "10px 36px", background: "var(--bg)", borderRadius: 14,
-            boxShadow: "var(--shadow-raised-sm)", fontSize: 15, fontWeight: 600, color: "var(--text)",
-          }}>
+          <button
+            onClick={() => setShowDatePicker(true)}
+            style={{
+              padding: "10px 36px", background: "var(--bg)", borderRadius: 14,
+              boxShadow: "var(--shadow-raised-sm)", fontSize: 15, fontWeight: 600, color: "var(--text)",
+              border: "none", cursor: "pointer", fontFamily: "inherit",
+              touchAction: "manipulation",
+            }}
+          >
             {formatDate(selectedDate)}
-          </div>
+          </button>
           <button onClick={() => navigateDate(1)}
             style={{
               width: 44, height: 44, background: "var(--bg)", borderRadius: 14,
@@ -815,6 +822,17 @@ export default function NutritionPage() {
             </div>
           </div>
         </div>
+      )}
+      {showDatePicker && (
+        <DatePicker
+          value={new Date(selectedDate)}
+          onChange={(date) => {
+            setSelectedDate(date.toISOString().split("T")[0]);
+            setHealthEval(null);
+            setShowDatePicker(false);
+          }}
+          onClose={() => setShowDatePicker(false)}
+        />
       )}
     </div>
     </AuthGuard>
