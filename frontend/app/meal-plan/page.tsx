@@ -7,6 +7,7 @@ import {getOrCreateWeekPlan, removeMealFromPlan, updateMealInPlan, clearMealPlan
 import {generateShoppingListFromRecipes} from "@/lib/shoppingListGenerator";
 import {showToast} from "@/components/Toast";
 import { AuthGuard } from "@/components/AuthGuard";
+import DatePicker from "@/components/DatePicker";
 import {generateMealPlan} from "@/lib/api";
 import { getPreference } from "@/lib/api";
 import {loadIngredients} from "@/lib/ingredientStore";
@@ -494,6 +495,7 @@ export default function MealPlanPage() {
     const [generating, setGenerating] = useState(false);
     const [genRequirements, setGenRequirements] = useState("");
     const [genMode, setGenMode] = useState<"full" | "breakfast_only" | "lunch_only" | "dinner_only">("full");
+    const [showDatePicker, setShowDatePicker] = useState(false);
 
     // Edit meal modal state
     const [showEdit, setShowEdit] = useState(false);
@@ -768,12 +770,19 @@ export default function MealPlanPage() {
                     >
                         ←
                     </button>
-                    <div style={s.navCenter}>
+                    <button
+                        onClick={() => setShowDatePicker(true)}
+                        style={{
+                            ...s.navCenter, background: "transparent", border: "none",
+                            cursor: "pointer", fontFamily: "inherit", padding: "4px 12px",
+                            borderRadius: 12, touchAction: "manipulation",
+                        }}
+                    >
                         <p style={s.navTitle}>{weekRange}</p>
                         <p style={s.navSub}>
                             第 {Math.ceil((new Date(plan.week_start).getTime() - new Date(new Date().getFullYear(), 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000))} 周
                         </p>
-                    </div>
+                    </button>
                     <button
                         onClick={() => goWeek(1)}
                         style={s.navArrow}
@@ -1115,6 +1124,14 @@ export default function MealPlanPage() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {showDatePicker && (
+                <DatePicker
+                    value={currentDate}
+                    onChange={(date) => { setCurrentDate(date); setShowDatePicker(false); }}
+                    onClose={() => setShowDatePicker(false)}
+                />
             )}
 
         </AuthGuard>

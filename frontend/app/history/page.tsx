@@ -10,6 +10,7 @@ import {
 } from "@/lib/historyStore";
 import {showToast} from "@/components/Toast";
 import { AuthGuard } from "@/components/AuthGuard";
+import DatePicker from "@/components/DatePicker";
 
 type TabKey = "chat" | "view" | "cook";
 
@@ -347,6 +348,8 @@ export default function HistoryPage() {
     const [cookHistory, setCookHistory] = useState<CookHistoryItem[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [searchFocused, setSearchFocused] = useState(false);
+    const [showDatePicker, setShowDatePicker] = useState(false);
+    const [filterMonth, setFilterMonth] = useState<string | null>(null);
     const [hoveredDelete, setHoveredDelete] = useState<string | null>(null);
 
     const refresh = useCallback(() => {
@@ -388,9 +391,16 @@ export default function HistoryPage() {
         ? viewHistory.filter((v) => v.recipe_name.includes(searchQuery))
         : viewHistory;
 
-    const filteredCook = searchQuery.trim()
-        ? cookHistory.filter((c) => c.recipe_name.includes(searchQuery) || c.notes.includes(searchQuery))
-        : cookHistory;
+    const filteredCook = (() => {
+        let list = cookHistory;
+        if (searchQuery.trim()) {
+            list = list.filter((c) => c.recipe_name.includes(searchQuery) || c.notes.includes(searchQuery));
+        }
+        if (filterMonth) {
+            list = list.filter((c) => (c.cook_date || "").startsWith(filterMonth));
+        }
+        return list;
+    })();
 
     return (
         <AuthGuard>
@@ -545,6 +555,36 @@ export default function HistoryPage() {
 
                 {/* Cook tab */}
                 {activeTab === "cook" && (
+                    <>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 4px 8px" }}>
+                        <button
+                            onClick={() => setShowDatePicker(true)}
+                            style={{
+                                display: "flex", alignItems: "center", gap: 4,
+                                padding: "6px 12px", borderRadius: 10,
+                                background: "var(--bg)", boxShadow: "var(--shadow-raised-sm)",
+                                border: "none", cursor: "pointer", fontSize: 13,
+                                fontWeight: 500, color: "var(--accent)",
+                                fontFamily: "inherit", touchAction: "manipulation",
+                            }}
+                        >
+                            📅 按月份筛选
+                        </button>
+                    </div>
+                    {filterMonth && (
+                        <div style={{
+                            display: "flex", alignItems: "center", gap: 8,
+                            padding: "0 4px 8px", fontSize: 13, color: "var(--text-secondary)",
+                        }}>
+                            <span>筛选：{filterMonth.replace("-", "年")}月</span>
+                            <button onClick={() => setFilterMonth(null)} style={{
+                                padding: "2px 8px", borderRadius: 8, border: "none",
+                                background: "var(--bg)", boxShadow: "var(--shadow-raised-sm)",
+                                cursor: "pointer", fontSize: 12, color: "var(--rose)",
+                                fontFamily: "inherit", touchAction: "manipulation",
+                            }}>清除</button>
+                        </div>
+                    )}
                     <div style={styles.listGap}>
                         {filteredCook.length === 0 ? (
                             <div style={styles.emptyState}>
@@ -595,9 +635,21 @@ export default function HistoryPage() {
                             ))
                         )}
                     </div>
+                    </>
                 )}
             </div>
         </div>
+            {showDatePicker && (
+                <DatePicker
+                    value={filterMonth ? new Date(filterMonth + "-01") : new Date()}
+                    onChange={(date) => {
+                        setFilterMonth(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`);
+                        setShowDatePicker(false);
+                    }}
+                    onClose={() => setShowDatePicker(false)}
+                />
+            )}
+
         </AuthGuard>
     );
 }
