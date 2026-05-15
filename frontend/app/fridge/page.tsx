@@ -14,6 +14,7 @@ import {
 } from "@/lib/ingredientStore";
 import { showToast } from "@/components/Toast";
 import { AuthGuard } from "@/components/AuthGuard";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 export default function FridgePage() {
     const router = useRouter();
@@ -97,7 +98,9 @@ export default function FridgePage() {
         setEditId(null);
     };
 
-    const handleDelete = (id: string) => {
+    const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+    const doDelete = (id: string) => {
         deleteIngredient(id);
         showToast("食材已删除", "success");
     };
@@ -304,7 +307,7 @@ export default function FridgePage() {
                                             >
                                                 ✏️
                                             </button>
-                                            <button onClick={() => handleDelete(item.id)}
+                                            <button onClick={() => setConfirmDeleteId(item.id)}
                                                 style={{
                                                     width: 28, height: 28,
                                                     background: "var(--bg)",
@@ -644,6 +647,18 @@ export default function FridgePage() {
                 </div>
             )}
         </div>
+            {confirmDeleteId && (
+                <ConfirmDialog
+                    isOpen={!!confirmDeleteId}
+                    title="删除食材"
+                    message="确定要删除这个食材吗？此操作不可撤销。"
+                    onCancel={() => setConfirmDeleteId(null)}
+                    onConfirm={() => {
+                        doDelete(confirmDeleteId);
+                        setConfirmDeleteId(null);
+                    }}
+                />
+            )}
         </AuthGuard>
     );
 }

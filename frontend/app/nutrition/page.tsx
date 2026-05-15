@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { showToast } from "@/components/Toast";
 import { AuthGuard } from "@/components/AuthGuard";
 import DatePicker from "@/components/DatePicker";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { useFeishuStatus } from "@/hooks/useFeishuStatus";
 import { getToken } from "@/lib/authStore";
 
@@ -116,14 +117,16 @@ export default function NutritionPage() {
   const [healthEval, setHealthEval] = useState<HealthEval | null>(null);
   const [evaluating, setEvaluating] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const fetchSummary = useCallback(async () => {
     setLoading(true);
     try {
       const resp = await fetch(`${API_BASE}/api/v1/nutrition/summary/${selectedDate}`, { headers: authHeaders() });
-      if (resp.ok) setSummary(await resp.json());
-    } catch (e) { console.error(e); }
+      if (resp.ok) { setSummary(await resp.json()); }
+      else { showToast("加载饮食记录失败", "error"); }
+    } catch (e) { showToast("网络错误，请稍后重试", "error"); }
     setLoading(false);
   }, [selectedDate]);
 
@@ -172,12 +175,12 @@ export default function NutritionPage() {
     } catch (e) { showToast("添加失败", "error"); }
   };
 
-  const handleDelete = async (id: string) => {
+  const doDelete = async (id: string) => {
     try {
       const resp = await fetch(`${API_BASE}/api/v1/nutrition/records/${id}`, { method: "DELETE", headers: authHeaders() });
       if (resp.ok) { showToast("已删除", "success"); fetchSummary(); }
       else { showToast("删除失败", "error"); }
-    } catch (e) { showToast("删除失败", "error"); }
+    } catch (e) { showToast("网络错误，删除失败", "error"); }
   };
 
   const handleShareToFeishu = async () => {
@@ -660,7 +663,7 @@ export default function NutritionPage() {
                                   {meal.calories ? (
                                     <span style={{ fontSize: 13, color: "var(--text-muted)" }}>🔥{meal.calories}kcal</span>
                                   ) : null}
-                                  <button onClick={() => handleDelete(meal.id)}
+                                  <button onClick={() => setConfirmDeleteId(meal.id)}
                                     style={{
                                       width: 28, height: 28, background: "var(--bg)", borderRadius: 8,
                                       boxShadow: "var(--shadow-raised-xs)", border: "none", cursor: "pointer",
@@ -832,6 +835,18 @@ export default function NutritionPage() {
             setShowDatePicker(false);
           }}
           onClose={() => setShowDatePicker(false)}
+        />
+      )}
+      {confirmDeleteId && (
+        <ConfirmDialog
+          isOpen={!!confirmDeleteId}
+          title="删除饮食记录"
+          message="确定要删除这条饮食记录吗？此操作不可撤销。"
+          onCancel={() => setConfirmDeleteId(null)}
+          onConfirm={() => {
+            doDelete(confirmDeleteId);
+            setConfirmDeleteId(null);
+          }}
         />
       )}
     </div>

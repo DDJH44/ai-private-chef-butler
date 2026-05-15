@@ -10,6 +10,7 @@ import {
 import { generateUUID } from "@/lib/utils";
 import { showToast } from "@/components/Toast";
 import { AuthGuard } from "@/components/AuthGuard";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 export default function ShoppingListPage() {
     const router = useRouter();
@@ -17,6 +18,7 @@ export default function ShoppingListPage() {
     const [showCreate, setShowCreate] = useState(false);
     const [customTitle, setCustomTitle] = useState("");
     const [customInput, setCustomInput] = useState("");
+    const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
     const load = useCallback(async () => {
         const data = await loadShoppingLists();
@@ -36,9 +38,13 @@ export default function ShoppingListPage() {
         setLists(data);
     }, []);
 
-    const handleDelete = useCallback(async (list: ShoppingList, e: React.MouseEvent) => {
+    const handleDelete = useCallback((list: ShoppingList, e: React.MouseEvent) => {
         e.stopPropagation();
-        await deleteShoppingList(list.id);
+        setConfirmDeleteId(list.id);
+    }, []);
+
+    const doDelete = useCallback(async (id: string) => {
+        await deleteShoppingList(id);
         showToast("清单已删除", "success");
     }, []);
 
@@ -710,6 +716,18 @@ export default function ShoppingListPage() {
                 </div>
             )}
         </div>
+            {confirmDeleteId && (
+                <ConfirmDialog
+                    isOpen={!!confirmDeleteId}
+                    title="删除购物清单"
+                    message="确定要删除这个购物清单吗？此操作不可撤销。"
+                    onCancel={() => setConfirmDeleteId(null)}
+                    onConfirm={() => {
+                        doDelete(confirmDeleteId);
+                        setConfirmDeleteId(null);
+                    }}
+                />
+            )}
         </AuthGuard>
     );
 }

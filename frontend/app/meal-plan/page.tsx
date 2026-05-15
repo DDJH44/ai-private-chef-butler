@@ -8,6 +8,7 @@ import {generateShoppingListFromRecipes} from "@/lib/shoppingListGenerator";
 import {showToast} from "@/components/Toast";
 import { AuthGuard } from "@/components/AuthGuard";
 import DatePicker from "@/components/DatePicker";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import {generateMealPlan} from "@/lib/api";
 import { getPreference } from "@/lib/api";
 import {loadIngredients} from "@/lib/ingredientStore";
@@ -496,6 +497,7 @@ export default function MealPlanPage() {
     const [genRequirements, setGenRequirements] = useState("");
     const [genMode, setGenMode] = useState<"full" | "breakfast_only" | "lunch_only" | "dinner_only">("full");
     const [showDatePicker, setShowDatePicker] = useState(false);
+    const [showClearConfirm, setShowClearConfirm] = useState(false);
 
     // Edit meal modal state
     const [showEdit, setShowEdit] = useState(false);
@@ -550,8 +552,7 @@ export default function MealPlanPage() {
 
     const handleClearPlan = useCallback(() => {
         if (!plan) return;
-        clearMealPlan(plan.id);
-        showToast("本周计划已清空", "info");
+        setShowClearConfirm(true);
     }, [plan]);
 
     const refreshPlan = useCallback(() => {
@@ -1131,6 +1132,18 @@ export default function MealPlanPage() {
                     value={currentDate}
                     onChange={(date) => { setCurrentDate(date); setShowDatePicker(false); }}
                     onClose={() => setShowDatePicker(false)}
+                />
+            )}
+            {showClearConfirm && (
+                <ConfirmDialog
+                    isOpen={showClearConfirm}
+                    title="清空膳食计划"
+                    message="确定要清空本周所有膳食计划吗？此操作不可撤销。"
+                    onCancel={() => setShowClearConfirm(false)}
+                    onConfirm={() => {
+                        if (plan) { clearMealPlan(plan.id); showToast("本周计划已清空", "info"); }
+                        setShowClearConfirm(false);
+                    }}
                 />
             )}
 
