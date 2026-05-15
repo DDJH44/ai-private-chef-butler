@@ -242,25 +242,27 @@ export function ChatInput({ onSendMessage, onImageUpload, disabled, defaultValue
               boxShadow: "var(--shadow-raised-lg)",
               animation: "scaleIn 0.2s ease both", zIndex: 30,
             }}>
-              {/* Camera */}
-              <div style={{ position: "relative", width: 42, height: 42 }}>
+              {/* Camera — use onClick to trigger hidden input, reliable on iOS */}
+              <div style={{ position: "relative" }}>
                 <button
-                  style={{ ...btnBase, width: 42, height: 42, fontSize: 20 }}
+                  onClick={() => cameraInputRef.current?.click()}
+                  style={{ ...btnBase, width: 44, height: 44, fontSize: 20, touchAction: "manipulation" }}
                   aria-label="拍照"
                 >📷</button>
                 <input ref={cameraInputRef} type="file" accept="image/*" capture="environment"
                   onChange={handleFileChange}
-                  style={{ position: "absolute", top: 0, left: 0, width: 42, height: 42, opacity: 0.001, cursor: "pointer" }} />
+                  style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0,0,0,0)", border: 0 }} />
               </div>
-              {/* Gallery */}
-              <div style={{ position: "relative", width: 42, height: 42 }}>
+              {/* Gallery — use onClick to trigger hidden input, reliable on iOS */}
+              <div style={{ position: "relative" }}>
                 <button
-                  style={{ ...btnBase, width: 42, height: 42, fontSize: 20 }}
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{ ...btnBase, width: 44, height: 44, fontSize: 20, touchAction: "manipulation" }}
                   aria-label="从相册选择"
                 >🖼</button>
                 <input ref={fileInputRef} type="file" accept="image/*"
                   onChange={handleFileChange}
-                  style={{ position: "absolute", top: 0, left: 0, width: 42, height: 42, opacity: 0.001, cursor: "pointer" }} />
+                  style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0,0,0,0)", border: 0 }} />
               </div>
             </div>
           )}

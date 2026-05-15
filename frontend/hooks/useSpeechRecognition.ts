@@ -57,7 +57,6 @@ export function useSpeechRecognition() {
     const win = window as unknown as Record<string, unknown>;
     const SR = (win.SpeechRecognition || win.webkitSpeechRecognition) as SpeechRecognitionCtor | undefined;
     if (!SR) {
-      setIsSupported(false);
       return false;
     }
     const recognition = new SR();
@@ -113,7 +112,15 @@ export function useSpeechRecognition() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       chunksRef.current = [];
-      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm;codecs=opus" });
+
+      // iOS Safari only supports audio/mp4; Chrome/Android/Desktop use webm
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/mp4")
+          ? "audio/mp4"
+          : "audio/webm";
+
+      const recorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = recorder;
 
       recorder.ondataavailable = (e: BlobEvent) => {
@@ -126,9 +133,11 @@ export function useSpeechRecognition() {
           stream.getTracks().forEach((t) => t.stop());
           setUploading(true);
           try {
-            const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+            const blobType = mimeType.startsWith("audio/mp4") ? "audio/mp4" : "audio/webm";
+            const blobExt = mimeType.startsWith("audio/mp4") ? "m4a" : "webm";
+            const blob = new Blob(chunksRef.current, { type: blobType });
             const formData = new FormData();
-            formData.append("file", blob, "recording.webm");
+            formData.append("file", blob, `recording.${blobExt}`);
             const resp = await fetch(WhisperAPI, { method: "POST", body: formData });
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json();
@@ -148,7 +157,7 @@ export function useSpeechRecognition() {
         setIsRecording(true);
       });
     } catch (e) {
-      console.error("Microphone access denied");
+      console.error("Microphone access denied:", e);
       setIsSupported(false);
       return "";
     }

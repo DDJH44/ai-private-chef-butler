@@ -532,4 +532,16 @@ body {
 @media (max-width: 639px) {
   ::-webkit-scrollbar { display: none; }
   * { scrollbar-width: none; }
+
+  /* Eliminate 300ms tap delay on iOS */
+  button, a, input, textarea, [role="button"] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Prevent text selection on long-press for interactive elements */
+  button, [role="button"] {
+    -webkit-user-select: none;
+    user-select: none;
+  }
 }
