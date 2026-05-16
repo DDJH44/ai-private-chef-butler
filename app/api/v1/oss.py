@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-router = APIRouter(dependencies=[Depends(get_current_user)])
+router = APIRouter()
 
 def _get_bucket():
     """延迟初始化 OSS Bucket，确保环境变量已加载"""
@@ -88,7 +88,7 @@ async def proxy_image(url: str = Query(...)):
         return JSONResponse(status_code=500, content={"detail": f"Proxy failed: {str(e)}"})
 
 @router.post("/oss/upload")
-async def upload_to_oss(file: UploadFile = File(...)):
+async def upload_to_oss(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     """通过后端代理上传图片到 OSS，避免浏览器跨域问题"""
     try:
         file_content = await file.read()
@@ -117,7 +117,7 @@ async def upload_to_oss(file: UploadFile = File(...)):
         )
 
 @router.post("/oss/upload-url")
-async def get_upload_url(request: OSSUploadRequest):
+async def get_upload_url(request: OSSUploadRequest, current_user: dict = Depends(get_current_user)):
     """获取OSS上传签名URL"""
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     filename = f"uploads/{timestamp}_{request.filename}"
@@ -142,7 +142,7 @@ async def get_upload_url(request: OSSUploadRequest):
     )
 
 @router.get("/oss/presign")
-def presign_endpoint(filename: str):
+def presign_endpoint(filename: str, current_user: dict = Depends(get_current_user)):
     ext = filename.split(".")[-1].lower() if "." in filename else "jpg"
     content_type = CONTENT_TYPE_MAP.get(ext, "application/octet-stream")
 
