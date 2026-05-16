@@ -12,12 +12,7 @@ interface ChatMessageProps {
 }
 
 import { apiOrigin, apiPort } from '@/lib/env';
-
-function proxyImageUrl(url: string): string {
-  if (!url) return url;
-  if (url.startsWith("/api/")) return url;
-  return `/api/v1/oss/proxy?url=${encodeURIComponent(url)}`;
-}
+import { proxyImageUrl } from '@/lib/imageUtils';
 
 function getBackendOrigin(): string {
   if (typeof window === "undefined") return apiOrigin() || "";

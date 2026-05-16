@@ -44,8 +44,9 @@ function Home() {
 
   const s = getChatState();
 
-  const scrollToBottom = useCallback((smooth = true) => {
-    messagesEndRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "instant" });
+  const scrollToBottom = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, []);
 
   useEffect(() => {
@@ -69,7 +70,7 @@ function Home() {
   useEffect(() => {
     if (s.loading && !wasLoadingRef.current) {
       isNearBottomRef.current = true;
-      scrollToBottom(false);
+      scrollToBottom();
     }
     wasLoadingRef.current = s.loading;
   }, [s.loading, scrollToBottom]);
@@ -111,7 +112,7 @@ function Home() {
         ) : (
           <div style={{ padding: "24px 24px 16px", maxWidth: 760, margin: "0 auto", display: "flex", flexDirection: "column", gap: 4 }}>
             {s.messages.map((msg, i) => (
-              <ChatMessage key={`${msg.id}-${i}`} message={msg} />
+              <ChatMessage key={`${msg.id}-${i}`} message={msg} isStreaming={s.loading && i === s.messages.length - 1 && msg.role === "assistant"} />
             ))}
             {s.recipesToSave && (
               <div style={{ maxWidth: 640, margin: "0 auto" }}>

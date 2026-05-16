@@ -424,8 +424,9 @@ def _generate_and_upload_image(query: str) -> str | None:
     endpoint = os.getenv("OSS_ENDPOINT", "oss-cn-beijing.aliyuncs.com")
     bucket_name = os.getenv("OSS_BUCKET")
     oss_url = f"https://{bucket_name}.{endpoint}/{filename}"
-    logger.info(f"[image_gen] {query} -> {oss_url}")
-    return oss_url
+    proxy_url = proxy_image_url(oss_url)
+    logger.info(f"[image_gen] {query} -> {proxy_url}")
+    return proxy_url
 
 
 @tool
