@@ -45,7 +45,8 @@ def create_access_token(data: dict) -> str:
 
 
 def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
-    from app.api.v1.auth import get_db
+    from app.common.database import get_db
+    from app.models.db import User
     credentials_exception = HTTPException(status_code=401, detail="无效的认证凭据")
     if is_token_revoked(token):
         raise credentials_exception
@@ -58,8 +59,8 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     except JWTError:
         raise credentials_exception
 
-    with get_db() as conn:
-        row = conn.execute("SELECT id, username FROM users WHERE id = ?", (user_id,)).fetchone()
-    if row is None:
+    with get_db() as session:
+        user = session.query(User).filter(User.id == user_id).first()
+    if user is None:
         raise credentials_exception
-    return {"user_id": row["id"], "username": row["username"]}
+    return {"user_id": user.id, "username": user.username}

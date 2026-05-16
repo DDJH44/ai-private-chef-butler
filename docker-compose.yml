@@ -1,6 +1,31 @@
 version: '3.8'
 
 services:
+  db:
+    image: mysql:8.0
+    container_name: ai-chef-db
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-authentication-plugin=mysql_native_password
+
   app:
     build:
       context: .
@@ -10,12 +35,16 @@ services:
     ports:
       - "8001:8001"
     volumes:
-      - ./data:/app/data
       - ./logs:/app/logs
     env_file:
       - .env
     environment:
       - TZ=Asia/Shanghai
+      - MYSQL_HOST=db
+      - DATABASE_URL=mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE}
+    depends_on:
+      db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/api/v1/health"]
       interval: 30s
@@ -40,5 +69,5 @@ services:
       - TZ=Asia/Shanghai
 
 volumes:
-  data:
+  mysql_data:
   logs:

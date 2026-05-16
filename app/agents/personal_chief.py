@@ -5,8 +5,7 @@ from langgraph.graph import StateGraph, MessagesState, START, END
 from langgraph.prebuilt import ToolNode
 from app.common.logger import logger
 import os
-from langgraph.checkpoint.sqlite import SqliteSaver
-import sqlite3
+from app.common.checkpoint_saver import MySQLSaver
 import json
 import requests
 from dotenv import load_dotenv
@@ -320,12 +319,7 @@ model = init_chat_model(
 
 model_with_tools = model.bind_tools([recipe_search, bilibili_search])
 
-_db_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
-os.makedirs(_db_dir, exist_ok=True)
-connection = sqlite3.connect(os.path.join(_db_dir, "personal_chief.db"), check_same_thread=False, timeout=10)
-connection.execute("PRAGMA journal_mode=WAL")
-checkpointer = SqliteSaver(connection)
-checkpointer.setup()
+checkpointer = MySQLSaver()
 
 def _load_system_prompt() -> str:
     prompt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "system_prompt.txt")

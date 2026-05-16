@@ -1,68 +1,37 @@
 """飞书集成 API — 每用户独立配置"""
 import os
-import json
-import sqlite3
 import time
 import httpx
-from contextlib import contextmanager
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional, List
 from dotenv import load_dotenv
 from app.auth import get_current_user
+from app.common.database import get_db
+from app.models.db import FeishuConfig
 
 load_dotenv()
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 GLOBAL_WEBHOOK_URL = os.getenv("FEISHU_WEBHOOK_URL", "")
-DB_PATH = os.getenv("FEISHU_DB_PATH", "data/feishu.db")
-
-
-@contextmanager
-def get_db():
-    conn = sqlite3.connect(DB_PATH, timeout=10)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    try:
-        yield conn
-    finally:
-        conn.close()
-
-
-def init_db():
-    import os as _os
-    _os.makedirs(_os.path.dirname(DB_PATH), exist_ok=True)
-    with get_db() as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS feishu_config (
-                user_id TEXT PRIMARY KEY,
-                webhook_url TEXT NOT NULL,
-                onboarding_step TEXT NOT NULL DEFAULT 'webhook_saved',
-                enabled INTEGER NOT NULL DEFAULT 0,
-                created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL
-            )
-        """)
-        conn.commit()
 
 
 def get_user_config(user_id: str) -> dict | None:
-    with get_db() as conn:
-        row = conn.execute("SELECT * FROM feishu_config WHERE user_id = ?", (user_id,)).fetchone()
+    with get_db() as session:
+        row = session.query(FeishuConfig).filter(FeishuConfig.user_id == user_id).first()
     if not row:
         return None
     return {
-        "webhook_url": row["webhook_url"],
-        "onboarding_step": row["onboarding_step"],
-        "enabled": bool(row["enabled"]),
-        "created_at": row["created_at"],
-        "updated_at": row["updated_at"],
+        "webhook_url": row.webhook_url,
+        "onboarding_step": row.onboarding_step,
+        "enabled": row.enabled,
+        "created_at": row.created_at,
+        "updated_at": row.updated_at,
     }
 
 
 def get_user_webhook_url(user_id: str) -> str:
-    """优先使用用户配置的 webhook，否则回退到全局配置"""
     cfg = get_user_config(user_id)
     if cfg and cfg["enabled"] and cfg["webhook_url"]:
         return cfg["webhook_url"]
@@ -75,6 +44,22 @@ async def send_to_feishu(webhook_url: str, card: dict) -> None:
         if resp.status_code != 200:
             body = resp.text[:200]
             raise HTTPException(status_code=500, detail=f"飞书推送失败: {body}")
+
+
+def _save_config(uid: str, url: str, step: str, enabled: bool, existing: dict | None = None) -> None:
+    now = int(time.time())
+    with get_db() as session:
+        cfg = session.query(FeishuConfig).filter(FeishuConfig.user_id == uid).first()
+        if cfg:
+            cfg.webhook_url = url
+            cfg.onboarding_step = step
+            cfg.enabled = enabled
+            cfg.updated_at = now
+        else:
+            session.add(FeishuConfig(
+                user_id=uid, webhook_url=url, onboarding_step=step,
+                enabled=enabled, created_at=now, updated_at=now,
+            ))
 
 
 # ── Pydantic Models ──
@@ -99,6 +84,12 @@ class DailyReportRequest(BaseModel):
     analysis: str
     health_score: Optional[float] = None
     health_eval: Optional[str] = None
+
+
+def mask_url(url: str) -> str:
+    if len(url) <= 40:
+        return url[:20] + "****"
+    return url[:30] + "****" + url[-10:]
 
 
 # ── 配置端点 ──
@@ -140,33 +131,25 @@ def save_feishu_config(data: FeishuConfigRequest, current_user: dict = Depends(g
         raise HTTPException(400, "Webhook 地址格式不正确，应以 https://open.feishu.cn/open-apis/bot/v2/hook/ 开头")
 
     uid = current_user["user_id"]
-    now = int(time.time())
     existing = get_user_config(uid)
     step = existing["onboarding_step"] if existing else "webhook_saved"
     if step == "not_started":
         step = "webhook_saved"
 
-    with get_db() as conn:
-        conn.execute("""
-            INSERT OR REPLACE INTO feishu_config (user_id, webhook_url, onboarding_step, enabled, created_at, updated_at)
-            VALUES (?, ?, ?, 0, ?, ?)
-        """, (uid, url, step, existing["created_at"] if existing else now, now))
-        conn.commit()
+    _save_config(uid, url, step, False, existing)
     return {"message": "已保存", "onboarding_step": step, "webhook_url_masked": mask_url(url)}
 
 
 @router.delete("/config")
 def delete_feishu_config(current_user: dict = Depends(get_current_user)):
     uid = current_user["user_id"]
-    with get_db() as conn:
-        conn.execute("DELETE FROM feishu_config WHERE user_id = ?", (uid,))
-        conn.commit()
+    with get_db() as session:
+        session.query(FeishuConfig).filter(FeishuConfig.user_id == uid).delete(synchronize_session=False)
     return {"message": "已断开飞书连接"}
 
 
 @router.post("/test")
 async def test_feishu(data: FeishuConfigRequest | None = None, current_user: dict = Depends(get_current_user)):
-    """发送测试消息验证 webhook 是否可用"""
     url = ""
     if data and data.webhook_url.strip():
         url = data.webhook_url.strip()
@@ -196,16 +179,8 @@ async def test_feishu(data: FeishuConfigRequest | None = None, current_user: dic
 
     await send_to_feishu(url, card)
 
-    # 更新引导状态
     uid = current_user["user_id"]
-    now = int(time.time())
-    existing = get_user_config(uid)
-    with get_db() as conn:
-        conn.execute("""
-            INSERT OR REPLACE INTO feishu_config (user_id, webhook_url, onboarding_step, enabled, created_at, updated_at)
-            VALUES (?, ?, 'test_success', 1, ?, ?)
-        """, (uid, url, existing["created_at"] if existing else now, now))
-        conn.commit()
+    _save_config(uid, url, "test_success", True, get_user_config(uid))
 
     return {"message": "测试消息已发送", "onboarding_step": "active", "enabled": True}
 
@@ -217,10 +192,10 @@ def toggle_feishu(current_user: dict = Depends(get_current_user)):
         raise HTTPException(400, "请先配置飞书 Webhook 地址")
     new_enabled = not cfg["enabled"]
     now = int(time.time())
-    with get_db() as conn:
-        conn.execute("UPDATE feishu_config SET enabled = ?, updated_at = ? WHERE user_id = ?",
-                    (int(new_enabled), now, current_user["user_id"]))
-        conn.commit()
+    with get_db() as session:
+        session.query(FeishuConfig).filter(FeishuConfig.user_id == current_user["user_id"]).update(
+            {"enabled": new_enabled, "updated_at": now}, synchronize_session=False
+        )
     return {"enabled": new_enabled}
 
 
@@ -356,10 +331,3 @@ async def share_recipe(recipe: dict, current_user: dict = Depends(get_current_us
 
     await send_to_feishu(url, card)
     return {"status": "ok", "message": "菜谱分享成功"}
-
-
-def mask_url(url: str) -> str:
-    """隐藏 webhook URL 中的敏感部分"""
-    if len(url) <= 40:
-        return url[:20] + "****"
-    return url[:30] + "****" + url[-10:]

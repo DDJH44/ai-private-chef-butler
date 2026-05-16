@@ -1,66 +1,22 @@
 import json
-import sqlite3
 import os
 import uuid
 import base64
-from datetime import datetime, date
+import re
+from datetime import datetime
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from app.auth import get_current_user
 from pydantic import BaseModel
-from contextlib import contextmanager
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage
 from dotenv import load_dotenv
+from app.common.database import get_db
+from app.models.db import NutritionRecord
 
 load_dotenv()
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
-
-DB_PATH = os.getenv("NUTRITION_DB_PATH", "data/nutrition.db")
-
-
-@contextmanager
-def get_db():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    try:
-        yield conn
-    finally:
-        conn.close()
-
-
-def init_db():
-    with get_db() as conn:
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS nutrition_records (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL DEFAULT '',
-                date TEXT NOT NULL,
-                meal_type TEXT NOT NULL,
-                food_name TEXT NOT NULL,
-                calories REAL,
-                protein REAL,
-                carbs REAL,
-                fat REAL,
-                fiber REAL,
-                sodium REAL,
-                image_url TEXT,
-                notes TEXT,
-                created_at INTEGER NOT NULL
-            )
-        ''')
-        conn.execute('CREATE INDEX IF NOT EXISTS idx_date ON nutrition_records(date)')
-        # Migration: add user_id column if missing
-        try:
-            conn.execute('SELECT user_id FROM nutrition_records LIMIT 1')
-        except sqlite3.OperationalError:
-            conn.execute('ALTER TABLE nutrition_records ADD COLUMN user_id TEXT NOT NULL DEFAULT \'\'')
-        conn.commit()
-
-
-init_db()
 
 
 class NutritionRecordCreate(BaseModel):
@@ -127,60 +83,117 @@ class PhotoAnalysisResult(BaseModel):
     summary: str
 
 
+def _record_to_response(r: NutritionRecord) -> NutritionRecordResponse:
+    return NutritionRecordResponse(
+        id=r.id, date=r.date, meal_type=r.meal_type, food_name=r.food_name,
+        calories=r.calories, protein=r.protein, carbs=r.carbs, fat=r.fat,
+        fiber=r.fiber, sodium=r.sodium, image_url=r.image_url, notes=r.notes,
+        created_at=r.created_at,
+    )
+
+
+def _extract_json(text: str) -> str:
+    match = re.search(r'\{[\s\S]*\}', text)
+    if match:
+        return match.group()
+    return text
+
+
+async def _upload_photo_to_oss(image_data: bytes, filename: str) -> str:
+    try:
+        import oss2
+        auth = oss2.Auth(
+            os.getenv("OSS_ACCESS_KEY_ID"),
+            os.getenv("OSS_ACCESS_KEY_SECRET")
+        )
+        bucket = oss2.Bucket(
+            auth,
+            "https://" + os.getenv("OSS_ENDPOINT", "oss-cn-beijing.aliyuncs.com"),
+            os.getenv("OSS_BUCKET")
+        )
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
+        ext = filename.split(".")[-1].lower() if "." in filename else "jpg"
+        oss_key = f"nutrition/{timestamp}.{ext}"
+        bucket.put_object(oss_key, image_data)
+        endpoint = os.getenv("OSS_ENDPOINT", "oss-cn-beijing.aliyuncs.com")
+        return f"https://{os.getenv('OSS_BUCKET')}.{endpoint}/{oss_key}"
+    except Exception:
+        return ""
+
+
+def generate_analysis(calories, protein, carbs, fat, fiber, sodium):
+    if calories == 0:
+        return "今日暂无饮食记录"
+
+    lines = [f"📊 今日摄入 {calories:.0f} 千卡"]
+
+    if calories < 1200:
+        lines.append("⚠️ 热量摄入偏低，建议适当增加")
+    elif calories > 2500:
+        lines.append("⚠️ 热量摄入偏高，注意控制")
+    else:
+        lines.append("✅ 热量摄入适中")
+
+    protein_ratio = protein * 4 / calories * 100 if calories > 0 else 0
+    carbs_ratio = carbs * 4 / calories * 100 if calories > 0 else 0
+    fat_ratio = fat * 9 / calories * 100 if calories > 0 else 0
+
+    lines.append(f"🥩 蛋白质 {protein:.0f}g ({protein_ratio:.0f}%)")
+    lines.append(f"🍚 碳水 {carbs:.0f}g ({carbs_ratio:.0f}%)")
+    lines.append(f"🧈 脂肪 {fat:.0f}g ({fat_ratio:.0f}%)")
+
+    if fiber < 20:
+        lines.append("💡 建议增加膳食纤维摄入（蔬菜、水果）")
+    if sodium > 2000:
+        lines.append("⚠️ 钠摄入偏高，注意清淡饮食")
+
+    return "\n".join(lines)
+
+
 @router.post("/records", response_model=NutritionRecordResponse)
 async def create_record(record: NutritionRecordCreate, current_user: dict = Depends(get_current_user)):
     uid = current_user["user_id"]
     record_id = str(uuid.uuid4())
     now = int(datetime.now().timestamp())
 
-    with get_db() as conn:
-        conn.execute('''
-            INSERT INTO nutrition_records (
-                id, user_id, date, meal_type, food_name, calories, protein, carbs, fat, fiber, sodium, image_url, notes, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            record_id, uid, record.date, record.meal_type, record.food_name,
-            record.calories, record.protein, record.carbs, record.fat, record.fiber, record.sodium,
-            record.image_url, record.notes, now
-        ))
-        conn.commit()
+    with get_db() as session:
+        nr = NutritionRecord(
+            id=record_id, user_id=uid, date=record.date, meal_type=record.meal_type,
+            food_name=record.food_name, calories=record.calories, protein=record.protein,
+            carbs=record.carbs, fat=record.fat, fiber=record.fiber, sodium=record.sodium,
+            image_url=record.image_url, notes=record.notes, created_at=now,
+        )
+        session.add(nr)
+        session.flush()
+        result = _record_to_response(nr)
 
-    return NutritionRecordResponse(
-        id=record_id, date=record.date, meal_type=record.meal_type, food_name=record.food_name,
-        calories=record.calories, protein=record.protein, carbs=record.carbs, fat=record.fat,
-        fiber=record.fiber, sodium=record.sodium, image_url=record.image_url, notes=record.notes, created_at=now
-    )
+    return result
 
 
 @router.get("/records", response_model=List[NutritionRecordResponse])
 async def get_records(date_str: Optional[str] = None, limit: int = 30, current_user: dict = Depends(get_current_user)):
     uid = current_user["user_id"]
-    with get_db() as conn:
+    with get_db() as session:
+        query = session.query(NutritionRecord).filter(NutritionRecord.user_id == uid)
         if date_str:
-            rows = conn.execute(
-                'SELECT * FROM nutrition_records WHERE date = ? AND user_id = ? ORDER BY created_at DESC',
-                (date_str, uid)
-            ).fetchall()
+            query = query.filter(NutritionRecord.date == date_str)
+            query = query.order_by(NutritionRecord.created_at.desc())
         else:
-            rows = conn.execute(
-                'SELECT * FROM nutrition_records WHERE user_id = ? ORDER BY date DESC, created_at DESC LIMIT ?',
-                (uid, limit)
-            ).fetchall()
+            query = query.order_by(NutritionRecord.date.desc(), NutritionRecord.created_at.desc())
+        if not date_str:
+            query = query.limit(limit)
+        rows = query.all()
 
-    return [NutritionRecordResponse(
-        id=row['id'], date=row['date'], meal_type=row['meal_type'], food_name=row['food_name'],
-        calories=row['calories'], protein=row['protein'], carbs=row['carbs'], fat=row['fat'],
-        fiber=row['fiber'], sodium=row['sodium'], image_url=row['image_url'], notes=row['notes'],
-        created_at=row['created_at']
-    ) for row in rows]
+    return [_record_to_response(r) for r in rows]
 
 
 @router.delete("/records/{record_id}")
 async def delete_record(record_id: str, current_user: dict = Depends(get_current_user)):
     uid = current_user["user_id"]
-    with get_db() as conn:
-        conn.execute('DELETE FROM nutrition_records WHERE id = ? AND user_id = ?', (record_id, uid))
-        conn.commit()
+    with get_db() as session:
+        session.query(NutritionRecord).filter(
+            NutritionRecord.id == record_id, NutritionRecord.user_id == uid
+        ).delete(synchronize_session=False)
     return {"status": "ok"}
 
 
@@ -250,35 +263,32 @@ async def analyze_photo(
         json_str = _extract_json(result_text)
         analysis = json.loads(json_str)
 
+        now = int(datetime.now().timestamp())
         foods = []
-        for food_data in analysis.get("foods", []):
-            food_item = FoodItem(
-                food_name=food_data.get("food_name", "未知食物"),
-                calories=food_data.get("calories", 0),
-                protein=food_data.get("protein", 0),
-                carbs=food_data.get("carbs", 0),
-                fat=food_data.get("fat", 0),
-                fiber=food_data.get("fiber", 0),
-                sodium=food_data.get("sodium", 0),
-                estimated_weight=food_data.get("estimated_weight", "")
-            )
-            foods.append(food_item)
+        with get_db() as session:
+            for food_data in analysis.get("foods", []):
+                food_item = FoodItem(
+                    food_name=food_data.get("food_name", "未知食物"),
+                    calories=food_data.get("calories", 0),
+                    protein=food_data.get("protein", 0),
+                    carbs=food_data.get("carbs", 0),
+                    fat=food_data.get("fat", 0),
+                    fiber=food_data.get("fiber", 0),
+                    sodium=food_data.get("sodium", 0),
+                    estimated_weight=food_data.get("estimated_weight", "")
+                )
+                foods.append(food_item)
 
-            record_id = str(uuid.uuid4())
-            now = int(datetime.now().timestamp())
-            with get_db() as conn:
-                conn.execute('''
-                    INSERT INTO nutrition_records (
-                        id, user_id, date, meal_type, food_name, calories, protein, carbs, fat, fiber, sodium, image_url, notes, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    record_id, uid, date, meal_type, food_item.food_name,
-                    food_item.calories, food_item.protein, food_item.carbs, food_item.fat,
-                    food_item.fiber, food_item.sodium, image_url,
-                    f"估算重量: {food_item.estimated_weight}" if food_item.estimated_weight else None,
-                    now
-                ))
-                conn.commit()
+                record_id = str(uuid.uuid4())
+                nr = NutritionRecord(
+                    id=record_id, user_id=uid, date=date, meal_type=meal_type,
+                    food_name=food_item.food_name, calories=food_item.calories,
+                    protein=food_item.protein, carbs=food_item.carbs, fat=food_item.fat,
+                    fiber=food_item.fiber, sodium=food_item.sodium, image_url=image_url,
+                    notes=f"估算重量: {food_item.estimated_weight}" if food_item.estimated_weight else None,
+                    created_at=now,
+                )
+                session.add(nr)
 
         return PhotoAnalysisResult(
             meal_type=meal_type,
@@ -298,32 +308,29 @@ async def analyze_photo(
 @router.get("/health-eval/{date_str}")
 async def health_evaluation(date_str: str, current_user: dict = Depends(get_current_user)):
     uid = current_user["user_id"]
-    with get_db() as conn:
-        rows = conn.execute(
-            'SELECT * FROM nutrition_records WHERE date = ? AND user_id = ? ORDER BY created_at',
-            (date_str, uid)
-        ).fetchall()
+    with get_db() as session:
+        rows = session.query(NutritionRecord).filter(
+            NutritionRecord.date == date_str, NutritionRecord.user_id == uid
+        ).order_by(NutritionRecord.created_at).all()
 
     if not rows:
         return {"date": date_str, "health_eval": "今日暂无饮食记录，无法进行评估。", "score": 0}
 
     meals_by_type = {}
-    for row in rows:
-        mt = row['meal_type']
-        if mt not in meals_by_type:
-            meals_by_type[mt] = []
-        meals_by_type[mt].append({
-            "food_name": row['food_name'],
-            "calories": row['calories'] or 0,
-            "protein": row['protein'] or 0,
-            "carbs": row['carbs'] or 0,
-            "fat": row['fat'] or 0,
+    for r in rows:
+        mt = r.meal_type
+        meals_by_type.setdefault(mt, []).append({
+            "food_name": r.food_name,
+            "calories": r.calories or 0,
+            "protein": r.protein or 0,
+            "carbs": r.carbs or 0,
+            "fat": r.fat or 0,
         })
 
-    total_calories = sum(r['calories'] or 0 for r in [dict(row) for row in rows])
-    total_protein = sum(r['protein'] or 0 for r in [dict(row) for row in rows])
-    total_carbs = sum(r['carbs'] or 0 for r in [dict(row) for row in rows])
-    total_fat = sum(r['fat'] or 0 for r in [dict(row) for row in rows])
+    total_calories = sum((r.calories or 0) for r in rows)
+    total_protein = sum((r.protein or 0) for r in rows)
+    total_carbs = sum((r.carbs or 0) for r in rows)
+    total_fat = sum((r.fat or 0) for r in rows)
 
     meal_summary = ""
     for mt, items in meals_by_type.items():
@@ -366,7 +373,7 @@ async def health_evaluation(date_str: str, current_user: dict = Depends(get_curr
             "score": result.get("score", 60),
             "health_eval": result.get("eval", "评估完成")
         }
-    except Exception as e:
+    except Exception:
         basic_eval = generate_analysis(total_calories, total_protein, total_carbs, total_fat, 0, 0)
         return {
             "date": date_str,
@@ -378,18 +385,12 @@ async def health_evaluation(date_str: str, current_user: dict = Depends(get_curr
 @router.get("/summary/{date_str}", response_model=DailySummary)
 async def get_daily_summary(date_str: str, current_user: dict = Depends(get_current_user)):
     uid = current_user["user_id"]
-    with get_db() as conn:
-        rows = conn.execute(
-            'SELECT * FROM nutrition_records WHERE date = ? AND user_id = ? ORDER BY created_at',
-            (date_str, uid)
-        ).fetchall()
+    with get_db() as session:
+        rows = session.query(NutritionRecord).filter(
+            NutritionRecord.date == date_str, NutritionRecord.user_id == uid
+        ).order_by(NutritionRecord.created_at).all()
 
-    meals = [NutritionRecordResponse(
-        id=row['id'], date=row['date'], meal_type=row['meal_type'], food_name=row['food_name'],
-        calories=row['calories'] or 0, protein=row['protein'] or 0, carbs=row['carbs'] or 0, fat=row['fat'] or 0,
-        fiber=row['fiber'] or 0, sodium=row['sodium'] or 0, image_url=row['image_url'], notes=row['notes'],
-        created_at=row['created_at']
-    ) for row in rows]
+    meals = [_record_to_response(r) for r in rows]
 
     total_calories = sum(m.calories or 0 for m in meals)
     total_protein = sum(m.protein or 0 for m in meals)
@@ -411,62 +412,3 @@ async def get_daily_summary(date_str: str, current_user: dict = Depends(get_curr
         meals=meals,
         analysis=analysis
     )
-
-
-def generate_analysis(calories, protein, carbs, fat, fiber, sodium):
-    if calories == 0:
-        return "今日暂无饮食记录"
-
-    lines = [f"📊 今日摄入 {calories:.0f} 千卡"]
-
-    if calories < 1200:
-        lines.append("⚠️ 热量摄入偏低，建议适当增加")
-    elif calories > 2500:
-        lines.append("⚠️ 热量摄入偏高，注意控制")
-    else:
-        lines.append("✅ 热量摄入适中")
-
-    protein_ratio = protein * 4 / calories * 100 if calories > 0 else 0
-    carbs_ratio = carbs * 4 / calories * 100 if calories > 0 else 0
-    fat_ratio = fat * 9 / calories * 100 if calories > 0 else 0
-
-    lines.append(f"🥩 蛋白质 {protein:.0f}g ({protein_ratio:.0f}%)")
-    lines.append(f"🍚 碳水 {carbs:.0f}g ({carbs_ratio:.0f}%)")
-    lines.append(f"🧈 脂肪 {fat:.0f}g ({fat_ratio:.0f}%)")
-
-    if fiber < 20:
-        lines.append("💡 建议增加膳食纤维摄入（蔬菜、水果）")
-    if sodium > 2000:
-        lines.append("⚠️ 钠摄入偏高，注意清淡饮食")
-
-    return "\n".join(lines)
-
-
-async def _upload_photo_to_oss(image_data: bytes, filename: str) -> str:
-    try:
-        import oss2
-        auth = oss2.Auth(
-            os.getenv("OSS_ACCESS_KEY_ID"),
-            os.getenv("OSS_ACCESS_KEY_SECRET")
-        )
-        bucket = oss2.Bucket(
-            auth,
-            "https://" + os.getenv("OSS_ENDPOINT", "oss-cn-beijing.aliyuncs.com"),
-            os.getenv("OSS_BUCKET")
-        )
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
-        ext = filename.split(".")[-1].lower() if "." in filename else "jpg"
-        oss_key = f"nutrition/{timestamp}.{ext}"
-        bucket.put_object(oss_key, image_data)
-        endpoint = os.getenv("OSS_ENDPOINT", "oss-cn-beijing.aliyuncs.com")
-        return f"https://{os.getenv('OSS_BUCKET')}.{endpoint}/{oss_key}"
-    except Exception:
-        return ""
-
-
-def _extract_json(text: str) -> str:
-    import re
-    match = re.search(r'\{[\s\S]*\}', text)
-    if match:
-        return match.group()
-    return text

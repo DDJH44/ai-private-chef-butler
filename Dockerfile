@@ -26,8 +26,6 @@ RUN uv pip install --system -e .
 COPY app/ ./app/
 COPY main.py ./
 
-RUN mkdir -p /app/data
-
 COPY --from=frontend-builder /app/frontend/out /app/app/static/
 
 ENV PYTHONUNBUFFERED=1

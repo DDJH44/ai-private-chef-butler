@@ -58,14 +58,10 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 @app.on_event("startup")
 async def startup():
-    auth.init_db()
-    recipes.init_db()
-    shopping.init_db()
-    nutrition.init_db()
-    preferences.init_db()
-    ingredients.init_db()
-    cook_history.init_db()
-    feishu.init_db()
+    from app.common.database import engine
+    from app.models.db import Base
+    Base.metadata.create_all(bind=engine)
+    logger.info("MySQL 数据库表初始化完成")
 
 @app.get("/health")
 async def health():
