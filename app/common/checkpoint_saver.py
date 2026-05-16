@@ -18,8 +18,6 @@ from langgraph.checkpoint.base import (
     get_checkpoint_metadata,
 )
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
-from sqlalchemy.dialects.mysql import insert as mysql_insert
-
 from app.common.database import SessionLocal
 from app.models.db import CheckpointRow, WriteRow
 
@@ -208,22 +206,28 @@ class MySQLSaver(BaseCheckpointSaver[str]):
         ).encode("utf-8", "ignore")
 
         with self.cursor() as session:
-            stmt = mysql_insert(CheckpointRow).values(
-                thread_id=thread_id,
-                checkpoint_ns=checkpoint_ns,
-                checkpoint_id=checkpoint["id"],
-                parent_checkpoint_id=config["configurable"].get("checkpoint_id"),
-                type=type_,
-                checkpoint=serialized_checkpoint,
-                meta=serialized_metadata,
-            )
-            stmt = stmt.on_duplicate_key_update(
-                parent_checkpoint_id=stmt.inserted.parent_checkpoint_id,
-                type=stmt.inserted.type,
-                checkpoint=stmt.inserted.checkpoint,
-                meta=stmt.inserted.meta,
-            )
-            session.execute(stmt)
+            existing = session.query(CheckpointRow).filter(
+                CheckpointRow.thread_id == thread_id,
+                CheckpointRow.checkpoint_ns == checkpoint_ns,
+                CheckpointRow.checkpoint_id == checkpoint["id"],
+            ).first()
+
+            if existing:
+                existing.parent_checkpoint_id = config["configurable"].get("checkpoint_id")
+                existing.type = type_
+                existing.checkpoint = serialized_checkpoint
+                existing.meta = serialized_metadata
+            else:
+                row = CheckpointRow(
+                    thread_id=thread_id,
+                    checkpoint_ns=checkpoint_ns,
+                    checkpoint_id=checkpoint["id"],
+                    parent_checkpoint_id=config["configurable"].get("checkpoint_id"),
+                    type=type_,
+                    checkpoint=serialized_checkpoint,
+                    meta=serialized_metadata,
+                )
+                session.add(row)
 
         return {
             "configurable": {
@@ -247,22 +251,32 @@ class MySQLSaver(BaseCheckpointSaver[str]):
         with self.cursor() as session:
             for idx, (channel, value) in enumerate(writes):
                 type_, serialized_value = self.serde.dumps_typed(value)
-                stmt = mysql_insert(WriteRow).values(
-                    thread_id=thread_id,
-                    checkpoint_ns=checkpoint_ns,
-                    checkpoint_id=checkpoint_id_val,
-                    task_id=task_id,
-                    idx=WRITES_IDX_MAP.get(channel, idx),
-                    channel=channel,
-                    type=type_,
-                    value=serialized_value,
-                )
-                stmt = stmt.on_duplicate_key_update(
-                    channel=stmt.inserted.channel,
-                    type=stmt.inserted.type,
-                    value=stmt.inserted.value,
-                )
-                session.execute(stmt)
+                write_idx = WRITES_IDX_MAP.get(channel, idx)
+
+                existing = session.query(WriteRow).filter(
+                    WriteRow.thread_id == thread_id,
+                    WriteRow.checkpoint_ns == checkpoint_ns,
+                    WriteRow.checkpoint_id == checkpoint_id_val,
+                    WriteRow.task_id == task_id,
+                    WriteRow.idx == write_idx,
+                ).first()
+
+                if existing:
+                    existing.channel = channel
+                    existing.type = type_
+                    existing.value = serialized_value
+                else:
+                    row = WriteRow(
+                        thread_id=thread_id,
+                        checkpoint_ns=checkpoint_ns,
+                        checkpoint_id=checkpoint_id_val,
+                        task_id=task_id,
+                        idx=write_idx,
+                        channel=channel,
+                        type=type_,
+                        value=serialized_value,
+                    )
+                    session.add(row)
 
     def delete_thread(self, thread_id: str) -> None:
         with self.cursor() as session:
