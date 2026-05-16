@@ -154,3 +154,12 @@ class WriteRow(Base):
     channel = Column(String(100), nullable=False)
     type = Column(String(100), nullable=True)
     value = Column(LargeBinary, nullable=True)
+
+
+class ImageCache(Base):
+    """AI 生成图片缓存 — 同一菜名不重复生成"""
+    __tablename__ = "image_cache"
+
+    dish_query = Column(String(200), primary_key=True, nullable=False)
+    oss_url = Column(Text, nullable=False)
+    created_at = Column(BigInteger, nullable=False)

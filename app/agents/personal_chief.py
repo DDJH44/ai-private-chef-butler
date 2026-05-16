@@ -5,11 +5,13 @@ from langgraph.graph import StateGraph, MessagesState, START, END
 from langgraph.prebuilt import ToolNode
 from app.common.logger import logger
 import os
+import hashlib
+import time
 from app.common.checkpoint_saver import MySQLSaver
 import json
 import requests
 from dotenv import load_dotenv
-from app.api.v1.oss import proxy_image_url
+from app.api.v1.oss import proxy_image_url, _get_bucket
 load_dotenv()
 
 # 常见中餐菜品的中英对照，用于提升 Pexels 英文搜索准确度
@@ -309,6 +311,157 @@ def bilibili_search(query: str):
         return json.dumps([{"title": "异常", "content": str(e)}], ensure_ascii=False)
 
 
+# ── Seedream 图片生成 ──
+
+_IMAGE_PROMPT_SUFFIX = """, authentic Chinese cuisine, served on a handcrafted ceramic plate,
+overhead angle, natural window lighting, shallow depth of field,
+garnished with fresh herbs, steam rising gently,
+4K resolution, warm tones, sharp focus,
+no people, no hands, no chopsticks, no text, no watermark,
+no cartoon, no illustration, no plastic containers, no takeout boxes"""
+
+
+def _build_image_prompt(query: str) -> str:
+    """从中文菜名构建英文图像生成提示词"""
+    mapped = _DISH_NAME_MAP.get(query, [query])
+    en_name = mapped[0] if mapped else query
+    return f"professional food photography of {en_name},{_IMAGE_PROMPT_SUFFIX}"
+
+
+def _lookup_image_cache(dish_query: str) -> str | None:
+    """从 MySQL 缓存查找已生成的图片 URL"""
+    from app.models.db import ImageCache
+    from app.common.database import SessionLocal
+    session = SessionLocal()
+    try:
+        row = session.query(ImageCache).filter(
+            ImageCache.dish_query == dish_query
+        ).first()
+        return row.oss_url if row else None
+    except Exception as e:
+        logger.warning(f"[image_cache] 查询失败: {e}")
+        return None
+    finally:
+        session.close()
+
+
+def _save_image_cache(dish_query: str, oss_url: str):
+    """将生成的图片 URL 写入 MySQL 缓存"""
+    from app.models.db import ImageCache
+    from app.common.database import SessionLocal
+    session = SessionLocal()
+    try:
+        existing = session.query(ImageCache).filter(
+            ImageCache.dish_query == dish_query
+        ).first()
+        if existing:
+            existing.oss_url = oss_url
+            existing.created_at = int(time.time())
+        else:
+            session.add(ImageCache(
+                dish_query=dish_query, oss_url=oss_url,
+                created_at=int(time.time()),
+            ))
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        logger.warning(f"[image_cache] 写入失败: {e}")
+    finally:
+        session.close()
+
+
+def _generate_and_upload_image(query: str) -> str | None:
+    """通过火山引擎 ARK Seedream 生成菜品图片并上传 OSS"""
+    api_key = os.getenv("DOUBAO_API_KEY")
+    base_url = os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v1")
+    model_name = os.getenv("IMAGE_GEN_MODEL", "doubao-seedream-4-5-251128")
+
+    prompt = _build_image_prompt(query)
+
+    resp = requests.post(
+        f"{base_url}/images/generations",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": model_name,
+            "prompt": prompt,
+            "n": 1,
+            "size": "1920x1920",
+        },
+        timeout=120,
+    )
+    if resp.status_code != 200:
+        logger.warning(f"[image_gen] ARK API 返回 {resp.status_code}: {resp.text[:300]}")
+        return None
+
+    data = resp.json()
+    image_url = (data.get("data") or [{}])[0].get("url", "")
+    if not image_url:
+        logger.warning(f"[image_gen] ARK 响应中未找到图片 URL: {str(data)[:300]}")
+        return None
+
+    img_resp = requests.get(image_url, timeout=60)
+    if img_resp.status_code != 200:
+        logger.warning(f"[image_gen] 下载图片失败 HTTP {img_resp.status_code}")
+        return None
+
+    image_bytes = img_resp.content
+    hash_prefix = hashlib.md5(query.encode("utf-8")).hexdigest()[:12]
+    filename = f"ai-generated/{hash_prefix}_{int(time.time())}.jpg"
+
+    try:
+        bucket = _get_bucket()
+        bucket.put_object(filename, image_bytes, headers={
+            "Content-Type": "image/jpeg",
+            "x-oss-object-acl": "public-read",
+        })
+    except Exception as e:
+        logger.warning(f"[image_gen] OSS 上传失败: {e}")
+        return None
+
+    endpoint = os.getenv("OSS_ENDPOINT", "oss-cn-beijing.aliyuncs.com")
+    bucket_name = os.getenv("OSS_BUCKET")
+    oss_url = f"https://{bucket_name}.{endpoint}/{filename}"
+    logger.info(f"[image_gen] {query} -> {oss_url}")
+    return oss_url
+
+
+@tool
+def generate_recipe_image(query: str):
+    """AI生成指定菜品的成品照片。输入准确的菜品名称如'宫保鸡丁'或'番茄炒蛋'，返回AI生成的高质量菜品图片URL。用于没有现成照片的定制菜品或创意菜。"""
+    try:
+        cached_url = _lookup_image_cache(query)
+        if cached_url:
+            logger.info(f"[generate_recipe_image] 缓存命中: {query}")
+            return json.dumps(
+                [{"title": query, "url": cached_url, "content": f"{query}（AI生成）"}],
+                ensure_ascii=False
+            )
+
+        logger.info(f"[generate_recipe_image] 生成新图片: {query}")
+        oss_url = _generate_and_upload_image(query)
+
+        if oss_url:
+            _save_image_cache(query, oss_url)
+            return json.dumps(
+                [{"title": query, "url": oss_url, "content": f"{query}（AI生成）"}],
+                ensure_ascii=False
+            )
+
+        return json.dumps(
+            [{"title": "生成失败", "content": f"未能为'{query}'生成图片，请稍后重试"}],
+            ensure_ascii=False
+        )
+    except Exception as e:
+        logger.error(f"[generate_recipe_image] 异常: {e}")
+        return json.dumps(
+            [{"title": "异常", "content": str(e)}],
+            ensure_ascii=False
+        )
+
+
 model = init_chat_model(
     model=os.getenv("DOUBAO_MODEL_NAME", "doubao-seed-1-8-251228"),
     model_provider="openai",
@@ -317,7 +470,7 @@ model = init_chat_model(
     extra_body={"thinking": {"type": "disabled"}},
 )
 
-model_with_tools = model.bind_tools([recipe_search, bilibili_search])
+model_with_tools = model.bind_tools([recipe_search, bilibili_search, generate_recipe_image])
 
 checkpointer = MySQLSaver()
 
@@ -351,7 +504,7 @@ def should_continue(state: AgentState):
 
 workflow = StateGraph(AgentState)
 workflow.add_node("agent", agent_node)
-workflow.add_node("tools", ToolNode([recipe_search, bilibili_search]))
+workflow.add_node("tools", ToolNode([recipe_search, bilibili_search, generate_recipe_image]))
 workflow.add_edge(START, "agent")
 workflow.add_conditional_edges("agent", should_continue)
 workflow.add_edge("tools", "agent")
