@@ -105,7 +105,7 @@ function Home() {
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg)" }}>
       <Header messagesLen={s.messages.length} onNewChat={newChat} />
 
-      <div ref={scrollContainerRef} style={{ flex: 1, overflowY: "auto", position: "relative" }}>
+      <div ref={scrollContainerRef} style={{ flex: 1, overflowY: "auto", overflowAnchor: "none", position: "relative" }}>
         {!hasMessages ? (
           <WelcomeScreen onSend={handleSend} />
         ) : (
