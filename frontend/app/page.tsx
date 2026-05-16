@@ -24,6 +24,8 @@ function Home() {
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const prevThread = useRef<string | null | undefined>(undefined);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const isNearBottomRef = useRef(true);
+  const wasLoadingRef = useRef(false);
 
   useEffect(() => {
     const unsub = subscribeToChat(() => forceUpdate((n) => n + 1));
@@ -46,18 +48,31 @@ function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "instant" });
   }, []);
 
-  useEffect(() => { scrollToBottom(); }, [s.messages, scrollToBottom]);
+  useEffect(() => {
+    if (isNearBottomRef.current) {
+      scrollToBottom();
+    }
+  }, [s.messages, scrollToBottom]);
 
   useEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
     const handleScroll = () => {
       const diff = el.scrollHeight - el.scrollTop - el.clientHeight;
+      isNearBottomRef.current = diff <= 120;
       setShowScrollBtn(diff > 120);
     };
     el.addEventListener("scroll", handleScroll, { passive: true });
     return () => el.removeEventListener("scroll", handleScroll);
   }, []);
+
+  useEffect(() => {
+    if (s.loading && !wasLoadingRef.current) {
+      isNearBottomRef.current = true;
+      scrollToBottom(false);
+    }
+    wasLoadingRef.current = s.loading;
+  }, [s.loading, scrollToBottom]);
 
   useEffect(() => {
     if (autoMessage && !hasAutoSent.current && s.threadId && !s.loading) {
