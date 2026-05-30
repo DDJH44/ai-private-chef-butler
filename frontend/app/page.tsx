@@ -12,6 +12,7 @@ import {
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
 import { MultiRecipeSave } from "@/components/MultiRecipeSave";
+import { ChefHat, Camera, Snowflake, Calendar, Sparkles } from "lucide-react";
 
 function Home() {
   const searchParams = useSearchParams();
@@ -60,7 +61,7 @@ function Home() {
     if (!el) return;
     const handleScroll = () => {
       const diff = el.scrollHeight - el.scrollTop - el.clientHeight;
-      isNearBottomRef.current = diff <= 120;
+      isNearBottomRef.current = diff <= 60;
       setShowScrollBtn(diff > 120);
     };
     el.addEventListener("scroll", handleScroll, { passive: true });
@@ -106,7 +107,11 @@ function Home() {
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg)" }}>
       <Header messagesLen={s.messages.length} onNewChat={newChat} />
 
-      <div ref={scrollContainerRef} style={{ flex: 1, overflowY: "auto", overflowAnchor: "none", position: "relative" }}>
+      <div
+        ref={scrollContainerRef}
+        style={{ flex: 1, overflowY: "auto", overflowAnchor: "none", position: "relative" }}
+        onWheel={(e) => { if (e.deltaY < 0) isNearBottomRef.current = false; }}
+      >
         {!hasMessages ? (
           <WelcomeScreen onSend={handleSend} />
         ) : (
@@ -138,11 +143,11 @@ function Home() {
             onClick={() => scrollToBottom()}
             style={{
               width: 40, height: 40, borderRadius: "50%",
-              background: "var(--bg)", boxShadow: "var(--shadow-raised-sm)",
+              background: "var(--surface)", boxShadow: "var(--shadow-raised-sm)",
               border: "none", cursor: "pointer", display: "flex",
               alignItems: "center", justifyContent: "center",
               fontSize: 18, color: "var(--text-secondary)",
-              transition: "all 0.25s ease",
+              transition: "var(--transition)",
             }}
           >↓</button>
         </div>
@@ -165,7 +170,7 @@ function Header({ messagesLen, onNewChat }: { messagesLen: number; onNewChat: ()
     <header style={{
       flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between",
       padding: "14px 24px", margin: "16px 24px 0", borderRadius: 20,
-      background: "var(--bg)", boxShadow: "var(--shadow-raised)",
+      background: "var(--surface)", boxShadow: "var(--shadow-raised)",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <span style={{
@@ -182,10 +187,10 @@ function Header({ messagesLen, onNewChat }: { messagesLen: number; onNewChat: ()
           onClick={onNewChat}
           style={{
             padding: "8px 16px", borderRadius: 12,
-            background: "var(--bg)", boxShadow: "var(--shadow-raised-sm)",
+            background: "var(--surface)", boxShadow: "var(--shadow-raised-sm)",
             border: "none", cursor: "pointer", fontFamily: "inherit",
             fontSize: 13, fontWeight: 500, color: "var(--accent)",
-            transition: "all 0.25s ease",
+            transition: "var(--transition)",
           }}
         >＋ 新对话</button>
       )}
@@ -195,10 +200,10 @@ function Header({ messagesLen, onNewChat }: { messagesLen: number; onNewChat: ()
 
 function WelcomeScreen({ onSend }: { onSend: (msg: string) => void }) {
   const actions = [
-    { icon: "🥗", text: "推荐几道家常菜" },
-    { icon: "📷", text: "拍照识别食材" },
-    { icon: "🧊", text: "冰箱有什么菜" },
-    { icon: "📅", text: "规划一周膳食" },
+    { icon: <ChefHat size={16} strokeWidth={1.8} />, text: "推荐几道家常菜" },
+    { icon: <Camera size={16} strokeWidth={1.8} />, text: "拍照识别食材" },
+    { icon: <Snowflake size={16} strokeWidth={1.8} />, text: "冰箱有什么菜" },
+    { icon: <Calendar size={16} strokeWidth={1.8} />, text: "规划一周膳食" },
   ];
 
   return (
@@ -211,8 +216,8 @@ function WelcomeScreen({ onSend }: { onSend: (msg: string) => void }) {
         <div style={{
           width: 72, height: 72, borderRadius: 20, margin: "0 auto 24px",
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 32, background: "var(--bg)", boxShadow: "var(--shadow-raised-lg)",
-        }}>✨</div>
+          fontSize: 32, background: "var(--surface)", boxShadow: "var(--shadow-raised-lg)",
+        }}><Sparkles size={24} strokeWidth={1.5} style={{ color: "var(--accent)" }} /></div>
         <h2 style={{
           fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif",
           fontWeight: 700, fontSize: 22, color: "var(--text)", marginBottom: 6,
@@ -234,9 +239,9 @@ function WelcomeScreen({ onSend }: { onSend: (msg: string) => void }) {
             style={{
               display: "flex", flexDirection: "column", alignItems: "center", gap: 12,
               padding: 20, borderRadius: 20,
-              background: "var(--bg)", boxShadow: "var(--shadow-raised)",
+              background: "var(--surface)", boxShadow: "var(--shadow-raised)",
               border: "none", cursor: "pointer", fontFamily: "inherit",
-              transition: "all 0.25s ease",
+              transition: "var(--transition)",
               animation: `fadeUp 0.4s ease both ${0.1 + i * 0.08}s`,
             }}
           >

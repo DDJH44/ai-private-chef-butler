@@ -92,20 +92,25 @@ export async function initChat(resumeThreadId?: string): Promise<void> {
                 history = cached.messages.map(m => ({
                     role: m.role === "ai" ? "assistant" : "user",
                     content: m.content,
+                    ...(m.imageUrl ? { imageUrl: m.imageUrl } : {}),
                 }));
             }
         }
         if (Array.isArray(history) && history.length > 0) {
             state.messages = history.map(
-                (msg: { role: string; content: unknown }) => {
+                (msg: { role: string; content: unknown; image_url?: string }) => {
                     let text: string;
+                    let imageUrl: string | undefined;
                     if (typeof msg.content === "string") {
                         text = msg.content;
                     } else if (Array.isArray(msg.content)) {
-                        text = (msg.content as Array<{type?: string; text?: string}>)
+                        const parts = msg.content as Array<{type?: string; text?: string; image_url?: string}>;
+                        text = parts
                             .filter(item => item.type === "text" && item.text)
-                            .map(item => item.text)
+                            .map(item => item.text!)
                             .join(" ");
+                        const imgPart = parts.find(item => item.type === "image_url" && item.image_url);
+                        if (imgPart) imageUrl = imgPart.image_url;
                     } else {
                         text = String(msg.content || "");
                     }
@@ -113,6 +118,7 @@ export async function initChat(resumeThreadId?: string): Promise<void> {
                         id: generateUUID(),
                         role: (msg.role === "human" ? "user" : msg.role === "ai" ? "assistant" : msg.role) as "user" | "assistant",
                         content: text,
+                        ...(imageUrl || msg.image_url ? { imageUrl: imageUrl || msg.image_url } : {}),
                         timestamp: Date.now(),
                     };
                 }
@@ -139,6 +145,7 @@ export function saveCurrentSession() {
             id: m.id,
             role: m.role === "assistant" ? "ai" : "user",
             content: m.content,
+            imageUrl: m.imageUrl || null,
             timestamp: new Date(m.timestamp).toISOString(),
         })),
     });
@@ -227,6 +234,7 @@ export async function sendMessage(content: string, imageUrl?: string): Promise<v
                                 score: p.recipe.score,
                                 reason: p.recipe.reason,
                                 videoUrl: p.recipe.videoUrl,
+                                videos: p.recipe.videos || [],
                                 tags: p.recipe.tags || [],
                                 createdAt: p.recipe.createdAt || Date.now(),
                                 updatedAt: p.recipe.updatedAt || Date.now(),

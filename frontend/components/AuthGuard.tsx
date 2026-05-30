@@ -2,6 +2,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
+import { Loading } from "@/components/Loading";
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { token, isLoading } = useAuth();
@@ -9,16 +10,12 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isLoading && !token) {
-      router.replace("/login");
+      router.replace("/login?reason=unauthorized");
     }
   }, [token, isLoading, router]);
 
   if (isLoading) {
-    return (
-      <div className="empty-state pt-16">
-        <div style={{ fontSize: 16, color: "var(--text-muted)" }}>加载中...</div>
-      </div>
-    );
+    return <Loading text="加载中..." fullPage />;
   }
 
   if (!token) return null;

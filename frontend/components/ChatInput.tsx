@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useSpeechSynthesis } from "@/hooks/useSpeechSynthesis";
+import { X, Camera, Image as ImageIcon, Mic, ArrowUp } from "lucide-react";
 
 interface ChatInputProps {
   onSendMessage: (message: string, imageUrl?: string) => void;
@@ -161,21 +162,21 @@ export function ChatInput({ onSendMessage, onImageUpload, disabled, defaultValue
   const btnBase: React.CSSProperties = {
     width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center",
     fontSize: 20, borderRadius: "50%", border: "none", cursor: "pointer",
-    fontFamily: "inherit", flexShrink: 0, transition: "all 0.25s ease",
-    background: "var(--bg)", color: "var(--text-secondary)",
+    fontFamily: "inherit", flexShrink: 0, transition: "var(--transition)",
+    background: "var(--surface)", color: "var(--text-secondary)",
     boxShadow: "var(--shadow-raised-sm)",
   };
 
   const attachBtnStyle: React.CSSProperties = {
     ...btnBase,
-    background: showAttachMenu ? "var(--accent-bg)" : "var(--bg)",
+    background: showAttachMenu ? "var(--accent-bg)" : "var(--surface)",
     color: showAttachMenu ? "var(--accent)" : "var(--text-secondary)",
     fontSize: 22, fontWeight: 300,
   };
 
   const micBtnStyle: React.CSSProperties = {
     ...btnBase,
-    background: isRecording ? "var(--rose)" : voiceMode ? "var(--accent-bg)" : "var(--bg)",
+    background: isRecording ? "var(--rose)" : voiceMode ? "var(--accent-bg)" : "var(--surface)",
     color: isRecording ? "#fff" : voiceMode ? "var(--accent)" : "var(--text-secondary)",
     animation: isRecording ? "pulse 0.8s ease-in-out infinite" : "none",
     opacity: (!isSupported && !voiceUploading) ? 0.35 : 1,
@@ -183,7 +184,7 @@ export function ChatInput({ onSendMessage, onImageUpload, disabled, defaultValue
 
   const sendBtnStyle: React.CSSProperties = {
     ...btnBase,
-    background: canSend ? "var(--accent)" : "var(--bg)",
+    background: canSend ? "var(--accent)" : "var(--surface)",
     color: canSend ? "#fff" : "var(--text-placeholder)",
     boxShadow: canSend ? "var(--shadow-accent)" : "var(--shadow-raised-sm)",
   };
@@ -214,7 +215,7 @@ export function ChatInput({ onSendMessage, onImageUpload, disabled, defaultValue
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 10, cursor: "pointer",
             }}
-          >✕</button>
+          ><X size={14} strokeWidth={1.8}/></button>
         </div>
       )}
 
@@ -222,7 +223,7 @@ export function ChatInput({ onSendMessage, onImageUpload, disabled, defaultValue
       <div style={{
         display: "flex", alignItems: "flex-end", gap: 8,
         padding: "8px 12px", borderRadius: 24,
-        background: "var(--bg)", boxShadow: "var(--shadow-raised)",
+        background: "var(--surface)", boxShadow: "var(--shadow-raised)",
       }}>
         {/* + Attach button */}
         <div style={{ position: "relative" }}>
@@ -238,7 +239,7 @@ export function ChatInput({ onSendMessage, onImageUpload, disabled, defaultValue
             <div style={{
               position: "absolute", bottom: 46, left: -4,
               display: "flex", gap: 8, padding: 10,
-              borderRadius: 18, background: "var(--bg)",
+              borderRadius: 18, background: "var(--surface)",
               boxShadow: "var(--shadow-raised-lg)",
               animation: "scaleIn 0.2s ease both", zIndex: 30,
             }}>
@@ -248,7 +249,7 @@ export function ChatInput({ onSendMessage, onImageUpload, disabled, defaultValue
                   onClick={() => cameraInputRef.current?.click()}
                   style={{ ...btnBase, width: 44, height: 44, fontSize: 20, touchAction: "manipulation" }}
                   aria-label="拍照"
-                >📷</button>
+                ><Camera size={18} strokeWidth={1.8}/></button>
                 <input ref={cameraInputRef} type="file" accept="image/*" capture="environment"
                   onChange={handleFileChange}
                   style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0,0,0,0)", border: 0 }} />
@@ -259,7 +260,7 @@ export function ChatInput({ onSendMessage, onImageUpload, disabled, defaultValue
                   onClick={() => fileInputRef.current?.click()}
                   style={{ ...btnBase, width: 44, height: 44, fontSize: 20, touchAction: "manipulation" }}
                   aria-label="从相册选择"
-                >🖼</button>
+                ><ImageIcon size={18} strokeWidth={1.8}/></button>
                 <input ref={fileInputRef} type="file" accept="image/*"
                   onChange={handleFileChange}
                   style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0,0,0,0)", border: 0 }} />
@@ -305,7 +306,7 @@ export function ChatInput({ onSendMessage, onImageUpload, disabled, defaultValue
           title={isRecording ? "停止录音" : voiceMode ? `语音模式开 · 长按0.5秒关闭 · 点按开始对话` : `语音模式关 · 长按0.5秒开启 · 点按语音输入`}
           aria-label={isRecording ? "停止录音" : "语音输入"}
         >
-          {voiceUploading ? "⏳" : "🎤"}
+          {voiceUploading ? "⏳" : <Mic size={18} strokeWidth={1.8}/>}
           {voiceMode && (
             <span style={{
               position: "absolute", top: 1, right: 1,
@@ -335,7 +336,7 @@ export function ChatInput({ onSendMessage, onImageUpload, disabled, defaultValue
             style={sendBtnStyle}
             title={uploading ? "图片处理中..." : "发送"}
             aria-label="发送"
-          >{uploading ? "⏳" : "➤"}</button>
+          >{uploading ? "⏳" : <ArrowUp size={18} strokeWidth={2}/>}</button>
         )}
       </div>
 

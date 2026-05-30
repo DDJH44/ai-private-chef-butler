@@ -1,52 +1,63 @@
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════════════
-   Neumorphism 2.0 — AI 私人厨师
-   Background: #e4e8ed  |  Accent: #6c5ce7
+   Warm + Clean — AI 私人厨师
+   Background: #faf8f5  |  Accent: #ff6b35
    ═══════════════════════════════════════════════════════════ */
 
 :root {
   /* ── Core palette ── */
-  --bg: #e4e8ed;
-  --bg-dark: #c8ccd1;
+  --bg: #faf8f5;
+  --bg-dark: #f0ece6;
   --bg-light: #ffffff;
-  --text: #3a3f47;
-  --text-secondary: #6b7280;
-  --text-muted: #9ca3af;
-  --text-placeholder: #b0b5bd;
+  --text: #2c2420;
+  --text-secondary: #8a7e76;
+  --text-muted: #b5aaa0;
+  --text-placeholder: #c9bfb5;
 
   /* ── Accent ── */
-  --accent: #6c5ce7;
-  --accent-soft: #a29bfe;
-  --accent-deep: #5a4bd1;
-  --accent-bg: #ede9fc;
+  --accent: #ff6b35;
+  --accent-soft: #ff9f7a;
+  --accent-deep: #e55a28;
+  --accent-bg: #fff0ea;
 
   /* ── Semantic ── */
-  --green: #00b894;
-  --green-bg: #e6f9f4;
-  --golden: #f0a500;
-  --golden-bg: #fef4e0;
-  --rose: #e17055;
-  --rose-bg: #fde8e3;
+  --green: #7c9a6e;
+  --green-bg: #eef4eb;
+  --golden: #d4922a;
+  --golden-bg: #faf3e6;
+  --rose: #d4564a;
+  --rose-bg: #f9edeb;
+  --teal: #00d6b9;
+  --teal-bg: #e6f7f1;
+  --pink: #fb7299;
+  --pink-bg: #fef0f4;
+  --blue: #3b82f6;
+  --blue-bg: #eff6ff;
 
-  /* ── Neumorphic shadows ── */
-  --shadow-raised: 6px 6px 14px #c8ccd1, -6px -6px 14px #ffffff;
-  --shadow-raised-hover: 8px 8px 18px #c8ccd1, -8px -8px 18px #ffffff;
-  --shadow-raised-lg: 10px 10px 22px #c8ccd1, -10px -10px 22px #ffffff;
-  --shadow-raised-sm: 3px 3px 8px #c8ccd1, -3px -3px 8px #ffffff;
-  --shadow-raised-xs: 2px 2px 5px #c8ccd1, -2px -2px 5px #ffffff;
-  --shadow-inset: inset 3px 3px 6px #c8ccd1, inset -3px -3px 6px #ffffff;
-  --shadow-inset-sm: inset 2px 2px 4px #c8ccd1, inset -2px -2px 4px #ffffff;
-  --shadow-inset-focus: var(--shadow-inset), 0 0 0 2px rgba(108, 92, 231, 0.15);
-  --shadow-accent: 4px 4px 10px rgba(108,92,231,0.3), -3px -3px 8px rgba(162,155,254,0.2);
-  --shadow-accent-hover: 6px 6px 14px rgba(108,92,231,0.35), -4px -4px 10px rgba(162,155,254,0.25);
-  --shadow-accent-inset: inset 2px 2px 5px rgba(90,75,209,0.4), inset -2px -2px 5px rgba(162,155,254,0.2);
+  /* ── Surfaces ── */
+  --surface: #ffffff;
+  --border-light: rgba(0,0,0,0.06);
+  --overlay: rgba(0,0,0,0.2);
+
+  /* ── Soft shadows ── */
+  --shadow-raised: 0 2px 12px rgba(0,0,0,0.06);
+  --shadow-raised-hover: 0 4px 20px rgba(0,0,0,0.08);
+  --shadow-raised-lg: 0 8px 32px rgba(0,0,0,0.08);
+  --shadow-raised-sm: 0 1px 8px rgba(0,0,0,0.05);
+  --shadow-raised-xs: 0 1px 4px rgba(0,0,0,0.04);
+  --shadow-inset: inset 0 2px 6px rgba(0,0,0,0.06);
+  --shadow-inset-sm: inset 0 1px 4px rgba(0,0,0,0.05);
+  --shadow-inset-focus: inset 0 1px 4px rgba(0,0,0,0.05), 0 0 0 2px rgba(255,107,53,0.15);
+  --shadow-accent: 0 4px 16px rgba(255,107,53,0.2);
+  --shadow-accent-hover: 0 6px 24px rgba(255,107,53,0.25);
+  --shadow-accent-inset: inset 0 2px 6px rgba(200,80,30,0.2);
 
   /* ── Radii ── */
-  --radius-sm: 12px;
-  --radius: 16px;
-  --radius-lg: 20px;
-  --radius-xl: 24px;
+  --radius-sm: 14px;
+  --radius: 18px;
+  --radius-lg: 22px;
+  --radius-xl: 28px;
   --radius-full: 999px;
 
   /* ── Transition ── */
@@ -85,30 +96,29 @@ body {
 .scrollbar-none::-webkit-scrollbar { display: none; }
 
 /* ══════════════════════════════════════════════════════════
-   Neumorphic Components
+   Component Classes — Warm + Clean
    ══════════════════════════════════════════════════════════ */
 
-/* ── Card: Raised surface ── */
+/* ── Card: White surface ── */
 .card, .card-base {
-  background: var(--bg) !important;
-  border: none !important;
+  background: var(--surface) !important;
+  border: 1px solid var(--border-light) !important;
   border-radius: var(--radius) !important;
   box-shadow: var(--shadow-raised) !important;
   transition: all var(--transition);
 }
 .card-hover:hover {
   box-shadow: var(--shadow-raised-hover) !important;
-  transform: translateY(-1px);
+  transform: translateY(-2px);
 }
 .card:active, .card-base:active {
-  box-shadow: var(--shadow-inset) !important;
-  transform: translateY(0);
+  transform: scale(0.98);
 }
 
 /* ── Card Large ── */
 .card-lg {
-  background: var(--bg) !important;
-  border: none !important;
+  background: var(--surface) !important;
+  border: 1px solid var(--border-light) !important;
   border-radius: var(--radius-xl) !important;
   box-shadow: var(--shadow-raised-lg) !important;
   transition: all var(--transition);
@@ -116,43 +126,36 @@ body {
 
 /* ── Card Small ── */
 .card-sm {
-  background: var(--bg) !important;
-  border: none !important;
+  background: var(--surface) !important;
+  border: 1px solid var(--border-light) !important;
   border-radius: var(--radius-sm) !important;
   box-shadow: var(--shadow-raised-sm) !important;
   transition: all var(--transition);
 }
 
-/* ── Inset surface ── */
-.neumorph-inset {
-  background: var(--bg) !important;
-  border: none !important;
-  box-shadow: var(--shadow-inset) !important;
-}
-
 /* ── Input ── */
-.input, .neumorph-input {
+.input {
   width: 100%;
   padding: 10px 14px;
   background: var(--bg) !important;
-  border: none !important;
+  border: 1px solid var(--border-light) !important;
   border-radius: var(--radius-sm) !important;
   font-family: inherit;
   font-size: 14px;
   color: var(--text);
-  box-shadow: var(--shadow-inset-sm) !important;
   transition: all var(--transition);
 }
-.input::placeholder, .neumorph-input::placeholder {
+.input::placeholder {
   color: var(--text-placeholder);
 }
-.input:focus, .neumorph-input:focus {
+.input:focus {
   outline: none !important;
-  box-shadow: var(--shadow-inset-focus) !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(255,107,53,0.1) !important;
 }
 
-/* ── Button: Raised ── */
-.btn, .neumorph-btn {
+/* ── Button ── */
+.btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -164,25 +167,25 @@ body {
   font-weight: 600;
   letter-spacing: -0.01em;
   cursor: pointer;
-  background: var(--bg);
-  border: none;
+  background: var(--surface);
+  border: 1px solid var(--border-light);
   box-shadow: var(--shadow-raised-sm);
   transition: all var(--transition);
   color: var(--text);
 }
-.btn:hover, .neumorph-btn:hover {
+.btn:hover {
   box-shadow: var(--shadow-raised);
   transform: translateY(-1px);
 }
-.btn:active, .neumorph-btn:active {
-  box-shadow: var(--shadow-inset);
-  transform: translateY(0);
+.btn:active {
+  transform: scale(0.97);
 }
 
 /* ── Accent button ── */
 .btn-accent {
   background: var(--accent);
   color: #fff;
+  border: none;
   box-shadow: var(--shadow-accent);
 }
 .btn-accent:hover {
@@ -194,32 +197,31 @@ body {
 }
 
 /* ── Circle button ── */
-.btn-circle, .neumorph-circle {
+.btn-circle {
   width: 40px;
   height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: var(--bg);
-  border: none;
+  background: var(--surface);
+  border: 1px solid var(--border-light);
   box-shadow: var(--shadow-raised-sm);
   cursor: pointer;
   transition: all var(--transition);
   font-size: 17px;
   color: var(--text-secondary);
 }
-.btn-circle:hover, .neumorph-circle:hover {
+.btn-circle:hover {
   box-shadow: var(--shadow-raised);
   color: var(--text);
 }
-.btn-circle:active, .neumorph-circle:active {
-  box-shadow: var(--shadow-inset-sm);
-  transform: scale(0.94);
+.btn-circle:active {
+  transform: scale(0.93);
 }
 
 /* ── Pill (badges/tags) ── */
-.badge, .neumorph-pill {
+.badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -227,49 +229,20 @@ body {
   border-radius: var(--radius-full);
   font-size: 11px;
   font-weight: 600;
-  background: var(--bg);
-  border: none;
+  background: var(--surface);
+  border: 1px solid var(--border-light);
   box-shadow: var(--shadow-raised-xs);
   transition: all var(--transition);
   cursor: default;
 }
-.badge:hover, .neumorph-pill:hover {
-  box-shadow: var(--shadow-inset-sm);
+.badge:hover {
+  box-shadow: var(--shadow-raised-sm);
 }
 .badge-accent { color: var(--accent); }
 .badge-green { color: var(--green); }
 .badge-golden { color: var(--golden); }
 .badge-danger { color: var(--rose); }
 
-/* ── Track (progress, tabs) ── */
-.neumorph-track {
-  background: var(--bg);
-  border: none;
-  border-radius: var(--radius-full);
-  box-shadow: var(--shadow-inset-sm);
-  padding: 4px;
-}
-
-/* ── Step card ── */
-.neumorph-step {
-  background: var(--bg);
-  border: none;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-raised-sm);
-  transition: all var(--transition);
-}
-.neumorph-step:hover {
-  box-shadow: 2px 2px 5px #c8ccd1, -2px -2px 5px #ffffff;
-  transform: scale(0.998);
-}
-
-/* ── Modal ── */
-.neumorph-modal {
-  background: var(--bg);
-  border: none;
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-raised-lg);
-}
 
 /* ── Step number circle ── */
 .step-num {
@@ -279,8 +252,9 @@ body {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: var(--bg);
-  box-shadow: var(--shadow-inset-sm);
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-raised-xs);
   font-weight: 700;
   font-size: 14px;
   color: var(--accent);
@@ -311,7 +285,8 @@ body {
   gap: 7px;
   padding: 9px 16px;
   border-radius: var(--radius-full);
-  background: var(--bg);
+  background: var(--surface);
+  border: 1px solid var(--border-light);
   box-shadow: var(--shadow-raised-xs);
   font-size: 13px;
   color: var(--text);
@@ -319,7 +294,7 @@ body {
   cursor: default;
 }
 .ingredient-pill:hover {
-  box-shadow: var(--shadow-inset-sm);
+  box-shadow: var(--shadow-raised-sm);
 }
 .ingredient-pill .dot {
   width: 6px;
@@ -333,7 +308,8 @@ body {
 .seasoning-tag {
   padding: 6px 13px;
   border-radius: var(--radius-full);
-  background: var(--bg);
+  background: var(--surface);
+  border: 1px solid var(--border-light);
   box-shadow: var(--shadow-raised-xs);
   font-size: 12px;
   color: var(--text-secondary);
@@ -341,7 +317,7 @@ body {
   cursor: default;
 }
 .seasoning-tag:hover {
-  box-shadow: var(--shadow-inset-sm);
+  box-shadow: var(--shadow-raised-sm);
   color: var(--accent);
 }
 
@@ -363,7 +339,8 @@ body {
 .msg-bubble {
   padding: 14px 18px;
   border-radius: var(--radius-lg);
-  background: var(--bg);
+  background: var(--surface);
+  border: 1px solid var(--border-light);
   box-shadow: var(--shadow-raised);
   font-size: 14px;
   line-height: 1.75;
@@ -378,7 +355,8 @@ body {
   align-items: center;
   justify-content: center;
   font-size: 20px;
-  background: var(--bg);
+  background: var(--surface);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-raised-sm);
   flex-shrink: 0;
@@ -432,8 +410,46 @@ body {
   align-items: center;
   justify-content: center;
   margin-bottom: 1rem;
-  background: var(--bg);
+  background: var(--surface);
+  border: 1px solid var(--border-light);
   box-shadow: var(--shadow-raised);
+}
+
+/* ── Interactive utilities ── */
+.hover-lift {
+  transition: all var(--transition);
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-raised-hover);
+}
+.hover-lift:active {
+  transform: scale(0.97);
+}
+
+.press-scale {
+  transition: all var(--transition);
+}
+.press-scale:active {
+  transform: scale(0.95);
+}
+
+/* ── Hover color utilities ── */
+.hover-accent:hover {
+  color: var(--accent) !important;
+  transition: color var(--transition);
+}
+.hover-rose:hover {
+  color: var(--rose) !important;
+  transition: color var(--transition);
+}
+.hover-text:hover {
+  color: var(--text) !important;
+  transition: color var(--transition);
+}
+.hover-lift-bg:hover {
+  background: var(--bg) !important;
+  transition: background var(--transition);
 }
 
 /* ── Prose (markdown content) ── */
@@ -528,18 +544,73 @@ body {
   50% { transform: scale(1.08); opacity: 0.75; }
 }
 
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   Dark Mode
+   ══════════════════════════════════════════════════════════ */
+.dark {
+  --bg: #1a1614;
+  --bg-dark: #252120;
+  --bg-light: #2a2523;
+  --text: #f0ece6;
+  --text-secondary: #b5aaa0;
+  --text-muted: #8a7e76;
+  --text-placeholder: #6b5f56;
+
+  --accent: #ff8b5e;
+  --accent-soft: #ff9f7a;
+  --accent-deep: #ff6b35;
+  --accent-bg: #2a1f1a;
+
+  --green: #9ab88e;
+  --green-bg: #1e2a1a;
+  --golden: #e0a84a;
+  --golden-bg: #2a2318;
+  --rose: #e0706a;
+  --rose-bg: #2a1a18;
+  --teal: #00d6b9;
+  --teal-bg: #1a2a24;
+  --pink: #fb7299;
+  --pink-bg: #2a1a20;
+  --blue: #60a5fa;
+  --blue-bg: #1a2230;
+
+  --surface: #252120;
+  --border-light: rgba(255,255,255,0.06);
+  --overlay: rgba(0,0,0,0.5);
+
+  --shadow-raised: 0 2px 12px rgba(0,0,0,0.2);
+  --shadow-raised-hover: 0 4px 20px rgba(0,0,0,0.25);
+  --shadow-raised-lg: 0 8px 32px rgba(0,0,0,0.3);
+  --shadow-raised-sm: 0 1px 8px rgba(0,0,0,0.15);
+  --shadow-raised-xs: 0 1px 4px rgba(0,0,0,0.1);
+  --shadow-inset: inset 0 2px 6px rgba(0,0,0,0.2);
+  --shadow-inset-sm: inset 0 1px 4px rgba(0,0,0,0.15);
+  --shadow-inset-focus: inset 0 1px 4px rgba(0,0,0,0.15), 0 0 0 2px rgba(255,139,94,0.2);
+  --shadow-accent: 0 4px 16px rgba(255,107,53,0.15);
+  --shadow-accent-hover: 0 6px 24px rgba(255,107,53,0.2);
+  --shadow-accent-inset: inset 0 2px 6px rgba(200,80,30,0.15);
+}
+
+
 /* ── Mobile ── */
 @media (max-width: 639px) {
   ::-webkit-scrollbar { display: none; }
   * { scrollbar-width: none; }
 
-  /* Eliminate 300ms tap delay on iOS */
   button, a, input, textarea, [role="button"] {
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* Prevent text selection on long-press for interactive elements */
   button, [role="button"] {
     -webkit-user-select: none;
     user-select: none;

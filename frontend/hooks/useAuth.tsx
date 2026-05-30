@@ -2,7 +2,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import type { User } from "@/types/user";
 import { getToken, setToken as saveToken, clearToken } from "@/lib/authStore";
-import { login as apiLogin, register as apiRegister, getCurrentUser, logout as apiLogout } from "@/lib/authApi";
+import { login as apiLogin, register as apiRegister, getCurrentUser, logout as apiLogout, updateAvatar as apiUpdateAvatar } from "@/lib/authApi";
 
 interface AuthContextType {
   user: User | null;
@@ -12,6 +12,7 @@ interface AuthContextType {
   register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
+  updateAvatar: (avatarUrl: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -66,8 +67,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try { setUser(await getCurrentUser()); } catch { /* ignore */ }
   }, []);
 
+  const updateAvatar = useCallback(async (avatarUrl: string) => {
+    const updated = await apiUpdateAvatar(avatarUrl);
+    setUser(updated);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout, refreshUser, updateAvatar }}>
       {children}
     </AuthContext.Provider>
   );

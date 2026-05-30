@@ -55,6 +55,7 @@ export async function createShoppingList(data: {
                 in_stock: i.in_stock,
                 stock_amount: i.stock_amount,
                 checked: i.checked,
+                recipe_names: i.recipe_names,
             })),
         }),
     });
@@ -76,6 +77,7 @@ export async function updateShoppingList(
             in_stock: i.in_stock,
             stock_amount: i.stock_amount,
             checked: i.checked,
+            recipe_names: i.recipe_names,
         }));
     }
     if (data.status !== undefined) body.status = data.status;

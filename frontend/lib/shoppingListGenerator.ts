@@ -16,6 +16,19 @@ interface MergedIngredient {
     unit: string;
 }
 
+interface RecipeIngredientsInput {
+    recipeName: string;
+    ingredients: string[];
+    seasonings: string[];
+}
+
+interface GroupedIngredient {
+    name: string;
+    totalAmount: number;
+    unit: string;
+    recipeNames: string[];
+}
+
 const UNIT_PATTERNS: [RegExp, string][] = [
     [/(\d+(?:\.\d+)?)\s*(千克|公斤|kg)/i, '千克'],
     [/(\d+(?:\.\d+)?)\s*(克|g)/i, '克'],
@@ -78,6 +91,41 @@ export function mergeIngredients(ingredientLists: string[][]): MergedIngredient[
     return Array.from(map.values());
 }
 
+export function groupIngredientsByRecipe(inputs: RecipeIngredientsInput[]): GroupedIngredient[] {
+    const map = new Map<string, GroupedIngredient>();
+
+    for (const input of inputs) {
+        const allRaw = [...input.ingredients, ...input.seasonings];
+        for (const raw of allRaw) {
+            const parsed = parseIngredientString(raw);
+            const key = parsed.name;
+            const existing = map.get(key);
+            if (existing) {
+                if (existing.unit === parsed.unit || existing.unit === '份' || parsed.unit === '份') {
+                    existing.totalAmount += parsed.amount;
+                    if (existing.unit === '份' && parsed.unit !== '份') {
+                        existing.unit = parsed.unit;
+                    }
+                } else {
+                    existing.totalAmount += parsed.amount;
+                }
+                if (!existing.recipeNames.includes(input.recipeName)) {
+                    existing.recipeNames.push(input.recipeName);
+                }
+            } else {
+                map.set(key, {
+                    name: parsed.name,
+                    totalAmount: parsed.amount,
+                    unit: parsed.unit,
+                    recipeNames: [input.recipeName],
+                });
+            }
+        }
+    }
+
+    return Array.from(map.values());
+}
+
 const IGNORE_NAMES = new Set(['盐', '糖', '味精', '鸡精', '料酒', '生抽', '老抽', '醋', '胡椒', '花椒', '姜', '蒜', '葱', '油', '淀粉']);
 
 function extractIngredientsFromContent(content: string): string[] {
@@ -98,19 +146,17 @@ export async function generateShoppingListFromRecipes(
 ): Promise<ShoppingList> {
     const inventory = loadIngredients();
 
-    const ingredientLists = recipes.map(r =>
-      (r.ingredients && r.ingredients.length > 0)
-        ? r.ingredients
-        : extractIngredientsFromContent(r.content || '')
-    );
-    const merged = mergeIngredients(ingredientLists);
+    const inputs: RecipeIngredientsInput[] = recipes.map(r => ({
+        recipeName: r.title,
+        ingredients: (r.ingredients && r.ingredients.length > 0)
+            ? r.ingredients
+            : extractIngredientsFromContent(r.content || ''),
+        seasonings: r.seasonings || [],
+    }));
 
-    const seasoningLists = recipes.map(r => r.seasonings || []);
-    const mergedSeasonings = mergeIngredients(seasoningLists);
+    const grouped = groupIngredientsByRecipe(inputs);
 
-    const allMerged = [...merged, ...mergedSeasonings];
-
-    const items: ShoppingListItem[] = allMerged
+    const items: ShoppingListItem[] = grouped
         .filter(item => !IGNORE_NAMES.has(item.name) || item.totalAmount >= 2)
         .map(item => {
             const stockItem = inventory.find(
@@ -127,6 +173,7 @@ export async function generateShoppingListFromRecipes(
                 in_stock: inStock,
                 stock_amount: stockAmount,
                 checked: inStock,
+                recipe_names: item.recipeNames.length > 0 ? item.recipeNames : undefined,
             };
         });
 

@@ -118,7 +118,7 @@ const base: Record<string, React.CSSProperties> = {
   },
   modal: {
     width: "100%", maxWidth: 360, margin: "0 16px",
-    background: "var(--bg)", boxShadow: "var(--shadow-raised-lg)",
+    background: "var(--surface)", boxShadow: "var(--shadow-raised-lg)",
     borderRadius: 20, padding: 20,
     animation: "scaleIn 0.25s ease both",
   },

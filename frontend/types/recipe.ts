@@ -2,6 +2,14 @@
  * 菜谱相关类型定义
  */
 
+/** 视频信息 */
+export interface VideoInfo {
+  title: string;
+  url: string;
+  author?: string;
+  play?: string;
+}
+
 /**
  * 菜谱数据结构
  */
@@ -32,6 +40,8 @@ export interface Recipe {
   sourceUrl?: string;
   /** 视频教程链接（B站等） */
   videoUrl?: string;
+  /** 视频教程列表（含标题、链接、UP主、播放量） */
+  videos?: VideoInfo[];
   /** 创建时间戳 */
   createdAt: number;
   /** 更新时间戳 */
@@ -65,6 +75,7 @@ export interface AddRecipeRequest {
   difficulty?: string;
   cooking_time?: string;
   video_url?: string;
+  videos?: VideoInfo[];
   ingredients?: string[];
   seasonings?: string[];
   tags?: string[];

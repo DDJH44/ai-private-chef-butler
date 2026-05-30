@@ -1,6 +1,0 @@
-{
-  "graphs": {
-    "personal_chief": "./app/agents/personal_chief.py:agent"
-  },
-  "dependencies": ["./"]
-}

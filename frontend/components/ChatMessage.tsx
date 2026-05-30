@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { memo, useState, ComponentPropsWithoutRef } from "react";
 import { useSpeechSynthesis } from "@/hooks/useSpeechSynthesis";
+import { Square, Volume2, ChefHat } from "lucide-react";
 
 interface ChatMessageProps {
   message: Message;
@@ -43,13 +44,13 @@ function BilibiliCard({ href, children }: { href: string; children: React.ReactN
         display: "flex", alignItems: "center", gap: 12,
         padding: 12, borderRadius: 14, marginTop: 8,
         background: "var(--bg)", boxShadow: "var(--shadow-raised-sm)",
-        textDecoration: "none", transition: "all 0.25s ease",
+        textDecoration: "none", transition: "var(--transition)",
       }}
     >
       <span style={{
         width: 36, height: 36, borderRadius: 10, flexShrink: 0,
         display: "flex", alignItems: "center", justifyContent: "center",
-        background: "#fb7299", color: "#fff", fontSize: 18, fontWeight: 700,
+        background: "var(--pink)", color: "#fff", fontSize: 18, fontWeight: 700,
       }}>B</span>
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ fontSize: 13, color: "var(--text)", fontWeight: 600, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{children}</span>
@@ -86,12 +87,12 @@ function SpeakButton({ text }: { text: string }) {
         fontWeight: 600,
         cursor: "pointer",
         boxShadow: "var(--shadow-raised-xs)",
-        transition: "all 0.25s ease",
+        transition: "var(--transition)",
         marginTop: 4,
       }}
       title={speaking ? "停止朗读" : "朗读此消息"}
     >
-      {speaking ? "⏹ 停止" : "🔊 朗读"}
+      {speaking ? <><Square size={12} strokeWidth={2}/> 停止</> : <><Volume2 size={12} strokeWidth={2}/> 朗读</>}
     </button>
   );
 }
@@ -111,7 +112,7 @@ export const ChatMessage = memo(function ChatMessage({ message, isStreaming }: C
           )}
           <div style={{
             padding: "14px 18px", borderRadius: "20px 20px 6px 20px",
-            background: "var(--bg)", boxShadow: "var(--shadow-raised)",
+            background: "var(--surface)", boxShadow: "var(--shadow-raised)",
             fontSize: 14, lineHeight: 1.75, color: "var(--text)",
           }}>
             {rawContent}
@@ -124,7 +125,7 @@ export const ChatMessage = memo(function ChatMessage({ message, isStreaming }: C
   if (!rawContent) {
     return (
       <div style={{ display: "flex", gap: 12, marginBottom: 16, animation: "fadeIn 0.3s ease both" }}>
-        <div className="msg-avatar" style={{ marginTop: 2 }}>👨‍🍳</div>
+        <div className="msg-avatar" style={{ marginTop: 2 }}><ChefHat size={28} strokeWidth={1.5}/></div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 14px" }}>
           <div className="typing-dot" />
           <div className="typing-dot" />
@@ -136,7 +137,7 @@ export const ChatMessage = memo(function ChatMessage({ message, isStreaming }: C
 
   return (
     <div style={{ display: "flex", gap: 12, marginBottom: 16, animation: "fadeUp 0.35s ease both" }}>
-      <div className="msg-avatar" style={{ marginTop: 2 }}>👨‍🍳</div>
+      <div className="msg-avatar" style={{ marginTop: 2 }}><ChefHat size={28} strokeWidth={1.5}/></div>
       <div style={{ flex: 1, minWidth: 0, maxWidth: "80%" }}>
         {message.imageUrl && (
           <div style={{ marginBottom: 8, borderRadius: 16, overflow: "hidden", boxShadow: "var(--shadow-raised-sm)" }}>

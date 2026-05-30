@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Pencil, Trash2, X, Plus, Clock, Sparkles, Search, AlertTriangle, Snowflake } from "lucide-react";
+import { CATEGORY_ICONS, PageIcon } from "@/lib/icons";
+import { classifyIngredient } from "@/lib/ingredientClassifier";
 import { cn, generateUUID } from "@/lib/utils";
 import {
     Ingredient, IngredientCategory, IngredientUnit, CATEGORY_OPTIONS, UNIT_OPTIONS,
-    STATUS_CONFIG, CATEGORY_ICONS, DEFAULT_SHELF_LIFE, calculateExpiryDate, calculateStatus,
+    STATUS_CONFIG, DEFAULT_SHELF_LIFE, calculateExpiryDate, calculateStatus,
 } from "@/types/ingredient";
 import {
     loadIngredients, addIngredient, updateIngredient, deleteIngredient,
@@ -83,7 +85,7 @@ export default function FridgePage() {
             shelf_life_days: form.shelf_life_days || 7,
             expiry_date: expiry,
             status: calculateStatus(expiry),
-            created_at: new Date().toISOString(),
+            created_at: editId ? (form.created_at || new Date().toISOString()) : new Date().toISOString(),
             updated_at: new Date().toISOString(),
         };
 
@@ -114,22 +116,19 @@ export default function FridgePage() {
         <AuthGuard>
         <div className="flex flex-col h-full" style={{ background: "var(--bg)" }}>
             {/* Header */}
-            <header className="flex-shrink-0 px-4 lg:px-6 py-4" style={{ background: "var(--bg)" }}>
+            <header className="flex-shrink-0 px-4 lg:px-6 py-4" style={{ background: "var(--surface)" }}>
                 <div className="relative flex items-center justify-between max-w-5xl mx-auto lg:max-w-6xl xl:max-w-7xl">
                     <div className="flex items-center gap-3">
                         <button onClick={() => router.back()}
                             style={{
                                 width: 36, height: 36,
-                                background: "var(--bg)",
+                                background: "var(--surface)",
                                 borderRadius: 12,
                                 boxShadow: "var(--shadow-raised-sm)",
                                 display: "flex", alignItems: "center", justifyContent: "center",
                                 border: "none", cursor: "pointer",
-                                transition: "all 0.25s ease",
+                                transition: "var(--transition)",
                             }}
-                            onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-                            onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
                         >
                             <span style={{ fontSize: 16 }}>←</span>
                         </button>
@@ -139,7 +138,7 @@ export default function FridgePage() {
                                 fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif",
                                 letterSpacing: "-0.02em",
                             }}>
-                                🧊 我的冰箱
+                                我的冰箱
                             </h1>
                             <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
                                 {ingredients.length} 种食材
@@ -156,11 +155,8 @@ export default function FridgePage() {
                             fontSize: 12, fontWeight: 600,
                             border: "none", cursor: "pointer",
                             boxShadow: "var(--shadow-accent)",
-                            transition: "all 0.25s ease",
+                            transition: "var(--transition)",
                         }}
-                        onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-accent-inset)"; }}
-                        onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-accent)"; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-accent)"; }}
                     >
                         <span style={{ fontSize: 14 }}>＋</span> 添加
                     </button>
@@ -172,8 +168,8 @@ export default function FridgePage() {
                 <div className="relative" style={{ borderRadius: 12 }}>
                     <span style={{
                         position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)",
-                        fontSize: 14, color: "var(--text-placeholder)", pointerEvents: "none",
-                    }}>🔍</span>
+                        color: "var(--text-placeholder)", pointerEvents: "none",
+                    }}><Search size={16} strokeWidth={1.8} style={{ color: "var(--text-muted)" }} /></span>
                     <input value={search} onChange={e => setSearch(e.target.value)}
                         placeholder="搜索食材..."
                         style={{
@@ -181,23 +177,21 @@ export default function FridgePage() {
                             background: "var(--bg)", border: "none", borderRadius: 12,
                             boxShadow: "var(--shadow-inset-sm)",
                             fontSize: 14, color: "var(--text)",
-                            outline: "none", transition: "all 0.25s ease",
+                            outline: "none", transition: "var(--transition)",
                         }}
-                        onFocus={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
-                        onBlur={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
                     />
                 </div>
                 {expiringCount > 0 && (
                     <div style={{
                         display: "flex", alignItems: "center", gap: 8,
                         padding: "10px 14px",
-                        background: "var(--bg)",
+                        background: "var(--surface)",
                         borderRadius: 12,
                         boxShadow: "var(--shadow-raised-xs)",
                         color: "var(--golden)",
                         fontSize: 12, fontWeight: 500,
                     }}>
-                        <span style={{ fontSize: 14 }}>⚠️</span>
+                        <AlertTriangle size={16} strokeWidth={1.8} />
                         <span>{expiringCount} 种食材即将过期</span>
                     </div>
                 )}
@@ -210,13 +204,13 @@ export default function FridgePage() {
                                 borderRadius: 999,
                                 fontSize: 12, fontWeight: 600,
                                 border: "none", cursor: "pointer",
-                                transition: "all 0.25s ease",
-                                background: "var(--bg)",
+                                transition: "var(--transition)",
+                                background: "var(--surface)",
                                 color: category === cat ? "var(--accent)" : "var(--text-secondary)",
                                 boxShadow: category === cat ? "var(--shadow-inset-sm)" : "var(--shadow-raised-xs)",
                             }}
                         >
-                            {cat === "全部" ? "全部" : `${CATEGORY_ICONS[cat]} ${cat}`}
+                            {cat === "全部" ? "全部" : <>{CATEGORY_ICONS[cat]} {cat}</>}
                         </button>
                     ))}
                 </div>
@@ -228,12 +222,12 @@ export default function FridgePage() {
                     <div className="empty-state pt-16">
                         <div style={{
                             width: 72, height: 72,
-                            background: "var(--bg)", borderRadius: 20,
+                            background: "var(--surface)", borderRadius: 20,
                             boxShadow: "var(--shadow-raised)",
                             display: "flex", alignItems: "center", justifyContent: "center",
                             marginBottom: 16, fontSize: 32,
                         }}>
-                            ❄️
+                            <Snowflake size={32} strokeWidth={1.5} />
                         </div>
                         <h3 style={{
                             fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 4,
@@ -293,36 +287,30 @@ export default function FridgePage() {
                                             <button onClick={() => openEdit(item)}
                                                 style={{
                                                     width: 28, height: 28,
-                                                    background: "var(--bg)",
+                                                    background: "var(--surface)",
                                                     borderRadius: 8,
                                                     boxShadow: "var(--shadow-raised-xs)",
                                                     border: "none", cursor: "pointer",
                                                     display: "flex", alignItems: "center", justifyContent: "center",
                                                     fontSize: 12, color: "var(--text-muted)",
-                                                    transition: "all 0.25s ease",
+                                                    transition: "var(--transition)",
                                                 }}
-                                                onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-                                                onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-xs)"; }}
-                                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-xs)"; }}
                                             >
-                                                ✏️
+                                                <Pencil size={14} strokeWidth={1.8} />
                                             </button>
                                             <button onClick={() => setConfirmDeleteId(item.id)}
                                                 style={{
                                                     width: 28, height: 28,
-                                                    background: "var(--bg)",
+                                                    background: "var(--surface)",
                                                     borderRadius: 8,
                                                     boxShadow: "var(--shadow-raised-xs)",
                                                     border: "none", cursor: "pointer",
                                                     display: "flex", alignItems: "center", justifyContent: "center",
                                                     fontSize: 12, color: "var(--text-muted)",
-                                                    transition: "all 0.25s ease",
+                                                    transition: "var(--transition)",
                                                 }}
-                                                onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-                                                onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-xs)"; }}
-                                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-xs)"; }}
                                             >
-                                                🗑️
+                                                <Trash2 size={14} strokeWidth={1.8} />
                                             </button>
                                         </div>
                                     </div>
@@ -331,7 +319,7 @@ export default function FridgePage() {
                                             marginTop: 10, display: "flex", alignItems: "center", gap: 6,
                                             fontSize: 10, color: "var(--text-muted)",
                                         }}>
-                                            <span style={{ fontSize: 10 }}>⏱️</span>
+                                            <Clock size={14} strokeWidth={1.8} />
                                             <span>
                                                 {daysLeft < 0 ? `已过期 ${Math.abs(daysLeft)} 天` : daysLeft === 0 ? "今天到期" : `还剩 ${daysLeft} 天`}
                                             </span>
@@ -365,14 +353,11 @@ export default function FridgePage() {
                                 fontSize: 14, fontWeight: 700,
                                 border: "none", cursor: "pointer",
                                 boxShadow: "var(--shadow-raised)",
-                                transition: "all 0.25s ease",
+                                transition: "var(--transition)",
                                 fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif",
                             }}
-                            onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset)"; }}
-                            onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised)"; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised)"; }}
                         >
-                            ✨ AI 推荐菜品
+                            <Sparkles size={14} strokeWidth={1.8} /> AI 推荐菜品
                         </button>
                     </div>
                 </div>
@@ -390,7 +375,7 @@ export default function FridgePage() {
                 }} onClick={() => setShowForm(false)}>
                     <div style={{
                         width: "100%", maxWidth: 440,
-                        background: "var(--bg)",
+                        background: "var(--surface)",
                         borderRadius: 24,
                         boxShadow: "var(--shadow-raised-lg)",
                         overflow: "hidden",
@@ -406,24 +391,21 @@ export default function FridgePage() {
                                 fontSize: 16, fontWeight: 700, color: "var(--text)",
                                 fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif",
                             }}>
-                                {editId ? "✏️ 编辑食材" : "➕ 添加食材"}
+                                {editId ? <><Pencil size={14} strokeWidth={1.8} /> 编辑食材</> : <><Plus size={14} strokeWidth={1.8} /> 添加食材</>}
                             </h3>
                             <button onClick={() => setShowForm(false)}
                                 style={{
                                     width: 32, height: 32,
-                                    background: "var(--bg)",
+                                    background: "var(--surface)",
                                     borderRadius: 10,
                                     boxShadow: "var(--shadow-raised-xs)",
                                     border: "none", cursor: "pointer",
                                     display: "flex", alignItems: "center", justifyContent: "center",
                                     fontSize: 16, color: "var(--text-muted)",
-                                    transition: "all 0.25s ease",
+                                    transition: "var(--transition)",
                                 }}
-                                onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-                                onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-xs)"; }}
-                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-xs)"; }}
                             >
-                                ✕
+                                <X size={16} strokeWidth={1.8} />
                             </button>
                         </div>
 
@@ -436,17 +418,20 @@ export default function FridgePage() {
                                 }}>
                                     食材名称 *
                                 </label>
-                                <input value={form.name || ""} onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
+                                <input value={form.name || ""}
+                                    onChange={e => {
+                                        const name = e.target.value;
+                                        const cat = classifyIngredient(name);
+                                        setForm(prev => ({ ...prev, name, category: cat }));
+                                    }}
                                     placeholder="例如：西红柿"
                                     style={{
                                         width: "100%", padding: "10px 14px",
                                         background: "var(--bg)", border: "none", borderRadius: 12,
                                         boxShadow: "var(--shadow-inset-sm)",
                                         fontSize: 14, color: "var(--text)",
-                                        outline: "none", transition: "all 0.25s ease",
+                                        outline: "none", transition: "var(--transition)",
                                     }}
-                                    onFocus={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
-                                    onBlur={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
                                 />
                             </div>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
@@ -464,10 +449,8 @@ export default function FridgePage() {
                                             background: "var(--bg)", border: "none", borderRadius: 12,
                                             boxShadow: "var(--shadow-inset-sm)",
                                             fontSize: 14, color: "var(--text)",
-                                            outline: "none", transition: "all 0.25s ease",
+                                            outline: "none", transition: "var(--transition)",
                                         }}
-                                        onFocus={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
-                                        onBlur={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
                                     />
                                 </div>
                                 <div>
@@ -486,10 +469,8 @@ export default function FridgePage() {
                                                 boxShadow: "var(--shadow-inset-sm)",
                                                 fontSize: 14, color: "var(--text)",
                                                 outline: "none", appearance: "none",
-                                                transition: "all 0.25s ease",
+                                                transition: "var(--transition)",
                                             }}
-                                            onFocus={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
-                                            onBlur={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
                                         >
                                             {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
                                         </select>
@@ -506,6 +487,15 @@ export default function FridgePage() {
                                     color: "var(--text-secondary)", marginBottom: 6,
                                 }}>
                                     分类
+                                    {form.name && (
+                                        <span style={{
+                                            marginLeft: 8, padding: "1px 8px", borderRadius: 999,
+                                            fontSize: 10, fontWeight: 500,
+                                            background: "var(--accent-bg)", color: "var(--accent)",
+                                        }}>
+                                            自动识别
+                                        </span>
+                                    )}
                                 </label>
                                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                                     {CATEGORY_OPTIONS.map(cat => (
@@ -516,8 +506,8 @@ export default function FridgePage() {
                                                 borderRadius: 10,
                                                 fontSize: 11, fontWeight: 600,
                                                 border: "none", cursor: "pointer",
-                                                transition: "all 0.25s ease",
-                                                background: "var(--bg)",
+                                                transition: "var(--transition)",
+                                                background: "var(--surface)",
                                                 color: form.category === cat ? "var(--accent)" : "var(--text-secondary)",
                                                 boxShadow: form.category === cat ? "var(--shadow-inset-sm)" : "var(--shadow-raised-xs)",
                                             }}
@@ -542,10 +532,8 @@ export default function FridgePage() {
                                             background: "var(--bg)", border: "none", borderRadius: 12,
                                             boxShadow: "var(--shadow-inset-sm)",
                                             fontSize: 14, color: "var(--text)",
-                                            outline: "none", transition: "all 0.25s ease",
+                                            outline: "none", transition: "var(--transition)",
                                         }}
-                                        onFocus={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
-                                        onBlur={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
                                     />
                                 </div>
                                 <div>
@@ -562,10 +550,8 @@ export default function FridgePage() {
                                             background: "var(--bg)", border: "none", borderRadius: 12,
                                             boxShadow: "var(--shadow-inset-sm)",
                                             fontSize: 14, color: "var(--text)",
-                                            outline: "none", transition: "all 0.25s ease",
+                                            outline: "none", transition: "var(--transition)",
                                         }}
-                                        onFocus={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
-                                        onBlur={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
                                     />
                                 </div>
                             </div>
@@ -585,17 +571,14 @@ export default function FridgePage() {
                                         }))}
                                         style={{
                                             padding: "6px 12px",
-                                            background: "var(--bg)",
+                                            background: "var(--surface)",
                                             color: "var(--accent)",
                                             borderRadius: 10,
                                             fontSize: 11, fontWeight: 600,
                                             border: "none", cursor: "pointer",
                                             boxShadow: "var(--shadow-raised-xs)",
-                                            transition: "all 0.25s ease",
+                                            transition: "var(--transition)",
                                         }}
-                                        onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-                                        onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-xs)"; }}
-                                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-xs)"; }}
                                     >
                                         {s.name}
                                     </button>
@@ -611,17 +594,14 @@ export default function FridgePage() {
                             <button onClick={() => setShowForm(false)}
                                 style={{
                                     flex: 1, padding: "10px 0",
-                                    background: "var(--bg)",
+                                    background: "var(--surface)",
                                     color: "var(--text-secondary)",
                                     borderRadius: 12,
                                     fontSize: 14, fontWeight: 600,
                                     border: "none", cursor: "pointer",
                                     boxShadow: "var(--shadow-raised-sm)",
-                                    transition: "all 0.25s ease",
+                                    transition: "var(--transition)",
                                 }}
-                                onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-                                onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
-                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
                             >
                                 取消
                             </button>
@@ -634,11 +614,8 @@ export default function FridgePage() {
                                     fontSize: 14, fontWeight: 700,
                                     border: "none", cursor: "pointer",
                                     boxShadow: "var(--shadow-accent)",
-                                    transition: "all 0.25s ease",
+                                    transition: "var(--transition)",
                                 }}
-                                onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-accent-inset)"; }}
-                                onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-accent)"; }}
-                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-accent)"; }}
                             >
                                 {editId ? "保存修改" : "添加食材"}
                             </button>

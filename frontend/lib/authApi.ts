@@ -32,3 +32,12 @@ export async function logout(): Promise<void> {
     headers: { Authorization: `Bearer ${token}` },
   });
 }
+
+export async function updateAvatar(avatarUrl: string): Promise<User> {
+  const token = getToken();
+  return request<User>(`${AUTH_BASE}/me`, {
+    method: "PUT",
+    body: JSON.stringify({ avatar: avatarUrl }),
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}

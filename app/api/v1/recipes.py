@@ -24,6 +24,7 @@ def _recipe_to_dict(r: Recipe) -> dict:
         "tags": r.tags or [],
         "score": r.score, "reason": r.reason,
         "source_url": r.source_url, "video_url": r.video_url,
+        "videos": r.videos or [],
         "is_expanded": bool(r.is_expanded),
         "created_at": r.created_at, "updated_at": r.updated_at,
     }
@@ -46,6 +47,7 @@ async def create_recipe(recipe: RecipeCreate, current_user: dict = Depends(get_c
                 tags=recipe.tags or [],
                 score=recipe.score, reason=recipe.reason,
                 source_url=recipe.source_url, video_url=recipe.video_url,
+                videos=recipe.videos or [],
                 is_expanded=False, created_at=now, updated_at=now,
             )
             session.add(r)
@@ -104,6 +106,7 @@ async def batch_create_recipes(recipes_data: List[RecipeCreate] = Body(...), cur
                     tags=recipe.tags or [],
                     score=recipe.score, reason=recipe.reason,
                     source_url=recipe.source_url, video_url=recipe.video_url,
+                    videos=recipe.videos or [],
                     is_expanded=False, created_at=now, updated_at=now,
                 )
                 session.add(r)

@@ -5,6 +5,7 @@ import { Recipe } from "@/types/recipe";
 import { loadRecipes as getRecipesList, RECIPE_CHANGE_EVENT } from "@/lib/recipeStore";
 import { RecipeCard } from "./RecipeCard";
 import { Loading } from "./Loading";
+import { ChefHat, Search } from "lucide-react";
 
 interface RecipePanelProps {
   className?: string;
@@ -40,18 +41,18 @@ export function RecipePanel({ className, onRecipeSelect }: RecipePanelProps) {
 
   return (
     <div className={className} style={{
-      display: "flex", flexDirection: "column", background: "var(--bg)", height: "100%",
+      display: "flex", flexDirection: "column", background: "var(--surface)", height: "100%",
     }}>
       <header style={{
         flexShrink: 0, padding: "14px 16px",
-        background: "var(--bg)", boxShadow: "var(--shadow-raised-sm)",
+        background: "var(--surface)", boxShadow: "var(--shadow-raised-sm)",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{
             width: 36, height: 36, borderRadius: 12,
             background: "var(--bg)", boxShadow: "var(--shadow-raised-sm)",
             display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18,
-          }}>👨‍🍳</div>
+          }}><ChefHat size={18} strokeWidth={1.8}/></div>
           <div>
             <h2 style={{
               fontSize: 14, fontWeight: 700, color: "var(--text)",
@@ -67,7 +68,7 @@ export function RecipePanel({ className, onRecipeSelect }: RecipePanelProps) {
           <span style={{
             position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)",
             fontSize: 14, color: "var(--text-placeholder)", pointerEvents: "none",
-          }}>🔍</span>
+          }}><Search size={16} strokeWidth={1.8}/></span>
           <input
             type="text"
             placeholder="搜索菜谱..."
@@ -78,10 +79,8 @@ export function RecipePanel({ className, onRecipeSelect }: RecipePanelProps) {
               background: "var(--bg)", border: "none", borderRadius: 12,
               boxShadow: "var(--shadow-inset-sm)",
               fontSize: 14, color: "var(--text)", outline: "none",
-              transition: "all 0.25s ease",
+              transition: "var(--transition)",
             }}
-            onFocus={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
-            onBlur={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
           />
         </div>
       </div>
@@ -98,7 +97,7 @@ export function RecipePanel({ className, onRecipeSelect }: RecipePanelProps) {
               background: "var(--bg)", boxShadow: "var(--shadow-raised)",
               display: "flex", alignItems: "center", justifyContent: "center",
               marginBottom: 16, fontSize: 32,
-            }}>👨‍🍳</div>
+            }}><ChefHat size={18} strokeWidth={1.8}/></div>
             <h3 style={{
               fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 4,
               fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif",

@@ -6,6 +6,7 @@ export interface ShoppingListItem {
     in_stock: boolean;
     stock_amount: number;
     checked: boolean;
+    recipe_names?: string[];
 }
 
 export interface ShoppingList {

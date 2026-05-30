@@ -1,5 +1,6 @@
 """SQLAlchemy ORM 模型 —— 映射原 SQLite 表到 MySQL"""
 from sqlalchemy import Column, String, Integer, Float, Text, JSON, Boolean, BigInteger, Index, LargeBinary
+from sqlalchemy.dialects.mysql import LONGTEXT
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -14,6 +15,7 @@ class User(Base):
     username = Column(String(100), unique=True, nullable=False)
     email = Column(String(200), unique=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
+    avatar = Column(LONGTEXT, nullable=True)
     created_at = Column(BigInteger, nullable=False)
 
 
@@ -34,6 +36,7 @@ class Recipe(Base):
     reason = Column(Text, nullable=True)
     source_url = Column(Text, nullable=True)
     video_url = Column(Text, nullable=True)
+    videos = Column(JSON, nullable=True, default=list)
     tags = Column(JSON, nullable=True, default=list)
     is_expanded = Column(Boolean, nullable=True, default=False)
     created_at = Column(BigInteger, nullable=False)

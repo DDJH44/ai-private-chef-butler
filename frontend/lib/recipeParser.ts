@@ -3,7 +3,19 @@
  * 从 AI 回复的消息中提取菜谱信息
  */
 
-import { Recipe } from '@/types/recipe';
+import { Recipe, VideoInfo } from '@/types/recipe';
+
+/** 从内容中提取所有视频信息 */
+function extractVideos(content: string): VideoInfo[] {
+  const videos: VideoInfo[] = [];
+  // 匹配: `- [标题](URL) — UP主：XXX · 播放：XXX`
+  const regex = /-\s*\[([^\]]+)\]\((https?:\/\/(?:www\.)?bilibili\.com\/video\/[^)]+)\)\s*(?:—\s*UP主[：:]?\s*([^·]*?)\s*·\s*播放[：:]?\s*([\d.]+[万亿]?))?/g;
+  let m;
+  while ((m = regex.exec(content)) !== null) {
+    videos.push({title: m[1], url: m[2], author: m[3]?.trim(), play: m[4]?.trim()});
+  }
+  return videos;
+}
 
 /**
  * 从标记块中提取菜谱字段
@@ -56,6 +68,7 @@ function extractImageUrls(content: string): string[] {
 function parseAllMarkedRecipes(content: string): Array<{index: number; content: string; recipe: Partial<Recipe>}> {
   const recipes: Array<{index: number; content: string; recipe: Partial<Recipe>}> = [];
   const imageUrls = extractImageUrls(content);
+  const allVideos = extractVideos(content);
   const regex = /\[SAVE_RECIPE_START\]([\s\S]*?)\[SAVE_RECIPE_END\]/g;
   let match;
   let index = 0;
@@ -65,6 +78,7 @@ function parseAllMarkedRecipes(content: string): Array<{index: number; content: 
     if (imageUrls.length > index) {
       recipe.imageUrl = imageUrls[index];
     }
+    recipe.videos = allVideos;
     recipes.push({ index: index++, content: match[0], recipe });
   }
   return recipes;

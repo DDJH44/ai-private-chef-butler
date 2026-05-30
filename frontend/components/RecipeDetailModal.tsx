@@ -11,43 +11,44 @@ import { deleteRecipe as deleteRecipeFromStore } from "@/lib/recipeStore";
 import { getToken } from "@/lib/authStore";
 import { showToast } from "@/components/Toast";
 import { generateUUID } from "@/lib/utils";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { Star, Flame, Clock, X, Check, Clipboard, Trash2, ChefHat, CookingPot, ShoppingCart, Video } from "lucide-react";
+import { RecipeSaveBlock, stripSaveBlocks, difficultyColor } from "./RecipeSaveBlock";
 
-function formatContent(content: string): string {
+/** Plain-text formatContent for print (HTML output, can't use JSX) */
+function formatContentForPrint(content: string): string {
   return content.replace(
     /\[SAVE_RECIPE_START\]([\s\S]*?)\[SAVE_RECIPE_END\]/g,
     (_: string, block: string) => {
       let formatted = "";
       const lines = block.trim().split("\n");
       for (const line of lines) {
-        const colonIdx = line.indexOf("：");
-        if (colonIdx === -1) continue;
-        const key = line.slice(0, colonIdx);
-        const val = line.slice(colonIdx + 1).trim();
+        const idx = line.indexOf("：");
+        if (idx === -1) continue;
+        const key = line.slice(0, idx);
+        const val = line.slice(idx + 1).trim();
         if (!val) continue;
         switch (key) {
-          case "标题": formatted += `### ${val}\n\n`; break;
-          case "评分": formatted += `⭐ ${val}/5  `; break;
-          case "难度": formatted += `🔥 ${val}  `; break;
-          case "时间": formatted += `⏱ ${val}\n\n`; break;
-          case "理由": formatted += `> 💡 ${val}\n\n`; break;
-          case "食材": formatted += `**🥬 食材**：${val.replace(/，/g, "、")}\n\n`; break;
-          case "调味料": formatted += `**🧂 调料**：${val.replace(/，/g, "、")}\n\n`; break;
+          case "标题": formatted += `<h2>${val}</h2>`; break;
+          case "评分": formatted += `<p>评分：${val}/5</p>`; break;
+          case "难度": formatted += `<p>难度：${val}</p>`; break;
+          case "时间": formatted += `<p>时间：${val}</p>`; break;
+          case "理由": formatted += `<blockquote>推荐理由：${val}</blockquote>`; break;
+          case "食材": formatted += `<p><strong>食材</strong>：${val.replace(/，/g, "、")}</p>`; break;
+          case "调味料": formatted += `<p><strong>调料</strong>：${val.replace(/，/g, "、")}</p>`; break;
           case "步骤": {
             const steps = val.split(/[；;]/).filter(Boolean);
-            formatted += `**📝 步骤**\n`;
-            steps.forEach((s: string, i: number) => { formatted += `${i + 1}. ${s.trim()}\n`; });
-            formatted += "\n";
+            formatted += `<p><strong>步骤</strong></p><ol>`;
+            steps.forEach((s: string, i: number) => { formatted += `<li>${s.trim()}</li>`; });
+            formatted += "</ol>";
             break;
           }
           case "视频": {
-            if (val && val !== "无") formatted += `[🎬 观看视频教程](${val})\n\n`;
+            if (val && val !== "无") formatted += `<p><a href="${val}">观看视频教程</a></p>`;
             break;
           }
         }
       }
-      return formatted.trim();
+      return formatted;
     }
   ).trim();
 }
@@ -58,7 +59,7 @@ function StarRating({ score }: { score: number }) {
     <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
       {[1,2,3,4,5].map(n => (
         <span key={n} style={{ fontSize: 16, color: n <= rounded ? "var(--golden)" : "var(--text-placeholder)" }}>
-          {n <= rounded ? "★" : "☆"}
+          {n <= rounded ? <Star size={24} fill="var(--golden)"/> : <Star size={24}/>}
         </span>
       ))}
     </div>
@@ -68,8 +69,8 @@ function StarRating({ score }: { score: number }) {
 const circleBtn = (): React.CSSProperties => ({
   width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center",
   fontSize: 16, borderRadius: "50%", border: "none", cursor: "pointer",
-  background: "var(--bg)", color: "var(--text-secondary)",
-  boxShadow: "var(--shadow-raised-sm)", transition: "all 0.25s ease",
+  background: "var(--surface)", color: "var(--text-secondary)",
+  boxShadow: "var(--shadow-raised-sm)", transition: "var(--transition)",
 });
 
 interface RecipeDetailModalProps { recipe: Recipe; onClose: () => void; }
@@ -114,15 +115,6 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
     return "仅供参考";
   };
 
-  const difficultyColor = (d?: string) => {
-    switch (d) {
-      case "简单": return "var(--green)";
-      case "中等": return "var(--golden)";
-      case "困难": return "var(--rose)";
-      default: return "var(--accent)";
-    }
-  };
-
   const handleCopy = async () => {
     const text = fullRecipe.steps?.join("\n\n") || fullRecipe.content;
     try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }
@@ -132,7 +124,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
   const handlePrint = () => {
     const pw = window.open("", "_blank");
     if (pw) {
-      pw.document.write(`<html><head><title>${fullRecipe.title}</title><style>body{font-family:sans-serif;max-width:720px;margin:32px auto;padding:0 24px;line-height:1.8;color:#1F1D1A}h1{font-size:28px}h2{font-size:18px;margin:24px 0 12px}.step{display:flex;gap:12px;margin-bottom:16px;padding:14px;background:#e4e8ed;border-radius:12px;box-shadow:3px 3px 8px #c8ccd1,-3px -3px 8px #ffffff}.step-num{width:30px;height:30px;background:#6c5ce7;color:#fff;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0}img{max-width:100%;border-radius:16px;margin:16px 0}</style></head><body>${fullRecipe.imageUrl?`<img src="${proxyImageUrl(fullRecipe.imageUrl)}">`:""}<h1>${fullRecipe.title}</h1>${fullRecipe.steps?fullRecipe.steps.map((s,i)=>`<div class="step"><div class="step-num">${i+1}</div><div>${s}</div></div>`).join(""):`<div>${formatContent(fullRecipe.content)}</div>`}</body></html>`);
+      pw.document.write(`<html><head><title>${fullRecipe.title}</title><style>body{font-family:sans-serif;max-width:720px;margin:32px auto;padding:0 24px;line-height:1.8;color:#1F1D1A}h1{font-size:28px}h2{font-size:18px;margin:24px 0 12px}.step{display:flex;gap:12px;margin-bottom:16px;padding:14px;background:#faf8f5;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.06)}.step-num{width:30px;height:30px;background:#6c5ce7;color:#fff;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0}img{max-width:100%;border-radius:16px;margin:16px 0}</style></head><body>${fullRecipe.imageUrl?`<img src="${proxyImageUrl(fullRecipe.imageUrl)}">`:""}<h1>${fullRecipe.title}</h1>${fullRecipe.steps?fullRecipe.steps.map((s,i)=>`<div class="step"><div class="step-num">${i+1}</div><div>${s}</div></div>`).join(""):`<div>${formatContentForPrint(fullRecipe.content)}</div>`}</body></html>`);
       pw.document.close(); pw.print();
     }
   };
@@ -186,7 +178,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
 
   const modalStyle: React.CSSProperties = {
     position: "relative", width: "100%", maxWidth: 500,
-    maxHeight: "92vh", background: "var(--bg)", borderRadius: 24,
+    maxHeight: "92vh", background: "var(--surface)", borderRadius: 24,
     boxShadow: "var(--shadow-raised-lg)", overflow: "hidden",
     display: "flex", flexDirection: "column",
     animation: "slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) both",
@@ -207,49 +199,15 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
         <div style={{
           position: "absolute", top: 0, left: 0, right: 0, zIndex: 20,
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: 16, pointerEvents: "none",
+          padding: 12, pointerEvents: "none",
         }}>
-          <button onClick={onClose} style={{ ...circleBtn(), pointerEvents: "auto" }}
-            onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-            onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
-          >✕</button>
-          <div style={{ display: "flex", gap: 8, pointerEvents: "auto" }}>
-            <button onClick={handleCopy} style={circleBtn()}
-              onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-              onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
-            >{copied ? "✓" : "📋"}</button>
-            <button onClick={handlePrint} style={circleBtn()}
-              onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-              onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
-            >🖨</button>
-            <button onClick={handleShare} style={circleBtn()}
-              onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-              onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
-            >📤</button>
-            {feishuConfigured ? (
-              <button onClick={handleShareToFeishu} style={{ ...circleBtn(), color: "#00d6b9" }}
-                onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-                onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
-                title="分享到飞书"
-              >🪽</button>
-            ) : (
-              <button onClick={() => router.push("/profile")} style={{ ...circleBtn(), color: "var(--text-muted)", opacity: 0.5 }}
-                onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-                onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
-                title="连接飞书后可分享"
-              >🪽</button>
-            )}
-            <button onClick={() => setShowDeleteConfirm(true)} style={{ ...circleBtn(), color: "var(--rose)" }}
-              onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-              onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
-            >🗑</button>
+          <button onClick={onClose} style={{ ...circleBtn(), pointerEvents: "auto", width: 36, height: 36 }}
+          ><X size={18} strokeWidth={1.8}/></button>
+          <div style={{ display: "flex", gap: 6, pointerEvents: "auto" }}>
+            <button onClick={handleCopy} title="复制菜谱内容" style={{ ...circleBtn(), width: 36, height: 36, fontSize: 14 }}
+            >{copied ? <Check size={14}/> : <Clipboard size={14}/>}</button>
+            <button onClick={() => setShowDeleteConfirm(true)} title="删除菜谱" style={{ ...circleBtn(), width: 36, height: 36, color: "var(--rose)" }}
+            ><Trash2 size={14}/></button>
           </div>
         </div>
 
@@ -266,7 +224,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
               height: 120, display: "flex", alignItems: "center", justifyContent: "center",
               background: "var(--bg)", fontSize: 44, color: "var(--text-placeholder)",
             }}>
-              👨‍🍳
+              <ChefHat size={40} strokeWidth={1.5}/>
             </div>
           )}
 
@@ -298,7 +256,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
                     background: "var(--bg)", boxShadow: "var(--shadow-raised-xs)",
                     color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 4,
                   }}>
-                    <span style={{ fontSize: 11 }}>⏱</span> {fullRecipe.cookingTime}
+                    <Clock size={11} strokeWidth={1.8} /> {fullRecipe.cookingTime}
                   </span>
                 )}
               </div>
@@ -307,7 +265,6 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <StarRating score={fullRecipe.score} />
                   <span style={{ fontSize: 13, fontWeight: 600, color: "var(--golden)" }}>{fullRecipe.score}/5</span>
-                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{scoreLabel(fullRecipe.score)}</span>
                 </div>
               )}
             </div>
@@ -319,7 +276,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
               return (
                 <div style={{
                   marginBottom: 24, padding: 16, borderRadius: 16,
-                  background: "var(--bg)", boxShadow: "var(--shadow-inset-sm)",
+                  background: "var(--surface)", boxShadow: "var(--shadow-inset-sm)",
                 }}>
                   <p style={{ fontSize: 12, fontWeight: 600, color: "var(--green)", marginBottom: 8 }}>
                     你做过 {pastCooks.length} 次这道菜
@@ -331,7 +288,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
                           <div style={{ display: "flex", alignItems: "center", gap: 2, marginBottom: 2 }}>
                             {[1,2,3,4,5].map(s => (
                               <span key={s} style={{ fontSize: 11, color: s <= cook.rating ? "var(--golden)" : "var(--text-placeholder)" }}>
-                                {s <= cook.rating ? "★" : "☆"}
+                                {s <= cook.rating ? <Star size={12} fill="var(--golden)"/> : <Star size={12}/>}
                               </span>
                             ))}
                           </div>
@@ -346,18 +303,6 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
                 </div>
               );
             })()}
-
-            {/* Reason */}
-            {fullRecipe.reason && (
-              <div style={{
-                marginBottom: 24, padding: 16, borderRadius: 16,
-                background: "var(--bg)", boxShadow: "var(--shadow-inset-sm)",
-              }}>
-                <p style={{ fontSize: 13, color: "var(--accent)", lineHeight: 1.6 }}>
-                  💡 {fullRecipe.reason}
-                </p>
-              </div>
-            )}
 
             {/* Ingredients */}
             {fullRecipe.ingredients && fullRecipe.ingredients.length > 0 && (
@@ -377,7 +322,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
                       background: "var(--bg)", boxShadow: "var(--shadow-raised-xs)",
                       color: "var(--text)",
                     }}>
-                      <span style={{ color: "var(--accent)", marginRight: 4 }}>●</span>{ing}
+                      {ing}
                     </span>
                   ))}
                 </div>
@@ -389,7 +334,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
                         background: "var(--bg)", boxShadow: "var(--shadow-raised-xs)",
                         color: "var(--text-secondary)",
                       }}>
-                        🧂 {s}
+                        {s}
                       </span>
                     ))}
                   </div>
@@ -404,7 +349,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
                 fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 12,
                 fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif",
               }}>
-                <span style={{ width: 4, height: 16, borderRadius: 2, background: "var(--green)" }} />
+                <span style={{ width: 4, height: 16, borderRadius: 2, background: "var(--accent)" }} />
                 制作步骤
               </h2>
               {fullRecipe.steps && fullRecipe.steps.length > 0 ? (
@@ -412,11 +357,9 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
                   {fullRecipe.steps.map((step, i) => (
                     <div key={i} style={{
                       display: "flex", gap: 12, padding: 14, borderRadius: 16,
-                      background: "var(--bg)", boxShadow: "var(--shadow-raised-sm)",
-                      transition: "all 0.25s ease",
+                      background: "var(--surface)", boxShadow: "var(--shadow-raised-sm)",
+                      transition: "var(--transition)",
                     }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-xs)"; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
                     >
                       <div style={{
                         width: 28, height: 28, borderRadius: 10, flexShrink: 0,
@@ -433,11 +376,9 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
               ) : (
                 <div style={{
                   padding: 20, borderRadius: 16,
-                  background: "var(--bg)", boxShadow: "var(--shadow-raised-sm)",
+                  background: "var(--surface)", boxShadow: "var(--shadow-raised-sm)",
                 }}>
-                  <div className="prose-chat">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{formatContent(fullRecipe.content)}</ReactMarkdown>
-                  </div>
+                  <RecipeSaveBlock content={fullRecipe.content} />
                 </div>
               )}
             </div>
@@ -449,61 +390,82 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                   width: "100%", padding: "12px 0", marginBottom: 16,
                   fontSize: 13, color: "var(--text-muted)", textDecoration: "none",
-                  background: "var(--bg)", borderRadius: 16, boxShadow: "var(--shadow-raised-sm)",
-                  transition: "all 0.25s ease",
+                  background: "var(--surface)", borderRadius: 16, boxShadow: "var(--shadow-raised-sm)",
+                  transition: "var(--transition)",
                 }}
               >
                 查看原始食谱 →
               </a>
             )}
 
-            {/* Video tutorial */}
-            {fullRecipe.videoUrl && (
-              <a href={fullRecipe.videoUrl} target="_blank" rel="noopener noreferrer"
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  width: "100%", padding: "14px 0", marginBottom: 16,
-                  fontSize: 14, fontWeight: 600, color: "#fff", textDecoration: "none",
-                  background: "linear-gradient(135deg, #fb7299, #f25d8e)", borderRadius: 16,
-                  boxShadow: "0 4px 14px rgba(251,114,153,0.3)", transition: "all 0.25s ease",
-                }}
-              >
-                <span style={{ fontSize: 18 }}>🎬</span> 观看视频教程
-              </a>
-            )}
+            {/* Video tutorials — 使用预存的视频数据 */}
+            {(() => {
+              const videos = fullRecipe.videos || [];
+              if (videos.length === 0) return null;
+              return (
+                <div style={{ marginBottom: 16 }}>
+                  <h2 style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    fontSize: 13, fontWeight: 600, color: "var(--accent)", marginBottom: 10,
+                    fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif",
+                  }}>
+                    <span style={{ width: 4, height: 16, borderRadius: 2, background: "var(--accent)" }} />
+                    视频教程
+                  </h2>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {videos.map((v, i) => (
+                      <a key={i} href={v.url} target="_blank" rel="noopener noreferrer"
+                        style={{
+                          display: "flex", alignItems: "center", gap: 10, padding: "12px 14px",
+                          textDecoration: "none", background: "var(--surface)",
+                          borderRadius: 14, boxShadow: "var(--shadow-raised-sm)",
+                          transition: "var(--transition)",
+                        }}
+                      >
+                        <Video size={16} strokeWidth={1.8} style={{ color: "var(--accent)", flexShrink: 0 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {v.title}
+                          </div>
+                          {(v.author || v.play) && (
+                            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                              {v.author ? `UP主：${v.author}` : ""}{v.author && v.play ? " · " : ""}{v.play ? `播放：${v.play}` : ""}
+                            </div>
+                          )}
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
 
         {/* Bottom actions */}
         <div style={{
           flexShrink: 0, padding: "12px 20px", display: "flex", gap: 12,
-          background: "var(--bg)",
+          background: "var(--surface)",
         }}>
           <button onClick={handleGenerateShoppingList}
             style={{
               flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
               padding: "12px 0", borderRadius: 16, fontSize: 13, fontWeight: 600,
-              background: "var(--bg)", color: "var(--golden)", border: "none", cursor: "pointer",
-              boxShadow: "var(--shadow-raised)", transition: "all 0.25s ease",
+              background: "var(--surface)", color: "var(--golden)", border: "none", cursor: "pointer",
+              boxShadow: "var(--shadow-raised)", transition: "var(--transition)",
             }}
-            onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset)"; }}
-            onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised)"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised)"; }}
           >
-            🛒 加入购物清单
+            <ShoppingCart size={16}/> 加入购物清单
           </button>
           <button onClick={() => setShowCookModal(true)}
             style={{
               flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
               padding: "12px 0", borderRadius: 16, fontSize: 13, fontWeight: 700,
               background: "var(--accent)", color: "#fff", border: "none", cursor: "pointer",
-              boxShadow: "var(--shadow-accent)", transition: "all 0.25s ease",
+              boxShadow: "var(--shadow-accent)", transition: "var(--transition)",
             }}
-            onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-accent-inset)"; }}
-            onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-accent)"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-accent)"; }}
           >
-            🍳 开始烹饪
+            <CookingPot size={16}/> 开始烹饪
           </button>
         </div>
       </div>
@@ -517,7 +479,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
           animation: "fadeIn 0.2s ease",
         }} onClick={() => setShowDeleteConfirm(false)}>
           <div style={{
-            background: "var(--bg)", borderRadius: 24, width: "100%", maxWidth: 380,
+            background: "var(--surface)", borderRadius: 24, width: "100%", maxWidth: 380,
             padding: 24, boxShadow: "var(--shadow-raised-lg)",
             animation: "scaleIn 0.2s ease both", textAlign: "center",
           }} onClick={e => e.stopPropagation()}>
@@ -526,7 +488,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
               display: "flex", alignItems: "center", justifyContent: "center",
               background: "var(--bg)", boxShadow: "var(--shadow-raised)", fontSize: 24,
             }}>
-              🗑
+              <Trash2 size={24} strokeWidth={1.5} color="var(--rose)"/>
             </div>
             <h3 style={{
               fontSize: 17, fontWeight: 700, color: "var(--text)", marginBottom: 8,
@@ -540,25 +502,19 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
               <button onClick={() => setShowDeleteConfirm(false)}
                 style={{
                   flex: 1, padding: "10px 0", borderRadius: 12,
-                  background: "var(--bg)", color: "var(--text-secondary)",
+                  background: "var(--surface)", color: "var(--text-secondary)",
                   fontSize: 14, fontWeight: 500, border: "none", cursor: "pointer",
-                  boxShadow: "var(--shadow-raised-sm)", transition: "all 0.25s ease",
+                  boxShadow: "var(--shadow-raised-sm)", transition: "var(--transition)",
                 }}
-                onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-                onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
               >保留</button>
               <button onClick={handleDelete} disabled={deleting}
                 style={{
                   flex: 1, padding: "10px 0", borderRadius: 12,
                   background: "var(--rose)", color: "#fff",
                   fontSize: 14, fontWeight: 700, border: "none", cursor: deleting ? "not-allowed" : "pointer",
-                  boxShadow: "var(--shadow-raised-sm)", transition: "all 0.25s ease",
+                  boxShadow: "var(--shadow-raised-sm)", transition: "var(--transition)",
                   opacity: deleting ? 0.6 : 1,
                 }}
-                onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-                onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
               >{deleting ? "删除中..." : "确认移除"}</button>
             </div>
           </div>
@@ -574,7 +530,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
           animation: "fadeIn 0.2s ease",
         }} onClick={() => setShowCookModal(false)}>
           <div style={{
-            background: "var(--bg)", borderRadius: 24, width: "100%", maxWidth: 400,
+            background: "var(--surface)", borderRadius: 24, width: "100%", maxWidth: 400,
             padding: 24, boxShadow: "var(--shadow-raised-lg)",
             animation: "scaleIn 0.2s ease both",
           }} onClick={e => e.stopPropagation()}>
@@ -596,7 +552,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
                       color: star <= cookRating ? "var(--golden)" : "var(--text-placeholder)",
                       transition: "transform 0.15s ease",
                     }}
-                  >★</button>
+                  ><Star size={24} fill="var(--golden)"/></button>
                 ))}
               </div>
             </div>
@@ -609,10 +565,8 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
                   width: "100%", height: 80, padding: "10px 14px", borderRadius: 12,
                   background: "var(--bg)", border: "none", boxShadow: "var(--shadow-inset-sm)",
                   fontSize: 14, color: "var(--text)", resize: "none", outline: "none",
-                  transition: "all 0.25s ease",
+                  transition: "var(--transition)",
                 }}
-                onFocus={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
-                onBlur={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
               />
             </div>
 
@@ -620,24 +574,18 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
               <button onClick={() => setShowCookModal(false)}
                 style={{
                   flex: 1, padding: "10px 0", borderRadius: 12,
-                  background: "var(--bg)", color: "var(--text-secondary)",
+                  background: "var(--surface)", color: "var(--text-secondary)",
                   fontSize: 14, fontWeight: 500, border: "none", cursor: "pointer",
-                  boxShadow: "var(--shadow-raised-sm)", transition: "all 0.25s ease",
+                  boxShadow: "var(--shadow-raised-sm)", transition: "var(--transition)",
                 }}
-                onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-                onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
               >取消</button>
               <button onClick={handleSaveCookRecord}
                 style={{
                   flex: 1, padding: "10px 0", borderRadius: 12,
                   background: "var(--accent)", color: "#fff",
                   fontSize: 14, fontWeight: 700, border: "none", cursor: "pointer",
-                  boxShadow: "var(--shadow-accent)", transition: "all 0.25s ease",
+                  boxShadow: "var(--shadow-accent)", transition: "var(--transition)",
                 }}
-                onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-accent-inset)"; }}
-                onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-accent)"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-accent)"; }}
               >保存</button>
             </div>
           </div>

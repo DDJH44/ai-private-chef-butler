@@ -2,6 +2,7 @@
 
 import {useEffect, useState} from "react";
 import {createPortal} from "react-dom";
+import { Check, X } from "lucide-react";
 
 type ToastType = "success" | "error" | "info";
 
@@ -13,8 +14,8 @@ interface ToastItem {
 }
 
 const TOAST_CONFIG = {
-    success: {icon: "✓", color: "var(--green)"},
-    error: {icon: "✕", color: "var(--rose)"},
+    success: {icon: <Check size={14} strokeWidth={2}/>, color: "var(--green)"},
+    error: {icon: <X size={14} strokeWidth={2}/>, color: "var(--rose)"},
     info: {icon: "ℹ", color: "var(--accent)"},
 };
 
@@ -66,7 +67,7 @@ export function ToastContainer() {
                             pointerEvents: "auto",
                             display: "flex", alignItems: "center", gap: 12,
                             padding: "12px 16px", borderRadius: 16,
-                            background: "var(--bg)", boxShadow: "var(--shadow-raised)",
+                            background: "var(--surface)", boxShadow: "var(--shadow-raised)",
                             transition: "all 0.3s ease", width: "100%",
                             opacity: toast.visible ? 1 : 0,
                             transform: toast.visible ? "translateY(0)" : "translateY(-8px)",
@@ -88,7 +89,7 @@ export function ToastContainer() {
                                 fontSize: 14, color: "var(--text-muted)", padding: 4,
                             }}
                         >
-                            ✕
+                            <X size={14} strokeWidth={1.8}/>
                         </button>
                     </div>
                 );

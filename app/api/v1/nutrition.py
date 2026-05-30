@@ -125,27 +125,27 @@ def generate_analysis(calories, protein, carbs, fat, fiber, sodium):
     if calories == 0:
         return "今日暂无饮食记录"
 
-    lines = [f"📊 今日摄入 {calories:.0f} 千卡"]
+    lines = [f"● 今日摄入 {calories:.0f} 千卡"]
 
     if calories < 1200:
-        lines.append("⚠️ 热量摄入偏低，建议适当增加")
+        lines.append("● 热量摄入偏低，建议适当增加")
     elif calories > 2500:
-        lines.append("⚠️ 热量摄入偏高，注意控制")
+        lines.append("● 热量摄入偏高，注意控制")
     else:
-        lines.append("✅ 热量摄入适中")
+        lines.append("● 热量摄入适中")
 
     protein_ratio = protein * 4 / calories * 100 if calories > 0 else 0
     carbs_ratio = carbs * 4 / calories * 100 if calories > 0 else 0
     fat_ratio = fat * 9 / calories * 100 if calories > 0 else 0
 
-    lines.append(f"🥩 蛋白质 {protein:.0f}g ({protein_ratio:.0f}%)")
-    lines.append(f"🍚 碳水 {carbs:.0f}g ({carbs_ratio:.0f}%)")
-    lines.append(f"🧈 脂肪 {fat:.0f}g ({fat_ratio:.0f}%)")
+    lines.append(f"● 蛋白质 {protein:.0f}g ({protein_ratio:.0f}%)")
+    lines.append(f"● 碳水 {carbs:.0f}g ({carbs_ratio:.0f}%)")
+    lines.append(f"● 脂肪 {fat:.0f}g ({fat_ratio:.0f}%)")
 
     if fiber < 20:
-        lines.append("💡 建议增加膳食纤维摄入（蔬菜、水果）")
+        lines.append("● 建议增加膳食纤维摄入（蔬菜、水果）")
     if sodium > 2000:
-        lines.append("⚠️ 钠摄入偏高，注意清淡饮食")
+        lines.append("● 钠摄入偏高，注意清淡饮食")
 
     return "\n".join(lines)
 

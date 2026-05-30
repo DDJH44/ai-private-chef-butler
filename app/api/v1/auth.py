@@ -8,12 +8,17 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.exc import IntegrityError
 
 from app.models.schemas import UserRegister, UserLogin, UserResponse, TokenResponse
+from pydantic import BaseModel
 from app.models.db import User
 from app.common.database import get_db
 from app.auth import hash_password, verify_password, create_access_token, get_current_user, revoke_token
 
 router = APIRouter()
 _oauth2 = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+
+
+class AvatarUpdate(BaseModel):
+    avatar: str
 
 # 简易内存速率限制器
 _rate_limits: dict[str, list[float]] = defaultdict(list)
@@ -65,7 +70,7 @@ def register(req: UserRegister, request: Request):
     token = create_access_token({"sub": user_id, "username": req.username})
     return TokenResponse(
         access_token=token,
-        user=UserResponse(id=user_id, username=req.username, email=req.email, created_at=created_at)
+        user=UserResponse(id=user_id, username=req.username, email=req.email, created_at=created_at, avatar=None)
     )
 
 
@@ -74,13 +79,15 @@ def login(req: UserLogin, request: Request):
     _check_rate_limit(f"login:{_get_client_ip(request)}", max_requests=10, window=60)
     with get_db() as session:
         user = session.query(User).filter(User.username == req.username).first()
-    if not user or not verify_password(req.password, user.hashed_password):
+    if not user:
+        raise HTTPException(404, "未找到该用户")
+    if not verify_password(req.password, user.hashed_password):
         raise HTTPException(401, "用户名或密码错误")
 
     token = create_access_token({"sub": user.id, "username": user.username})
     return TokenResponse(
         access_token=token,
-        user=UserResponse(id=user.id, username=user.username, email=user.email, created_at=user.created_at)
+        user=UserResponse(id=user.id, username=user.username, email=user.email, created_at=user.created_at, avatar=user.avatar)
     )
 
 
@@ -90,7 +97,18 @@ def get_me(current_user: dict = Depends(get_current_user)):
         user = session.query(User).filter(User.id == current_user["user_id"]).first()
     if not user:
         raise HTTPException(404, "用户不存在")
-    return UserResponse(id=user.id, username=user.username, email=user.email, created_at=user.created_at)
+    return UserResponse(id=user.id, username=user.username, email=user.email, created_at=user.created_at, avatar=user.avatar)
+
+
+@router.put("/me", response_model=UserResponse)
+def update_me(req: AvatarUpdate, current_user: dict = Depends(get_current_user)):
+    with get_db() as session:
+        user = session.query(User).filter(User.id == current_user["user_id"]).first()
+        if not user:
+            raise HTTPException(404, "用户不存在")
+        user.avatar = req.avatar
+        session.flush()
+        return UserResponse(id=user.id, username=user.username, email=user.email, created_at=user.created_at, avatar=user.avatar)
 
 
 @router.post("/logout")

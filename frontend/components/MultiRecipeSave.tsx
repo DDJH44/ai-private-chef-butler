@@ -38,7 +38,7 @@ export function MultiRecipeSave({ recipes, onConfirm, onCancel }: MultiRecipeSav
   return (
     <div style={{ animation: "slideUp 0.35s ease both" }}>
       <div style={{
-        background: "var(--bg)", borderRadius: 20,
+        background: "var(--surface)", borderRadius: 20,
         boxShadow: "var(--shadow-raised)", overflow: "hidden",
       }}>
         {/* Header */}
@@ -61,7 +61,7 @@ export function MultiRecipeSave({ recipes, onConfirm, onCancel }: MultiRecipeSav
           </div>
           <button onClick={onCancel} style={{
             fontSize: 12, color: "var(--text-muted)", background: "none", border: "none",
-            cursor: "pointer", padding: "4px 8px", borderRadius: 8, transition: "all 0.25s ease",
+            cursor: "pointer", padding: "4px 8px", borderRadius: 8, transition: "var(--transition)",
           }}>取消</button>
         </div>
 
@@ -76,7 +76,7 @@ export function MultiRecipeSave({ recipes, onConfirm, onCancel }: MultiRecipeSav
                 padding: "10px 12px", borderRadius: 12, marginBottom: 4,
                 background: "var(--bg)", border: "none", cursor: "pointer", textAlign: "left",
                 boxShadow: selected.has(recipe.id) ? "var(--shadow-inset-sm)" : "var(--shadow-raised-xs)",
-                transition: "all 0.25s ease",
+                transition: "var(--transition)",
               }}
             >
               <div style={{
@@ -84,7 +84,7 @@ export function MultiRecipeSave({ recipes, onConfirm, onCancel }: MultiRecipeSav
                 background: selected.has(recipe.id) ? "var(--accent)" : "var(--bg)",
                 boxShadow: selected.has(recipe.id) ? "var(--shadow-accent)" : "var(--shadow-inset-sm)",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 11, color: "#fff", flexShrink: 0, transition: "all 0.25s ease",
+                fontSize: 11, color: "#fff", flexShrink: 0, transition: "var(--transition)",
               }}>
                 {selected.has(recipe.id) && "✓"}
               </div>
@@ -117,7 +117,7 @@ export function MultiRecipeSave({ recipes, onConfirm, onCancel }: MultiRecipeSav
               padding: "8px 20px", borderRadius: 12,
               background: "var(--accent)", color: "#fff",
               fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer",
-              boxShadow: "var(--shadow-accent)", transition: "all 0.25s ease",
+              boxShadow: "var(--shadow-accent)", transition: "var(--transition)",
               opacity: saving || selected.size === 0 ? 0.4 : 1,
             }}
           >

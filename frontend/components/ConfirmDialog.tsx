@@ -29,35 +29,21 @@ export function ConfirmDialog({
 
   const dialogContent = (
     <div
+      onClick={onCancel}
       style={{
         position: "fixed", inset: 0, zIndex: 9999,
         display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
         background: "rgba(0,0,0,0.25)", backdropFilter: "blur(4px)",
         animation: "fadeIn 0.2s ease",
       }}
-      onMouseDown={(e) => {
-        e.stopPropagation();
-        e.nativeEvent.stopImmediatePropagation();
-      }}
-      onClick={(e) => {
-        e.stopPropagation();
-        e.nativeEvent.stopImmediatePropagation();
-      }}
     >
       <div
+        onClick={(e) => e.stopPropagation()}
         style={{
           width: "100%", maxWidth: 380,
-          background: "var(--bg)", borderRadius: 24,
+          background: "var(--surface)", borderRadius: 24,
           boxShadow: "var(--shadow-raised-lg)", overflow: "hidden",
           animation: "scaleIn 0.2s ease both",
-        }}
-        onMouseDown={(e) => {
-          e.stopPropagation();
-          e.nativeEvent.stopImmediatePropagation();
-        }}
-        onClick={(e) => {
-          e.stopPropagation();
-          e.nativeEvent.stopImmediatePropagation();
         }}
       >
         <div style={{ padding: "20px 20px 12px" }}>
@@ -71,43 +57,25 @@ export function ConfirmDialog({
         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 20px 20px" }}>
           <button
             type="button"
-            onMouseDown={(e) => {
-              e.stopPropagation();
-              e.nativeEvent.stopImmediatePropagation();
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              e.nativeEvent.stopImmediatePropagation();
-              onCancel();
-            }}
+            onClick={onCancel}
             style={{
               flex: 1, padding: "10px 0", borderRadius: 12,
-              background: "var(--bg)", color: "var(--text-secondary)",
+              background: "var(--surface)", color: "var(--text-secondary)",
               fontSize: 13, fontWeight: 500, border: "none", cursor: "pointer",
-              boxShadow: "var(--shadow-raised-sm)", transition: "all 0.25s ease",
+              boxShadow: "var(--shadow-raised-sm)", transition: "var(--transition)",
             }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
           >
             取消
           </button>
           <button
             type="button"
-            onMouseDown={(e) => {
-              e.stopPropagation();
-              e.nativeEvent.stopImmediatePropagation();
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              e.nativeEvent.stopImmediatePropagation();
-              onConfirm();
-            }}
+            onClick={onConfirm}
             style={{
               flex: 1, padding: "10px 0", borderRadius: 12,
               background: "var(--rose)", color: "#fff",
               fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer",
-              boxShadow: "4px 4px 12px rgba(201,74,74,0.2), -3px -3px 8px rgba(255,255,255,0.6)",
-              transition: "all 0.25s ease",
+              boxShadow: "0 4px 16px rgba(212,86,74,0.2)",
+              transition: "var(--transition)",
             }}
           >
             确认

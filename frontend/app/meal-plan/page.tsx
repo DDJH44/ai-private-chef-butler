@@ -3,6 +3,7 @@
 import {useState, useEffect, useCallback} from "react";
 import {useRouter} from "next/navigation";
 import {MealPlan, MEAL_TYPES, WEEKDAYS, formatWeekRange, MealItem} from "@/types/mealPlan";
+import { MEAL_ICONS } from "@/lib/icons";
 import {getOrCreateWeekPlan, removeMealFromPlan, updateMealInPlan, clearMealPlan, MEAL_PLAN_CHANGE_EVENT} from "@/lib/mealPlanStore";
 import {generateShoppingListFromRecipes} from "@/lib/shoppingListGenerator";
 import {showToast} from "@/components/Toast";
@@ -12,10 +13,11 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import {generateMealPlan} from "@/lib/api";
 import { getPreference } from "@/lib/api";
 import {loadIngredients} from "@/lib/ingredientStore";
+import { Sparkles, Calendar, X, BookOpen, ShoppingCart, Clock } from "lucide-react";
 
 /* ---------- inline style tokens ---------- */
 const fontHeading = "var(--font-noto-serif-sc), 'Noto Serif SC', serif";
-const transition = "all 0.25s ease";
+const transition = "var(--transition)";
 
 const s = {
     page: {
@@ -27,7 +29,7 @@ const s = {
     header: {
         flexShrink: 0,
         padding: "14px 16px",
-        background: "var(--bg)",
+        background: "var(--surface)",
         boxShadow: "var(--shadow-raised)",
     },
     headerInner: {
@@ -42,7 +44,7 @@ const s = {
         width: 36,
         height: 36,
         borderRadius: 12,
-        background: "var(--bg)",
+        background: "var(--surface)",
         boxShadow: "var(--shadow-raised-sm)",
         display: "flex",
         alignItems: "center",
@@ -92,14 +94,14 @@ const s = {
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        background: "var(--bg)",
+        background: "var(--surface)",
         boxShadow: "var(--shadow-raised)",
         borderRadius: 16,
         padding: "10px 12px",
     },
     navArrow: {
         padding: 6,
-        background: "var(--bg)",
+        background: "var(--surface)",
         boxShadow: "var(--shadow-raised-xs)",
         borderRadius: 10,
         border: "none",
@@ -143,7 +145,7 @@ const s = {
         width: 56,
         height: 56,
         borderRadius: 16,
-        background: "var(--bg)",
+        background: "var(--surface)",
         boxShadow: "var(--shadow-raised)",
         display: "flex",
         alignItems: "center",
@@ -224,7 +226,7 @@ const s = {
     },
     mealCard: {
         position: "relative" as const,
-        background: "var(--bg)",
+        background: "var(--surface)",
         boxShadow: "var(--shadow-raised-sm)",
         borderRadius: 12,
         padding: 8,
@@ -278,7 +280,7 @@ const s = {
     },
     /* nutrition card */
     nutritionCard: {
-        background: "var(--bg)",
+        background: "var(--surface)",
         boxShadow: "var(--shadow-raised)",
         borderRadius: 16,
         padding: 16,
@@ -362,7 +364,7 @@ const s = {
         width: "100%",
         maxWidth: 448,
         margin: "0 16px",
-        background: "var(--bg)",
+        background: "var(--surface)",
         boxShadow: "var(--shadow-raised-lg)",
         borderRadius: 20,
         padding: 24,
@@ -472,14 +474,11 @@ const s = {
     },
 };
 
-/* ---------- injected keyframes (once) ---------- */
-if (typeof document !== "undefined" && !document.getElementById("neumorph-keyframes")) {
+/* ---------- injected hover rules (once) ---------- */
+if (typeof document !== "undefined" && !document.getElementById("meal-hover-rules")) {
     const style = document.createElement("style");
-    style.id = "neumorph-keyframes";
+    style.id = "meal-hover-rules";
     style.textContent = `
-@keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
-@keyframes scale-in { from { opacity: 0; transform: scale(0.95) } to { opacity: 1; transform: scale(1) } }
-@keyframes spin { to { transform: rotate(360deg) } }
 .meal-card-wrap:hover .meal-remove-btn { opacity: 1 !important; }
 .meal-card-wrap:hover { box-shadow: var(--shadow-raised) !important; }
 .empty-cell-wrap:hover { box-shadow: var(--shadow-raised-sm) !important; }
@@ -722,8 +721,6 @@ export default function MealPlanPage() {
                         <button
                             onClick={() => router.back()}
                             style={s.backBtn}
-                            onMouseEnter={(e) => { (e.currentTarget.style.boxShadow as any) = "var(--shadow-raised)"; }}
-                            onMouseLeave={(e) => { (e.currentTarget.style.boxShadow as any) = "var(--shadow-raised-sm)"; }}
                         >
                             ←
                         </button>
@@ -738,12 +735,10 @@ export default function MealPlanPage() {
                                 onClick={handleClearPlan}
                                 style={{
                                     ...s.aiBtn,
-                                    background: "var(--bg)",
+                                    background: "var(--surface)",
                                     color: "var(--rose)",
                                     boxShadow: "var(--shadow-raised-sm)",
                                 }}
-                                onMouseEnter={(e) => { (e.currentTarget.style.boxShadow as any) = "var(--shadow-raised)"; }}
-                                onMouseLeave={(e) => { (e.currentTarget.style.boxShadow as any) = "var(--shadow-raised-sm)"; }}
                             >
                                 清空计划
                             </button>
@@ -751,10 +746,8 @@ export default function MealPlanPage() {
                         <button
                             onClick={() => setShowGenerate(true)}
                             style={s.aiBtn}
-                            onMouseEnter={(e) => { (e.currentTarget.style.boxShadow as any) = "var(--shadow-raised)"; }}
-                            onMouseLeave={(e) => { (e.currentTarget.style.boxShadow as any) = "var(--shadow-raised-sm)"; }}
                         >
-                            ✨AI 生成
+                            <><Sparkles size={14} strokeWidth={1.8}/> AI 生成</>
                         </button>
                     </div>
                 </div>
@@ -766,8 +759,6 @@ export default function MealPlanPage() {
                     <button
                         onClick={() => goWeek(-1)}
                         style={s.navArrow}
-                        onMouseEnter={(e) => { (e.currentTarget.style.boxShadow as any) = "var(--shadow-raised-sm)"; }}
-                        onMouseLeave={(e) => { (e.currentTarget.style.boxShadow as any) = "var(--shadow-raised-xs)"; }}
                     >
                         ←
                     </button>
@@ -787,8 +778,6 @@ export default function MealPlanPage() {
                     <button
                         onClick={() => goWeek(1)}
                         style={s.navArrow}
-                        onMouseEnter={(e) => { (e.currentTarget.style.boxShadow as any) = "var(--shadow-raised-sm)"; }}
-                        onMouseLeave={(e) => { (e.currentTarget.style.boxShadow as any) = "var(--shadow-raised-xs)"; }}
                     >
                         →
                     </button>
@@ -799,16 +788,14 @@ export default function MealPlanPage() {
             <div style={s.content}>
                 {!hasAnyMeal ? (
                     <div style={s.emptyWrap}>
-                        <div style={s.emptyIcon}>📅</div>
+                        <div style={s.emptyIcon}><Calendar size={32} strokeWidth={1.5}/></div>
                         <h3 style={s.emptyTitle}>还没有膳食计划</h3>
                         <p style={s.emptyDesc}>让AI帮你规划本周三餐</p>
                         <button
                             onClick={() => setShowGenerate(true)}
                             style={s.goldenBtn}
-                            onMouseEnter={(e) => { (e.currentTarget.style.boxShadow as any) = "var(--shadow-raised-lg)"; }}
-                            onMouseLeave={(e) => { (e.currentTarget.style.boxShadow as any) = "var(--shadow-raised)"; }}
                         >
-                            ✨ AI 生成计划
+                            <><Sparkles size={14} strokeWidth={1.8}/> AI 生成计划</>
                         </button>
                     </div>
                 ) : (
@@ -834,7 +821,7 @@ export default function MealPlanPage() {
                                         <tr key={mealType.key}>
                                             <td style={s.tdLabel}>
                                                 <div style={s.labelInner}>
-                                                    <span style={s.labelIcon}>{mealType.icon}</span>
+                                                    <span style={s.labelIcon}>{MEAL_ICONS[mealType.label]}</span>
                                                     <span style={s.labelText}>{mealType.label}</span>
                                                 </div>
                                             </td>
@@ -858,7 +845,7 @@ export default function MealPlanPage() {
                                                                     style={s.removeBtn}
                                                                     onClick={(e) => { e.stopPropagation(); handleRemove(day.date, mealType.key); }}
                                                                 >
-                                                                    ✕
+                                                                    <X size={14} strokeWidth={1.8}/>
                                                                 </button>
                                                             </div>
                                                         ) : (
@@ -882,7 +869,7 @@ export default function MealPlanPage() {
                         {/* nutrition summary */}
                         <div style={s.nutritionCard}>
                             <div style={s.nutritionHeader}>
-                                <div style={s.nutritionIcon}>📊</div>
+                                <div style={s.nutritionIcon}><BookOpen size={18} strokeWidth={1.8}/></div>
                                 <span style={s.nutritionTitle}>本周营养概览</span>
                             </div>
                             <div style={s.nutritionGrid}>
@@ -906,10 +893,8 @@ export default function MealPlanPage() {
                         <button
                             onClick={handleGenerateWeekShoppingList}
                             style={s.shoppingBtn}
-                            onMouseEnter={(e) => { (e.currentTarget.style.boxShadow as any) = "var(--shadow-raised-lg)"; }}
-                            onMouseLeave={(e) => { (e.currentTarget.style.boxShadow as any) = "var(--shadow-raised)"; }}
                         >
-                            🛒 生成本周购物清单
+                            <><ShoppingCart size={14} strokeWidth={1.8}/> 生成本周购物清单</>
                         </button>
                     </div>
                 )}
@@ -966,8 +951,6 @@ export default function MealPlanPage() {
                                         ...s.textarea,
                                         opacity: generating ? 0.5 : 1,
                                     }}
-                                    onFocus={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
-                                    onBlur={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
                                 />
                             </div>
                         </div>
@@ -980,15 +963,13 @@ export default function MealPlanPage() {
                                     ...s.genBtn,
                                     opacity: generating ? 0.5 : 1,
                                 }}
-                                onMouseEnter={(e) => { if (!generating) (e.currentTarget.style.boxShadow as any) = "var(--shadow-raised)"; }}
-                                onMouseLeave={(e) => { (e.currentTarget.style.boxShadow as any) = "var(--shadow-raised-sm)"; }}
                             >
                                 {generating ? (
                                     <>
-                                        <span style={s.spinner}>⏳</span> 生成中...
+                                        <span style={s.spinner}><Clock size={14} strokeWidth={1.8}/></span> 生成中...
                                     </>
                                 ) : (
-                                    <>✨ 开始生成</>
+                                    <><Sparkles size={14} strokeWidth={1.8}/> 开始生成</>
                                 )}
                             </button>
                             <button
@@ -1014,7 +995,7 @@ export default function MealPlanPage() {
                 >
                     <div style={s.modal} onClick={(e) => e.stopPropagation()}>
                         <h3 style={s.modalTitle}>
-                            编辑 {MEAL_TYPES.find(m => m.key === editingMealType)?.icon} {MEAL_TYPES.find(m => m.key === editingMealType)?.label} · {editingDate}
+                            编辑 {MEAL_ICONS[(MEAL_TYPES.find(m => m.key === editingMealType)?.label) || ""]} {MEAL_TYPES.find(m => m.key === editingMealType)?.label} · {editingDate}
                         </h3>
 
                         <div style={{display: "flex", flexDirection: "column", gap: 12}}>
@@ -1027,8 +1008,6 @@ export default function MealPlanPage() {
                                     style={{
                                         ...s.textarea, width: "100%", boxSizing: "border-box" as const,
                                     }}
-                                    onFocus={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
-                                    onBlur={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
                                     onKeyDown={(e) => e.key === "Enter" && handleSaveMeal()}
                                 />
                             </div>
@@ -1041,8 +1020,6 @@ export default function MealPlanPage() {
                                     style={{
                                         ...s.textarea, width: "100%", boxSizing: "border-box" as const,
                                     }}
-                                    onFocus={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
-                                    onBlur={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
                                 />
                             </div>
                             <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12}}>
@@ -1056,8 +1033,6 @@ export default function MealPlanPage() {
                                         style={{
                                             ...s.textarea, width: "100%", boxSizing: "border-box" as const,
                                         }}
-                                        onFocus={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
-                                        onBlur={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
                                     />
                                 </div>
                                 <div>
@@ -1070,8 +1045,6 @@ export default function MealPlanPage() {
                                         style={{
                                             ...s.textarea, width: "100%", boxSizing: "border-box" as const,
                                         }}
-                                        onFocus={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
-                                        onBlur={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
                                     />
                                 </div>
                                 <div>
@@ -1084,8 +1057,6 @@ export default function MealPlanPage() {
                                         style={{
                                             ...s.textarea, width: "100%", boxSizing: "border-box" as const,
                                         }}
-                                        onFocus={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
-                                        onBlur={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
                                     />
                                 </div>
                                 <div>
@@ -1098,8 +1069,6 @@ export default function MealPlanPage() {
                                         style={{
                                             ...s.textarea, width: "100%", boxSizing: "border-box" as const,
                                         }}
-                                        onFocus={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
-                                        onBlur={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
                                     />
                                 </div>
                             </div>

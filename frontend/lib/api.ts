@@ -16,7 +16,7 @@ function handleAuthExpired() {
   if (typeof window === "undefined") return;
   localStorage.removeItem("auth_token");
   document.cookie = "auth_status=; path=/; max-age=0";
-  window.location.href = "/login";
+  window.location.href = "/login?reason=expired";
 }
 
 // Preference cache — read once, refresh only on explicit change
@@ -59,7 +59,7 @@ export async function request<T>(path: string, options?: RequestInit): Promise<T
     headers,
   });
   if (!res.ok) {
-    if (res.status === 401) { handleAuthExpired(); throw new Error("请先登录"); }
+    if (res.status === 401 && !path.includes("/api/v1/auth/")) { handleAuthExpired(); throw new Error("请先登录"); }
     const errorData = await res.json().catch(() => ({}));
     throw new Error((errorData as { detail?: string }).detail || "请求失败，请稍后重试");
   }
@@ -86,9 +86,13 @@ export async function uploadImageToOss(file: File): Promise<string> {
         const formData = new FormData();
         formData.append('file', file);
 
+        const token = getToken();
         const response = await fetch(`${API_BASE}/api/v1/oss/upload`, {
             method: 'POST',
             body: formData,
+            headers: {
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
         });
 
         if (!response.ok) {

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { ShoppingList, ShoppingListItem } from "@/types/shoppingList";
+import { PageHeader } from "@/components/PageHeader";
+import { getToken } from "@/lib/authStore";
 import {
     loadShoppingLists, toggleItemChecked, deleteShoppingList,
     addShoppingList, SHOPPING_LIST_CHANGE_EVENT,
@@ -11,9 +12,9 @@ import { generateUUID } from "@/lib/utils";
 import { showToast } from "@/components/Toast";
 import { AuthGuard } from "@/components/AuthGuard";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { ShoppingCart, Copy, Trash2, Check, X, Plus } from "lucide-react";
 
 export default function ShoppingListPage() {
-    const router = useRouter();
     const [lists, setLists] = useState<ShoppingList[]>([]);
     const [showCreate, setShowCreate] = useState(false);
     const [customTitle, setCustomTitle] = useState("");
@@ -21,6 +22,7 @@ export default function ShoppingListPage() {
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
     const load = useCallback(async () => {
+        if (!getToken()) return;
         const data = await loadShoppingLists();
         setLists(data);
     }, []);
@@ -49,6 +51,13 @@ export default function ShoppingListPage() {
     }, []);
 
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+    const [forceMerged, setForceMerged] = useState(false);
+    const [sectionCollapsed, setSectionCollapsed] = useState<Set<string>>(new Set());
+
+    const getViewMode = useCallback((list: ShoppingList): 'merged' | 'grouped' => {
+        if (forceMerged) return 'merged';
+        return list.source_recipes.length > 1 ? 'grouped' : 'merged';
+    }, [forceMerged]);
 
     const handleToggleCollapse = useCallback((listId: string) => {
         setCollapsed(prev => {
@@ -99,6 +108,7 @@ export default function ShoppingListPage() {
                 in_stock: false,
                 stock_amount: 0,
                 checked: false,
+                recipe_names: [customTitle.trim() || "自定义清单"],
             };
         });
 
@@ -120,6 +130,220 @@ export default function ShoppingListPage() {
         showToast(`已创建清单（${items.length} 种食材）`, "success");
     }, [customInput, customTitle]);
 
+    const handleSectionCollapse = useCallback((sectionKey: string) => {
+        setSectionCollapsed(prev => {
+            const next = new Set(prev);
+            next.has(sectionKey) ? next.delete(sectionKey) : next.add(sectionKey);
+            return next;
+        });
+    }, []);
+
+    const renderGroupedView = useCallback((list: ShoppingList) => {
+        const recipeMap = new Map<string, ShoppingListItem[]>();
+        const uncategorized: ShoppingListItem[] = [];
+
+        for (const item of list.items) {
+            if (item.recipe_names && item.recipe_names.length > 0) {
+                for (const rn of item.recipe_names) {
+                    const group = recipeMap.get(rn) || [];
+                    group.push(item);
+                    recipeMap.set(rn, group);
+                }
+            } else {
+                uncategorized.push(item);
+            }
+        }
+
+        const orderedRecipes = list.source_recipe_names.filter(n => recipeMap.has(n));
+
+        return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                {orderedRecipes.map(recipeName => {
+                    const groupItems = recipeMap.get(recipeName) || [];
+                    const sectionKey = `${list.id}::${recipeName}`;
+                    const isCollapsed = sectionCollapsed.has(sectionKey);
+
+                    return (
+                        <div key={sectionKey}>
+                            <button
+                                onClick={() => handleSectionCollapse(sectionKey)}
+                                style={{
+                                    width: "100%",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 8,
+                                    padding: "8px 10px",
+                                    borderRadius: 12,
+                                    background: "var(--bg)",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    textAlign: "left" as const,
+                                    transition: "var(--transition)",
+                                }}
+                            >
+                                <span style={{
+                                    fontSize: 10,
+                                    color: "var(--text-muted)",
+                                    transition: "var(--transition)",
+                                }}>
+                                    {isCollapsed ? "▸" : "▾"}
+                                </span>
+                                <span style={{
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    color: "var(--text)",
+                                    flex: 1,
+                                }}>
+                                    {recipeName}
+                                </span>
+                                <span style={{
+                                    fontSize: 10,
+                                    color: "var(--text-muted)",
+                                    flexShrink: 0,
+                                }}>
+                                    {groupItems.length} 种食材
+                                </span>
+                            </button>
+                            {!isCollapsed && (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 2, paddingLeft: 4 }}>
+                                    {groupItems.map(item => (
+                                        <button
+                                            key={item.id}
+                                            role="checkbox"
+                                            aria-checked={item.checked}
+                                            aria-label={`${item.ingredient_name} ${item.required_amount}${item.unit}`}
+                                            onClick={() => handleToggle(list.id, item.id)}
+                                            style={{
+                                                width: "100%",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: 12,
+                                                padding: "10px 10px",
+                                                borderRadius: 14,
+                                                background: "transparent",
+                                                border: "none",
+                                                cursor: "pointer",
+                                                transition: "var(--transition)",
+                                                textAlign: "left" as const,
+                                            }}
+                                        >
+                                            <div style={{
+                                                width: 22, height: 22, borderRadius: 8, flexShrink: 0,
+                                                display: "flex", alignItems: "center", justifyContent: "center",
+                                                fontSize: 12, fontWeight: 700, transition: "var(--transition)",
+                                                ...(item.checked
+                                                    ? { background: "var(--green)", boxShadow: "var(--shadow-raised-xs)", color: "#fff" }
+                                                    : { background: "var(--bg)", boxShadow: "var(--shadow-raised-sm)", color: "transparent" }),
+                                            }}>
+                                                {item.checked ? <Check size={12} strokeWidth={2}/> : ""}
+                                            </div>
+                                            <span style={{
+                                                fontSize: 14, flex: 1,
+                                                color: item.checked ? "var(--text-muted)" : "var(--text)",
+                                                textDecoration: item.checked ? "line-through" : "none",
+                                                textDecorationColor: item.checked ? "var(--green)" : undefined,
+                                                transition: "var(--transition)",
+                                            }}>
+                                                {item.ingredient_name}
+                                            </span>
+                                            {(item.recipe_names?.length ?? 0) > 1 && (
+                                                <span style={{
+                                                    fontSize: 9,
+                                                    color: "var(--text-muted)",
+                                                    background: "var(--bg)",
+                                                    borderRadius: 6,
+                                                    padding: "1px 5px",
+                                                    flexShrink: 0,
+                                                }}>
+                                                    +{item.recipe_names!.length - 1}
+                                                </span>
+                                            )}
+                                            <span style={{
+                                                fontSize: 11,
+                                                color: "var(--text-muted)",
+                                                flexShrink: 0,
+                                            }}>
+                                                {item.required_amount}{item.unit}
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+                {uncategorized.length > 0 && (
+                    <div>
+                        <div style={{
+                            display: "flex", alignItems: "center", gap: 8,
+                            padding: "8px 10px", borderRadius: 12,
+                            background: "var(--bg)",
+                        }}>
+                            <span style={{ fontSize: 10, color: "var(--text-muted)" }}>▾</span>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", flex: 1 }}>
+                                未分类
+                            </span>
+                            <span style={{ fontSize: 10, color: "var(--text-muted)", flexShrink: 0 }}>
+                                {uncategorized.length} 种
+                            </span>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2, paddingLeft: 4 }}>
+                            {uncategorized.map(item => (
+                                <button
+                                    key={item.id}
+                                    role="checkbox"
+                                    aria-checked={item.checked}
+                                    aria-label={`${item.ingredient_name} ${item.required_amount}${item.unit}`}
+                                    onClick={() => handleToggle(list.id, item.id)}
+                                    style={{
+                                        width: "100%",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 12,
+                                        padding: "10px 10px",
+                                        borderRadius: 14,
+                                        background: "transparent",
+                                        border: "none",
+                                        cursor: "pointer",
+                                        transition: "var(--transition)",
+                                        textAlign: "left" as const,
+                                    }}
+                                >
+                                    <div style={{
+                                        width: 22, height: 22, borderRadius: 8, flexShrink: 0,
+                                        display: "flex", alignItems: "center", justifyContent: "center",
+                                        fontSize: 12, fontWeight: 700, transition: "var(--transition)",
+                                        ...(item.checked
+                                            ? { background: "var(--green)", boxShadow: "var(--shadow-raised-xs)", color: "#fff" }
+                                            : { background: "var(--bg)", boxShadow: "var(--shadow-raised-sm)", color: "transparent" }),
+                                    }}>
+                                        {item.checked ? <Check size={12} strokeWidth={2}/> : ""}
+                                    </div>
+                                    <span style={{
+                                        fontSize: 14, flex: 1,
+                                        color: item.checked ? "var(--text-muted)" : "var(--text)",
+                                        textDecoration: item.checked ? "line-through" : "none",
+                                        textDecorationColor: item.checked ? "var(--green)" : undefined,
+                                        transition: "var(--transition)",
+                                    }}>
+                                        {item.ingredient_name}
+                                    </span>
+                                    <span style={{
+                                        fontSize: 11,
+                                        color: "var(--text-muted)",
+                                        flexShrink: 0,
+                                    }}>
+                                        {item.required_amount}{item.unit}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    }, [sectionCollapsed, handleToggle, handleSectionCollapse]);
+
     const [focusedInput, setFocusedInput] = useState<string | null>(null);
 
     return (
@@ -131,83 +355,23 @@ export default function ShoppingListPage() {
             background: "var(--bg)",
             color: "var(--text)",
         }}>
-            {/* Header */}
-            <header style={{
-                flexShrink: 0,
-                padding: "14px 16px",
-                background: "var(--bg)",
-                boxShadow: "var(--shadow-raised)",
-            }}>
-                <div style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    maxWidth: 1280,
-                    margin: "0 auto",
-                }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <button
-                            onClick={() => router.back()}
-                            style={{
-                                width: 36,
-                                height: 36,
-                                borderRadius: 14,
-                                background: "var(--bg)",
-                                boxShadow: "var(--shadow-raised-sm)",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                border: "none",
-                                cursor: "pointer",
-                                fontSize: 16,
-                                color: "var(--text)",
-                                transition: "all 0.25s ease",
-                            }}
-                        >
-                            ←
-                        </button>
-                        <div>
-                            <h1 style={{
-                                fontSize: 15,
-                                fontWeight: 700,
-                                fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif",
-                                color: "var(--text)",
-                                letterSpacing: "-0.02em",
-                                margin: 0,
-                            }}>
-                                购物清单
-                            </h1>
-                            <p style={{
-                                fontSize: 11,
-                                color: "var(--text-muted)",
-                                margin: "2px 0 0",
-                            }}>
-                                {lists.length} 个清单
-                            </p>
-                        </div>
-                    </div>
-                    <button
-                        onClick={() => setShowCreate(true)}
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 6,
-                            padding: "8px 14px",
-                            borderRadius: 14,
-                            background: "var(--bg)",
-                            boxShadow: "var(--shadow-raised-sm)",
-                            border: "none",
-                            cursor: "pointer",
-                            fontSize: 12,
-                            fontWeight: 600,
-                            color: "var(--accent)",
-                            transition: "all 0.25s ease",
-                        }}
-                    >
-                        <span style={{ fontSize: 16, lineHeight: 1 }}>＋</span> 新建清单
-                    </button>
-                </div>
-            </header>
+            <PageHeader
+              title="购物清单"
+              subtitle={`${lists.length} 个清单`}
+              rightAction={
+                <button onClick={() => setShowCreate(true)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6,
+                    padding: "8px 16px",
+                    background: "var(--accent)", color: "#fff",
+                    borderRadius: 12, fontSize: 12, fontWeight: 600,
+                    border: "none", cursor: "pointer",
+                    boxShadow: "var(--shadow-accent)", transition: "var(--transition)",
+                  }}>
+                  <Plus size={14} strokeWidth={2} /> 新建
+                </button>
+              }
+            />
 
             {/* Content */}
             <div style={{
@@ -231,7 +395,7 @@ export default function ShoppingListPage() {
                             width: 64,
                             height: 64,
                             borderRadius: 20,
-                            background: "var(--bg)",
+                            background: "var(--surface)",
                             boxShadow: "var(--shadow-raised)",
                             display: "flex",
                             alignItems: "center",
@@ -239,7 +403,7 @@ export default function ShoppingListPage() {
                             fontSize: 28,
                             marginBottom: 8,
                         }}>
-                            🛒
+                            <ShoppingCart size={32} strokeWidth={1.5} />
                         </div>
                         <h3 style={{
                             fontSize: 16,
@@ -272,7 +436,7 @@ export default function ShoppingListPage() {
                                 fontSize: 14,
                                 fontWeight: 600,
                                 color: "#fff",
-                                transition: "all 0.25s ease",
+                                transition: "var(--transition)",
                                 marginTop: 8,
                             }}
                         >
@@ -292,11 +456,12 @@ export default function ShoppingListPage() {
                                     style={{
                                         padding: 16,
                                         borderRadius: 18,
-                                        background: allDone ? "var(--green)" : "var(--bg)",
-                                        boxShadow: allDone ? "var(--shadow-raised)" : "var(--shadow-raised)",
-                                        transition: "all 0.25s ease",
+                                        background: allDone
+                                            ? "color-mix(in srgb, var(--green) 10%, var(--surface))"
+                                            : "var(--surface)",
+                                        boxShadow: "var(--shadow-raised)",
+                                        transition: "var(--transition)",
                                         opacity: allDone ? 0.85 : 1,
-                                        ...(allDone ? { background: "color-mix(in srgb, var(--green) 10%, var(--bg))" } : {}),
                                     }}
                                 >
                                     {/* List header */}
@@ -328,6 +493,29 @@ export default function ShoppingListPage() {
                                             </p>
                                         </div>
                                         <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                                            {list.source_recipes.length > 1 && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setForceMerged(v => !v);
+                                                    }}
+                                                    style={{
+                                                        padding: "4px 10px",
+                                                        borderRadius: 10,
+                                                        background: forceMerged ? "var(--bg)" : "var(--accent)",
+                                                        border: "none",
+                                                        cursor: "pointer",
+                                                        color: forceMerged ? "var(--text-secondary)" : "#fff",
+                                                        fontSize: 11,
+                                                        fontWeight: 600,
+                                                        transition: "var(--transition)",
+                                                        flexShrink: 0,
+                                                        whiteSpace: "nowrap",
+                                                    }}
+                                                >
+                                                    {forceMerged ? "按菜谱分组" : "合并显示"}
+                                                </button>
+                                            )}
                                             <button
                                                 onClick={() => handleCopy(list)}
                                                 style={{
@@ -338,15 +526,13 @@ export default function ShoppingListPage() {
                                                     cursor: "pointer",
                                                     color: "var(--text-muted)",
                                                     fontSize: 13,
-                                                    transition: "all 0.25s ease",
+                                                    transition: "var(--transition)",
                                                     display: "flex",
                                                     alignItems: "center",
                                                     justifyContent: "center",
                                                 }}
-                                                onMouseEnter={e => (e.currentTarget.style.color = "var(--accent)")}
-                                                onMouseLeave={e => (e.currentTarget.style.color = "var(--text-muted)")}
                                             >
-                                                📋
+                                                <Copy size={14} strokeWidth={1.8} />
                                             </button>
                                             <button
                                                 onClick={(e) => handleDelete(list, e)}
@@ -358,15 +544,13 @@ export default function ShoppingListPage() {
                                                     cursor: "pointer",
                                                     color: "var(--text-muted)",
                                                     fontSize: 13,
-                                                    transition: "all 0.25s ease",
+                                                    transition: "var(--transition)",
                                                     display: "flex",
                                                     alignItems: "center",
                                                     justifyContent: "center",
                                                 }}
-                                                onMouseEnter={e => (e.currentTarget.style.color = "var(--rose)")}
-                                                onMouseLeave={e => (e.currentTarget.style.color = "var(--text-muted)")}
                                             >
-                                                🗑
+                                                <Trash2 size={14} strokeWidth={1.8} />
                                             </button>
                                         </div>
                                     </div>
@@ -391,7 +575,7 @@ export default function ShoppingListPage() {
                                                 borderRadius: 999,
                                                 width: `${total > 0 ? (checked / total) * 100 : 0}%`,
                                                 background: allDone ? "var(--green)" : "var(--accent)",
-                                                transition: "all 0.25s ease",
+                                                transition: "var(--transition)",
                                             }} />
                                         </div>
                                         <span style={{
@@ -399,14 +583,16 @@ export default function ShoppingListPage() {
                                             fontWeight: 600,
                                             color: allDone ? "var(--green)" : "var(--text-muted)",
                                             flexShrink: 0,
-                                            transition: "all 0.25s ease",
+                                            transition: "var(--transition)",
                                         }}>
-                                            {allDone ? "全部购齐 ✓" : `${checked}/${total}`}
+                                            {allDone ? <><Check size={12} strokeWidth={2}/> 全部购齐</> : `${checked}/${total}`}
                                         </span>
                                     </div>
 
                                     {/* Ingredient list */}
-                                    {(() => {
+                                    {getViewMode(list) === 'grouped'
+                                        ? renderGroupedView(list)
+                                        : (() => {
                                         const isLong = total > 8;
                                         const isCollapsed = collapsed.has(list.id);
                                         const visible = isLong && !isCollapsed ? list.items.slice(0, 8) : list.items;
@@ -417,6 +603,9 @@ export default function ShoppingListPage() {
                                                     {visible.map(item => (
                                                         <button
                                                             key={item.id}
+                                                            role="checkbox"
+                                                            aria-checked={item.checked}
+                                                            aria-label={`${item.ingredient_name} ${item.required_amount}${item.unit}`}
                                                             onClick={() => handleToggle(list.id, item.id)}
                                                             style={{
                                                                 width: "100%",
@@ -428,11 +617,9 @@ export default function ShoppingListPage() {
                                                                 background: "transparent",
                                                                 border: "none",
                                                                 cursor: "pointer",
-                                                                transition: "all 0.25s ease",
+                                                                transition: "var(--transition)",
                                                                 textAlign: "left",
                                                             }}
-                                                            onMouseEnter={e => (e.currentTarget.style.background = "var(--bg)")}
-                                                            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                                                         >
                                                             {/* Checkbox */}
                                                             <div style={{
@@ -445,7 +632,7 @@ export default function ShoppingListPage() {
                                                                 justifyContent: "center",
                                                                 fontSize: 12,
                                                                 fontWeight: 700,
-                                                                transition: "all 0.25s ease",
+                                                                transition: "var(--transition)",
                                                                 ...(item.checked
                                                                     ? {
                                                                         background: "var(--green)",
@@ -458,7 +645,7 @@ export default function ShoppingListPage() {
                                                                         color: "transparent",
                                                                     }),
                                                             }}>
-                                                                {item.checked ? "✓" : ""}
+                                                                {item.checked ? <Check size={12} strokeWidth={2}/> : ""}
                                                             </div>
                                                             <span style={{
                                                                 fontSize: 14,
@@ -466,7 +653,7 @@ export default function ShoppingListPage() {
                                                                 color: item.checked ? "var(--text-muted)" : "var(--text)",
                                                                 textDecoration: item.checked ? "line-through" : "none",
                                                                 textDecorationColor: item.checked ? "var(--green)" : undefined,
-                                                                transition: "all 0.25s ease",
+                                                                transition: "var(--transition)",
                                                             }}>
                                                                 {item.ingredient_name}
                                                             </span>
@@ -496,10 +683,8 @@ export default function ShoppingListPage() {
                                                             cursor: "pointer",
                                                             fontSize: 11,
                                                             color: "var(--text-muted)",
-                                                            transition: "all 0.25s ease",
+                                                            transition: "var(--transition)",
                                                         }}
-                                                        onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
-                                                        onMouseLeave={e => (e.currentTarget.style.color = "var(--text-muted)")}
                                                     >
                                                         {isCollapsed ? (
                                                             <>▴ 收起 ({total} 种食材)</>
@@ -532,10 +717,10 @@ export default function ShoppingListPage() {
                                                 fontSize: 13,
                                                 fontWeight: 600,
                                                 color: "#fff",
-                                                transition: "all 0.25s ease",
+                                                transition: "var(--transition)",
                                             }}
                                         >
-                                            ✓ 全部购齐，删除清单
+                                            <><Check size={14} strokeWidth={2}/> 全部购齐，删除清单</>
                                         </button>
                                     )}
                                 </div>
@@ -568,7 +753,7 @@ export default function ShoppingListPage() {
                             width: "100%",
                             maxWidth: 448,
                             borderRadius: 24,
-                            background: "var(--bg)",
+                            background: "var(--surface)",
                             boxShadow: "var(--shadow-raised-lg)",
                             padding: 24,
                             animation: "scale-in 0.25s ease both",
@@ -601,15 +786,13 @@ export default function ShoppingListPage() {
                                     color: "var(--text-muted)",
                                     fontSize: 18,
                                     lineHeight: 1,
-                                    transition: "all 0.25s ease",
+                                    transition: "var(--transition)",
                                     display: "flex",
                                     alignItems: "center",
                                     justifyContent: "center",
                                 }}
-                                onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
-                                onMouseLeave={e => (e.currentTarget.style.color = "var(--text-muted)")}
                             >
-                                ✕
+                                <X size={16} strokeWidth={1.8} />
                             </button>
                         </div>
 
@@ -640,7 +823,7 @@ export default function ShoppingListPage() {
                                 boxShadow: focusedInput === "title" ? "var(--shadow-inset-focus)" : "var(--shadow-inset-sm)",
                                 fontSize: 14,
                                 color: "var(--text)",
-                                transition: "all 0.25s ease",
+                                transition: "var(--transition)",
                             }}
                         />
 
@@ -684,7 +867,7 @@ export default function ShoppingListPage() {
                                 fontSize: 14,
                                 color: "var(--text)",
                                 resize: "none",
-                                transition: "all 0.25s ease",
+                                transition: "var(--transition)",
                                 fontFamily: "inherit",
                             }}
                         />
@@ -707,10 +890,10 @@ export default function ShoppingListPage() {
                                 fontSize: 14,
                                 fontWeight: 600,
                                 color: "#fff",
-                                transition: "all 0.25s ease",
+                                transition: "var(--transition)",
                             }}
                         >
-                            ✓ 创建清单
+                            <><Check size={14} strokeWidth={2}/> 创建清单</>
                         </button>
                     </div>
                 </div>

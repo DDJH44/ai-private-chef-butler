@@ -45,9 +45,9 @@ export interface MealPlanStore {
 export const WEEKDAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 
 export const MEAL_TYPES = [
-    {key: "breakfast" as const, label: "早餐", icon: "🌅"},
-    {key: "lunch" as const, label: "午餐", icon: "🌞"},
-    {key: "dinner" as const, label: "晚餐", icon: "🌙"},
+    {key: "breakfast" as const, label: "早餐"},
+    {key: "lunch" as const, label: "午餐"},
+    {key: "dinner" as const, label: "晚餐"},
 ];
 
 export const EMPTY_MEAL: MealItem = {

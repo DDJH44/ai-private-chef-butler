@@ -6,6 +6,7 @@ import {
   toggleFeishu, disconnectFeishu, type FeishuConfig,
 } from "@/lib/feishuApi";
 import { showToast } from "@/components/Toast";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 export function FeishuSettings() {
   const [config, setConfig] = useState<FeishuConfig | null>(null);
@@ -13,6 +14,7 @@ export function FeishuSettings() {
   const [webhookUrl, setWebhookUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [disconnectOpen, setDisconnectOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -60,8 +62,11 @@ export function FeishuSettings() {
     }
   };
 
-  const handleDisconnect = async () => {
-    if (!confirm("确定要断开飞书连接吗？")) return;
+  const handleDisconnect = () => {
+    setDisconnectOpen(true);
+  };
+  const handleDisconnectConfirm = async () => {
+    setDisconnectOpen(false);
     try {
       await disconnectFeishu();
       showToast("已断开飞书连接", "info");
@@ -72,7 +77,7 @@ export function FeishuSettings() {
   };
 
   const card: React.CSSProperties = {
-    background: "var(--bg)", borderRadius: 20, padding: 24,
+    background: "var(--surface)", borderRadius: 20, padding: 24,
     boxShadow: "var(--shadow-raised)", marginBottom: 16,
   };
 
@@ -80,7 +85,7 @@ export function FeishuSettings() {
     width: "100%", padding: "12px 16px", borderRadius: 14,
     border: "none", outline: "none", fontSize: 14, color: "var(--text)",
     background: "var(--bg)", boxShadow: "var(--shadow-inset-sm)",
-    transition: "all 0.25s ease", boxSizing: "border-box",
+    transition: "var(--transition)", boxSizing: "border-box",
   };
 
   if (loading) {
@@ -112,7 +117,7 @@ export function FeishuSettings() {
             <div key={s.num} style={{
               display: "flex", gap: 14, padding: "12px 16px", borderRadius: 14,
               background: "var(--bg)", boxShadow: "var(--shadow-raised-sm)",
-              opacity: i === 0 ? 1 : 0.55, transition: "all 0.25s ease",
+              opacity: i === 0 ? 1 : 0.55, transition: "var(--transition)",
             }}>
               <div style={{
                 width: 28, height: 28, borderRadius: 10, flexShrink: 0,
@@ -140,8 +145,6 @@ export function FeishuSettings() {
             onChange={e => setWebhookUrl(e.target.value)}
             placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxxx"
             style={inputStyle}
-            onFocus={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
-            onBlur={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
           />
         </div>
 
@@ -153,7 +156,7 @@ export function FeishuSettings() {
               flex: 1, padding: "12px 0", borderRadius: 14, border: "none", cursor: "pointer",
               fontSize: 14, fontWeight: 700, color: "#fff",
               background: "var(--accent)", boxShadow: "var(--shadow-raised-sm)",
-              opacity: saving || !webhookUrl.trim() ? 0.6 : 1, transition: "all 0.25s ease",
+              opacity: saving || !webhookUrl.trim() ? 0.6 : 1, transition: "var(--transition)",
             }}
           >
             {saving ? "保存中..." : "保存"}
@@ -182,8 +185,8 @@ export function FeishuSettings() {
               style={{
                 padding: "12px 20px", borderRadius: 14, border: "none", cursor: "pointer",
                 fontSize: 14, fontWeight: 600, color: "#fff",
-                background: "#00d6b9", boxShadow: "var(--shadow-raised-sm)",
-                opacity: saving ? 0.6 : 1, transition: "all 0.25s ease",
+                background: "var(--teal)", boxShadow: "var(--shadow-raised-sm)",
+                opacity: saving ? 0.6 : 1, transition: "var(--transition)",
               }}
             >
               保存并测试
@@ -202,10 +205,18 @@ export function FeishuSettings() {
   };
 
   return (
+    <>
+      <ConfirmDialog
+        isOpen={disconnectOpen}
+        title="断开飞书连接"
+        message="确定要断开飞书连接吗？断开后将无法收到饮食报告和菜谱推送。"
+        onCancel={() => setDisconnectOpen(false)}
+        onConfirm={handleDisconnectConfirm}
+      />
     <div style={card}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 14, background: config.enabled ? "#e6f7f1" : "var(--bg)", boxShadow: config.enabled ? "var(--shadow-raised-sm)" : "var(--shadow-inset-sm)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 14, background: config.enabled ? "var(--teal-bg)" : "var(--bg)", boxShadow: config.enabled ? "var(--shadow-raised-sm)" : "var(--shadow-inset-sm)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>
             🪽
           </div>
           <div>
@@ -213,7 +224,7 @@ export function FeishuSettings() {
               飞书集成
               <span style={{
                 marginLeft: 10, padding: "3px 10px", borderRadius: 999, fontSize: 10, fontWeight: 600,
-                background: config.enabled ? "#e6f7f1" : "var(--bg)",
+                background: config.enabled ? "var(--teal-bg)" : "var(--bg)",
                 color: config.enabled ? "#00b37a" : "var(--text-muted)",
                 boxShadow: "var(--shadow-inset-xs)",
               }}>
@@ -230,7 +241,7 @@ export function FeishuSettings() {
           onClick={handleToggle}
           style={{
             flex: 1, padding: "12px 0", borderRadius: 14, border: "none", cursor: "pointer",
-            fontSize: 14, fontWeight: 600, transition: "all 0.25s ease",
+            fontSize: 14, fontWeight: 600, transition: "var(--transition)",
             background: config.enabled ? "var(--bg)" : "var(--accent)",
             color: config.enabled ? "var(--text-secondary)" : "#fff",
             boxShadow: config.enabled ? "var(--shadow-raised-sm)" : "var(--shadow-accent)",
@@ -243,8 +254,8 @@ export function FeishuSettings() {
           disabled={testing}
           style={{
             flex: 1, padding: "12px 0", borderRadius: 14, border: "none", cursor: "pointer",
-            fontSize: 14, fontWeight: 600, color: "#00d6b9", opacity: testing ? 0.6 : 1,
-            background: "var(--bg)", boxShadow: "var(--shadow-raised-sm)", transition: "all 0.25s ease",
+            fontSize: 14, fontWeight: 600, color: "var(--teal)", opacity: testing ? 0.6 : 1,
+            background: "var(--bg)", boxShadow: "var(--shadow-raised-sm)", transition: "var(--transition)",
           }}
         >
           {testing ? "发送中..." : "发送测试"}
@@ -256,13 +267,13 @@ export function FeishuSettings() {
         style={{
           width: "100%", padding: "10px 0", borderRadius: 14, border: "none", cursor: "pointer",
           fontSize: 13, fontWeight: 500, color: "var(--text-muted)",
-          background: "transparent", transition: "all 0.25s ease",
+          background: "transparent", transition: "var(--transition)",
         }}
-        onMouseEnter={e => { e.currentTarget.style.color = "var(--rose)"; }}
-        onMouseLeave={e => { e.currentTarget.style.color = "var(--text-muted)"; }}
+        className="hover-rose"
       >
         断开飞书连接
       </button>
     </div>
+    </>
   );
 }

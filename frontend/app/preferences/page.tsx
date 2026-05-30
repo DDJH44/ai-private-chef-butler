@@ -11,6 +11,16 @@ import { loadPreference, savePreference } from "@/lib/preferenceStore";
 import { generateUUID } from "@/lib/utils";
 import { showToast } from "@/components/Toast";
 import { AuthGuard } from "@/components/AuthGuard";
+import { AlertTriangle, Leaf, Flame, Users, User, X, Save, Drumstick, Salad, UtensilsCrossed, Egg, Dumbbell } from "lucide-react";
+
+const dietIconMap: Record<string, React.ReactNode> = {
+    normal:       <UtensilsCrossed size={18} strokeWidth={1.8} />,
+    vegan:        <Leaf size={18} strokeWidth={1.8} />,
+    vegetarian:   <Egg size={18} strokeWidth={1.8} />,
+    keto:         <Drumstick size={18} strokeWidth={1.8} />,
+    fitness:      <Dumbbell size={18} strokeWidth={1.8} />,
+    low_calorie:  <Salad size={18} strokeWidth={1.8} />,
+};
 
 const styles = {
     page: {
@@ -22,7 +32,7 @@ const styles = {
     header: {
         flexShrink: 0,
         padding: "14px 16px",
-        background: "var(--bg)",
+        background: "var(--surface)",
         boxShadow: "var(--shadow-raised)",
     },
     headerInner: {
@@ -37,7 +47,7 @@ const styles = {
     backBtn: {
         width: 36,
         height: 36,
-        background: "var(--bg)",
+        background: "var(--surface)",
         boxShadow: "var(--shadow-raised-sm)",
         borderRadius: 12,
         display: "flex",
@@ -47,7 +57,7 @@ const styles = {
         cursor: "pointer",
         fontSize: 16,
         color: "var(--text)",
-        transition: "all 0.25s ease",
+        transition: "var(--transition)",
     },
     title: {
         fontSize: 15,
@@ -75,7 +85,7 @@ const styles = {
         width: "100%",
     },
     card: {
-        background: "var(--bg)",
+        background: "var(--surface)",
         boxShadow: "var(--shadow-raised)",
         borderRadius: 20,
         padding: 20,
@@ -119,11 +129,11 @@ const styles = {
         boxShadow: "var(--shadow-inset-sm)",
         border: "none",
         outline: "none",
-        transition: "all 0.25s ease",
+        transition: "var(--transition)",
     },
     addBtn: {
         padding: "10px 14px",
-        background: "var(--bg)",
+        background: "var(--surface)",
         boxShadow: "var(--shadow-raised-sm)",
         borderRadius: 14,
         fontSize: 12,
@@ -131,7 +141,7 @@ const styles = {
         color: "var(--accent)",
         border: "none",
         cursor: "pointer",
-        transition: "all 0.25s ease",
+        transition: "var(--transition)",
     },
     customTag: {
         display: "inline-flex",
@@ -152,7 +162,7 @@ const styles = {
         fontSize: 10,
         padding: 0,
         opacity: 0.7,
-        transition: "all 0.25s ease",
+        transition: "var(--transition)",
     },
     emptyText: {
         fontSize: 12,
@@ -165,10 +175,10 @@ const styles = {
         alignItems: "center",
         justifyContent: "space-between",
         padding: 12,
-        background: "var(--bg)",
+        background: "var(--surface)",
         boxShadow: "var(--shadow-raised-sm)",
         borderRadius: 16,
-        transition: "all 0.25s ease",
+        transition: "var(--transition)",
     },
     memberIconArea: {
         width: 30,
@@ -199,12 +209,12 @@ const styles = {
         cursor: "pointer",
         fontSize: 14,
         padding: 4,
-        transition: "all 0.25s ease",
+        transition: "var(--transition)",
     },
     addMemberForm: {
         marginTop: 12,
         padding: 16,
-        background: "var(--bg)",
+        background: "var(--surface)",
         boxShadow: "var(--shadow-raised-sm)",
         borderRadius: 16,
         animation: "slideUp 0.3s ease",
@@ -225,13 +235,13 @@ const styles = {
         boxShadow: "var(--shadow-inset-sm)",
         border: "none",
         outline: "none",
-        transition: "all 0.25s ease",
+        transition: "var(--transition)",
         boxSizing: "border-box" as const,
     },
     cancelBtn: {
         flex: 1,
         padding: "10px 0",
-        background: "var(--bg)",
+        background: "var(--surface)",
         boxShadow: "var(--shadow-raised-sm)",
         borderRadius: 14,
         fontSize: 12,
@@ -239,7 +249,7 @@ const styles = {
         color: "var(--text-muted)",
         border: "none",
         cursor: "pointer",
-        transition: "all 0.25s ease",
+        transition: "var(--transition)",
     },
     confirmBtn: {
         flex: 1,
@@ -252,7 +262,7 @@ const styles = {
         color: "#fff",
         border: "none",
         cursor: "pointer",
-        transition: "all 0.25s ease",
+        transition: "var(--transition)",
     },
     addMemberBtn: {
         background: "none",
@@ -263,13 +273,13 @@ const styles = {
         padding: 6,
         borderRadius: 10,
         boxShadow: "var(--shadow-raised-xs)",
-        transition: "all 0.25s ease",
+        transition: "var(--transition)",
         lineHeight: 1,
     },
     bottomBar: {
         flexShrink: 0,
         padding: "12px 16px",
-        background: "var(--bg)",
+        background: "var(--surface)",
         boxShadow: "0 -4px 12px rgba(0,0,0,0.06)",
     },
     saveBtn: {
@@ -287,7 +297,7 @@ const styles = {
         color: "#fff",
         border: "none",
         cursor: "pointer",
-        transition: "all 0.25s ease",
+        transition: "var(--transition)",
         fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif",
     },
     badge: {
@@ -310,7 +320,7 @@ const styles = {
         WebkitAppearance: "none" as const,
         appearance: "none" as const,
         cursor: "pointer",
-        transition: "all 0.25s ease",
+        transition: "var(--transition)",
     },
     sliderLabel: {
         fontSize: 12,
@@ -330,8 +340,8 @@ const allergyPill = (selected: boolean): React.CSSProperties => ({
     fontWeight: 600,
     border: "none",
     cursor: "pointer",
-    transition: "all 0.25s ease",
-    background: selected ? "var(--rose)" : "var(--bg)",
+    transition: "var(--transition)",
+    background: selected ? "var(--rose)" : "var(--surface)",
     color: selected ? "#fff" : "var(--text-secondary)",
     boxShadow: selected ? "var(--shadow-inset-sm)" : "var(--shadow-raised-xs)",
 });
@@ -345,8 +355,8 @@ const dietCard = (selected: boolean): React.CSSProperties => ({
     border: "none",
     textAlign: "left" as const,
     cursor: "pointer",
-    transition: "all 0.25s ease",
-    background: "var(--bg)",
+    transition: "var(--transition)",
+    background: "var(--surface)",
     boxShadow: selected ? "var(--shadow-inset)" : "var(--shadow-raised-sm)",
 });
 
@@ -363,8 +373,8 @@ const rolePill = (selected: boolean): React.CSSProperties => ({
     fontWeight: 600,
     border: "none",
     cursor: "pointer",
-    transition: "all 0.25s ease",
-    background: selected ? "var(--accent)" : "var(--bg)",
+    transition: "var(--transition)",
+    background: selected ? "var(--accent)" : "var(--surface)",
     color: selected ? "#fff" : "var(--text-muted)",
     boxShadow: selected ? "var(--shadow-inset-sm)" : "var(--shadow-raised-xs)",
 });
@@ -449,10 +459,6 @@ export default function PreferencesPage() {
         <div style={styles.page}>
             {/* Global range input styles */}
             <style>{`
-                @keyframes slideUp {
-                    from { opacity: 0; transform: translateY(12px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
                 input[type="range"] {
                     -webkit-appearance: none;
                     appearance: none;
@@ -499,8 +505,6 @@ export default function PreferencesPage() {
                         <button
                             onClick={() => router.back()}
                             style={styles.backBtn}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised)"; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
                         >
                             ←
                         </button>
@@ -519,7 +523,7 @@ export default function PreferencesPage() {
                 <div style={styles.card}>
                     <div style={styles.sectionHeader}>
                         <div style={{ ...styles.sectionIcon, background: "var(--accent)" }}>
-                            ⚠
+                            <AlertTriangle size={18} strokeWidth={1.8} />
                         </div>
                         <div>
                             <h2 style={styles.sectionTitle}>过敏原</h2>
@@ -532,16 +536,6 @@ export default function PreferencesPage() {
                                 key={item}
                                 onClick={() => toggleAllergy(item)}
                                 style={allergyPill(preference.allergies.includes(item))}
-                                onMouseEnter={e => {
-                                    if (!preference.allergies.includes(item)) {
-                                        (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised)";
-                                    }
-                                }}
-                                onMouseLeave={e => {
-                                    if (!preference.allergies.includes(item)) {
-                                        (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-xs)";
-                                    }
-                                }}
                             >
                                 {item}
                             </button>
@@ -558,8 +552,6 @@ export default function PreferencesPage() {
                             onKeyDown={e => e.key === 'Enter' && addCustomAllergy()}
                         />
                         <button onClick={addCustomAllergy} style={styles.addBtn}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised)"; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
                         >
                             添加
                         </button>
@@ -576,7 +568,7 @@ export default function PreferencesPage() {
                                         }))}
                                         style={styles.customTagClose}
                                     >
-                                        ✕
+                                        <X size={14} strokeWidth={1.8} />
                                     </button>
                                 </span>
                             ))}
@@ -588,7 +580,7 @@ export default function PreferencesPage() {
                 <div style={styles.card}>
                     <div style={styles.sectionHeader}>
                         <div style={{ ...styles.sectionIcon, background: "var(--green)" }}>
-                            🌿
+                            <Leaf size={18} strokeWidth={1.8} />
                         </div>
                         <div>
                             <h2 style={styles.sectionTitle}>饮食类型</h2>
@@ -601,18 +593,8 @@ export default function PreferencesPage() {
                                 key={diet.value}
                                 onClick={() => setPreference(prev => ({ ...prev, diet_type: diet.value }))}
                                 style={dietCard(preference.diet_type === diet.value)}
-                                onMouseEnter={e => {
-                                    if (preference.diet_type !== diet.value) {
-                                        (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised)";
-                                    }
-                                }}
-                                onMouseLeave={e => {
-                                    if (preference.diet_type !== diet.value) {
-                                        (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)";
-                                    }
-                                }}
                             >
-                                <span style={{ fontSize: 20 }}>{diet.icon}</span>
+                                <span style={{ display: "inline-flex", alignItems: "center" }}>{dietIconMap[diet.value]}</span>
                                 <span style={dietLabel(preference.diet_type === diet.value)}>
                                     {diet.name}
                                 </span>
@@ -625,7 +607,7 @@ export default function PreferencesPage() {
                 <div style={styles.card}>
                     <div style={styles.sectionHeader}>
                         <div style={{ ...styles.sectionIcon, background: "var(--rose)" }}>
-                            🔥
+                            <Flame size={18} strokeWidth={1.8} />
                         </div>
                         <div>
                             <h2 style={styles.sectionTitle}>口味偏好</h2>
@@ -664,7 +646,7 @@ export default function PreferencesPage() {
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                         <div style={styles.sectionHeader}>
                             <div style={{ ...styles.sectionIcon, background: "var(--golden)" }}>
-                                👥
+                                <Users size={18} strokeWidth={1.8} />
                             </div>
                             <div>
                                 <h2 style={styles.sectionTitle}>家庭成员</h2>
@@ -674,8 +656,6 @@ export default function PreferencesPage() {
                         <button
                             onClick={() => setShowAddMember(true)}
                             style={styles.addMemberBtn}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised)"; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-xs)"; }}
                         >
                             ＋
                         </button>
@@ -688,7 +668,7 @@ export default function PreferencesPage() {
                                 <div key={member.id} style={styles.memberCard}>
                                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                                         <div style={styles.memberIconArea}>
-                                            <span style={{ fontSize: 12 }}>👤</span>
+                                            <User size={18} strokeWidth={1.8} />
                                         </div>
                                         <div>
                                             <p style={styles.memberName}>{getRoleLabel(member.role)}</p>
@@ -697,11 +677,9 @@ export default function PreferencesPage() {
                                     </div>
                                     <button
                                         onClick={() => removeMember(member.id)}
-                                        style={styles.removeBtn}
-                                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "var(--rose)"; }}
-                                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "var(--text-muted)"; }}
+                                        className="hover-rose" style={styles.removeBtn}
                                     >
-                                        ✕
+                                        <X size={14} strokeWidth={1.8} />
                                     </button>
                                 </div>
                             ))}
@@ -739,16 +717,6 @@ export default function PreferencesPage() {
                                         key={role.value}
                                         onClick={() => setNewMember(prev => ({ ...prev, role: role.value as FamilyMember["role"] }))}
                                         style={rolePill(newMember.role === role.value)}
-                                        onMouseEnter={e => {
-                                            if (newMember.role !== role.value) {
-                                                (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised)";
-                                            }
-                                        }}
-                                        onMouseLeave={e => {
-                                            if (newMember.role !== role.value) {
-                                                (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-xs)";
-                                            }
-                                        }}
                                     >
                                         {role.label}
                                     </button>
@@ -758,8 +726,6 @@ export default function PreferencesPage() {
                                 <button
                                     onClick={() => setShowAddMember(false)}
                                     style={styles.cancelBtn}
-                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised)"; }}
-                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
                                 >
                                     取消
                                 </button>
@@ -777,10 +743,8 @@ export default function PreferencesPage() {
                 <button
                     onClick={handleSave}
                     style={styles.saveBtn}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(-1px)"; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(0)"; }}
                 >
-                    💾 保存偏好设置
+                    <Save size={14} strokeWidth={1.8} /> 保存偏好设置
                 </button>
             </div>
         </div>

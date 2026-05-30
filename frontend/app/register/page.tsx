@@ -3,6 +3,7 @@ import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
+import { ChefHat } from "lucide-react";
 
 function RegisterForm() {
   const router = useRouter();
@@ -46,21 +47,21 @@ function RegisterForm() {
         <div className="flex items-center gap-5 max-w-5xl mx-auto">
           <button onClick={() => router.back()}
             style={{
-              width: 42, height: 42, background: "var(--bg)", borderRadius: 14,
+              width: 42, height: 42, background: "var(--surface)", borderRadius: 14,
               boxShadow: "var(--shadow-raised-sm)", display: "flex", alignItems: "center", justifyContent: "center",
               border: "none", cursor: "pointer", fontSize: 18, color: "var(--text-secondary)",
             }}
           >←</button>
-          <h1 style={{ fontSize: 18, fontWeight: 700, color: "var(--text)" }}>注册</h1>
+          <h1 style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>注册</h1>
         </div>
       </header>
       <div className="flex-1 flex items-center justify-center px-6 pb-16">
         <div style={{
           width: "100%", maxWidth: 400, padding: 32,
-          background: "var(--bg)", borderRadius: 24, boxShadow: "var(--shadow-raised-lg)",
+          background: "var(--surface)", borderRadius: 24, boxShadow: "var(--shadow-raised-lg)",
         }}>
           <div style={{ textAlign: "center", marginBottom: 28 }}>
-            <span style={{ fontSize: 40 }}>👨‍🍳</span>
+            <ChefHat size={40} strokeWidth={1.5} style={{ color: "var(--accent)" }} />
             <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", marginTop: 8 }}>创建账号</h2>
           </div>
 
@@ -78,8 +79,6 @@ function RegisterForm() {
               borderRadius: 14, boxShadow: "var(--shadow-inset-sm)", fontSize: 15, color: "var(--text)",
               outline: "none", marginBottom: 16, boxSizing: "border-box",
             }}
-            onFocus={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
-            onBlur={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
           />
 
           <input value={email} onChange={e => setEmail(e.target.value)}
@@ -89,8 +88,6 @@ function RegisterForm() {
               borderRadius: 14, boxShadow: "var(--shadow-inset-sm)", fontSize: 15, color: "var(--text)",
               outline: "none", marginBottom: 16, boxSizing: "border-box",
             }}
-            onFocus={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
-            onBlur={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
           />
 
           <input value={password} onChange={e => setPassword(e.target.value)}
@@ -100,8 +97,6 @@ function RegisterForm() {
               borderRadius: 14, boxShadow: "var(--shadow-inset-sm)", fontSize: 15, color: "var(--text)",
               outline: "none", marginBottom: 24, boxSizing: "border-box",
             }}
-            onFocus={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
-            onBlur={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
           />
 
           <button onClick={handleSubmit} disabled={loading}

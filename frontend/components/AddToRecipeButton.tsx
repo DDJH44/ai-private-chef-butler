@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { addRecipe } from "@/lib/recipeStore";
 import { parseRecipeFromMessage } from "@/lib/recipeParser";
+import { Check, AlertTriangle, BookOpen } from "lucide-react";
 
 interface AddToRecipeButtonProps {
   messageContent: string;
@@ -36,11 +37,11 @@ export function AddToRecipeButton({ messageContent, onSuccess, onError }: AddToR
   };
 
   const getStatusText = () => { if (adding) return "保存中..."; if (added) return "已保存"; return "保存到菜谱栏"; };
-  const getIcon = () => { if (adding) return "⏳"; if (added) return "✓"; if (error) return "⚠"; return "📖"; };
+  const getIcon = () => { if (adding) return "⏳"; if (added) return <Check size={14} strokeWidth={2}/>; if (error) return <AlertTriangle size={14} strokeWidth={1.8}/>; return <BookOpen size={14} strokeWidth={1.8}/>; };
   const getColors = () => {
-    if (error) return { bg: "var(--bg)", color: "var(--rose)", shadow: "var(--shadow-raised-sm)" };
-    if (added) return { bg: "var(--bg)", color: "var(--green)", shadow: "var(--shadow-raised-sm)" };
-    return { bg: "var(--bg)", color: "var(--accent)", shadow: "var(--shadow-raised-sm)" };
+    if (error) return { bg: "var(--surface)", color: "var(--rose)", shadow: "var(--shadow-raised-sm)" };
+    if (added) return { bg: "var(--surface)", color: "var(--green)", shadow: "var(--shadow-raised-sm)" };
+    return { bg: "var(--surface)", color: "var(--accent)", shadow: "var(--shadow-raised-sm)" };
   };
 
   const colors = getColors();
@@ -54,12 +55,9 @@ export function AddToRecipeButton({ messageContent, onSuccess, onError }: AddToR
           background: colors.bg, color: colors.color,
           fontSize: 14, fontWeight: 500, border: "none",
           cursor: adding || added ? "not-allowed" : "pointer",
-          boxShadow: colors.shadow, transition: "all 0.25s ease",
+          boxShadow: colors.shadow, transition: "var(--transition)",
           opacity: adding || added ? 0.7 : 1,
         }}
-        onMouseDown={e => { if (!adding && !added) (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-        onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = colors.shadow; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = colors.shadow; }}
         title={error ? error : "将此菜谱保存到菜谱栏"}>
         {getIcon()}<span>{getStatusText()}</span>
       </button>

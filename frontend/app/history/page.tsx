@@ -11,13 +11,15 @@ import {
 import {showToast} from "@/components/Toast";
 import { AuthGuard } from "@/components/AuthGuard";
 import DatePicker from "@/components/DatePicker";
+import { PageHeader } from "@/components/PageHeader";
+import { MessageCircle, BookOpen, ChefHat, Search, X, Trash2, Star, Calendar } from "lucide-react";
 
 type TabKey = "chat" | "view" | "cook";
 
-const TABS: {key: TabKey; label: string; icon: string}[] = [
-    {key: "chat", label: "对话历史", icon: "💬"},
-    {key: "view", label: "浏览记录", icon: "📖"},
-    {key: "cook", label: "烹饪记录", icon: "👨‍🍳"},
+const TABS: {key: TabKey; label: string; icon: React.ReactNode}[] = [
+    {key: "chat", label: "对话历史", icon: <MessageCircle size={18} strokeWidth={1.8} />},
+    {key: "view", label: "浏览记录", icon: <BookOpen size={18} strokeWidth={1.8} />},
+    {key: "cook", label: "烹饪记录", icon: <ChefHat size={18} strokeWidth={1.8} />},
 ];
 
 const styles = {
@@ -30,7 +32,7 @@ const styles = {
     header: {
         flexShrink: 0,
         padding: "14px 24px",
-        background: "var(--bg)",
+        background: "var(--surface)",
         boxShadow: "var(--shadow-raised)",
     },
     headerInner: {
@@ -50,7 +52,7 @@ const styles = {
         width: "36px",
         height: "36px",
         borderRadius: "12px",
-        background: "var(--bg)",
+        background: "var(--surface)",
         boxShadow: "var(--shadow-raised-sm)",
         display: "flex",
         alignItems: "center",
@@ -59,7 +61,7 @@ const styles = {
         cursor: "pointer",
         fontSize: "16px",
         color: "var(--text)",
-        transition: "all 0.25s ease",
+        transition: "var(--transition)",
     },
     headerTitle: {
         fontSize: "15px",
@@ -113,7 +115,7 @@ const styles = {
         fontSize: "14px",
         color: "var(--text)",
         outline: "none",
-        transition: "all 0.25s ease",
+        transition: "var(--transition)",
         boxSizing: "border-box" as const,
     },
     searchClear: {
@@ -127,7 +129,7 @@ const styles = {
         cursor: "pointer",
         fontSize: "14px",
         color: "var(--text-muted)",
-        transition: "all 0.25s ease",
+        transition: "var(--transition)",
     },
     content: {
         flex: 1,
@@ -155,7 +157,7 @@ const styles = {
         width: "56px",
         height: "56px",
         borderRadius: "18px",
-        background: "var(--bg)",
+        background: "var(--surface)",
         boxShadow: "var(--shadow-raised)",
         display: "flex",
         alignItems: "center",
@@ -177,9 +179,9 @@ const styles = {
     card: {
         padding: "16px",
         borderRadius: "18px",
-        background: "var(--bg)",
+        background: "var(--surface)",
         boxShadow: "var(--shadow-raised)",
-        transition: "all 0.25s ease",
+        transition: "var(--transition)",
     },
     metaRow: {
         display: "flex",
@@ -215,24 +217,24 @@ const styles = {
         padding: "10px",
         borderRadius: "14px",
         border: "none",
-        background: "var(--bg)",
+        background: "var(--surface)",
         boxShadow: "var(--shadow-raised-sm)",
         color: "var(--accent)",
         fontSize: "12px",
         fontWeight: 600,
         cursor: "pointer",
-        transition: "all 0.25s ease",
+        transition: "var(--transition)",
     },
     iconBtn: {
         padding: "10px",
         borderRadius: "14px",
         border: "none",
-        background: "var(--bg)",
+        background: "var(--surface)",
         boxShadow: "var(--shadow-raised-sm)",
         color: "var(--text-muted)",
         fontSize: "14px",
         cursor: "pointer",
-        transition: "all 0.25s ease",
+        transition: "var(--transition)",
     },
     viewRow: {
         display: "flex",
@@ -257,13 +259,13 @@ const styles = {
         padding: "6px 12px",
         borderRadius: "14px",
         border: "none",
-        background: "var(--bg)",
+        background: "var(--surface)",
         boxShadow: "var(--shadow-raised-sm)",
         color: "var(--accent)",
         fontSize: "12px",
         fontWeight: 600,
         cursor: "pointer",
-        transition: "all 0.25s ease",
+        transition: "var(--transition)",
     },
     clearBtn: {
         background: "none",
@@ -271,7 +273,7 @@ const styles = {
         fontSize: "10px",
         color: "var(--text-muted)",
         cursor: "pointer",
-        transition: "all 0.25s ease",
+        transition: "var(--transition)",
         alignSelf: "flex-end",
         marginBottom: "4px",
     },
@@ -325,18 +327,10 @@ function tabBtnStyle(active: boolean): React.CSSProperties {
         fontSize: "12px",
         fontWeight: 600,
         cursor: "pointer",
-        transition: "all 0.25s ease",
-        background: active ? "var(--accent)" : "var(--bg)",
+        transition: "var(--transition)",
+        background: active ? "var(--accent)" : "var(--surface)",
         color: active ? "#fff" : "var(--text-muted)",
         boxShadow: active ? "var(--shadow-raised)" : "var(--shadow-raised-xs)",
-    };
-}
-
-function deleteBtnHoverStyle(hover: boolean): React.CSSProperties {
-    return {
-        ...styles.iconBtn,
-        color: hover ? "var(--rose)" : "var(--text-muted)",
-        boxShadow: hover ? "var(--shadow-inset-sm)" : "var(--shadow-raised-sm)",
     };
 }
 
@@ -350,7 +344,6 @@ export default function HistoryPage() {
     const [searchFocused, setSearchFocused] = useState(false);
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [filterMonth, setFilterMonth] = useState<string | null>(null);
-    const [hoveredDelete, setHoveredDelete] = useState<string | null>(null);
 
     const refresh = useCallback(() => {
         setChatHistory(loadChatHistory());
@@ -405,20 +398,7 @@ export default function HistoryPage() {
     return (
         <AuthGuard>
         <div style={styles.page}>
-            {/* Header */}
-            <header style={styles.header}>
-                <div style={styles.headerInner}>
-                    <div style={styles.headerLeft}>
-                        <button onClick={() => router.back()} style={styles.backBtn}>
-                            <span>←</span>
-                        </button>
-                        <div>
-                            <h1 style={styles.headerTitle}>历史记录</h1>
-                            <p style={styles.headerSub}>对话、浏览和烹饪记录</p>
-                        </div>
-                    </div>
-                </div>
-            </header>
+            <PageHeader title="历史记录" subtitle="查看和管理你的历史数据" />
 
             {/* Tab bar + search */}
             <div style={styles.tabBarWrap}>
@@ -439,7 +419,7 @@ export default function HistoryPage() {
                 </div>
 
                 <div style={styles.searchWrap}>
-                    <span style={styles.searchIcon}>🔍</span>
+                    <Search size={16} strokeWidth={1.8} style={styles.searchIcon} />
                     <input
                         type="text"
                         placeholder="搜索记录..."
@@ -459,7 +439,7 @@ export default function HistoryPage() {
                             onClick={() => setSearchQuery("")}
                             style={styles.searchClear}
                         >
-                            ✕
+                                <X size={14} strokeWidth={1.8} />
                         </button>
                     )}
                 </div>
@@ -472,7 +452,7 @@ export default function HistoryPage() {
                     <div style={styles.listGap}>
                         {filteredChat.length === 0 ? (
                             <div style={styles.emptyState}>
-                                <div style={styles.emptyIcon}>💬</div>
+                                <div style={styles.emptyIcon}><MessageCircle size={32} strokeWidth={1.5} /></div>
                                 <h3 style={styles.emptyTitle}>没有对话历史</h3>
                                 <p style={styles.emptyDesc}>开始和AI对话后会自动记录</p>
                             </div>
@@ -480,7 +460,7 @@ export default function HistoryPage() {
                             filteredChat.map((session) => (
                                 <div key={session.session_id} style={styles.card}>
                                     <div style={styles.metaRow}>
-                                        <span style={{fontSize: "11px"}}>📅</span>
+                                        <Calendar size={14} strokeWidth={1.8} />
                                         <span style={styles.metaText}>
                                             {new Date(session.created_at).toLocaleString("zh-CN")}
                                         </span>
@@ -494,15 +474,13 @@ export default function HistoryPage() {
                                             onClick={() => router.push(`/?thread=${session.session_id}`)}
                                             style={styles.primaryBtn}
                                         >
-                                            <span>💬</span> 继续对话
+                                            <MessageCircle size={14} strokeWidth={1.8} /> 继续对话
                                         </button>
                                         <button
                                             onClick={() => handleDeleteChat(session.session_id)}
-                                            onMouseEnter={() => setHoveredDelete(session.session_id)}
-                                            onMouseLeave={() => setHoveredDelete(null)}
-                                            style={deleteBtnHoverStyle(hoveredDelete === session.session_id)}
+                                            className="hover-rose" style={{...styles.iconBtn, color: "var(--text-muted)", boxShadow: "var(--shadow-raised-sm)"}}
                                         >
-                                            🗑
+                                            <Trash2 size={14} strokeWidth={1.8} />
                                         </button>
                                     </div>
                                 </div>
@@ -516,7 +494,7 @@ export default function HistoryPage() {
                     <div style={styles.listGap}>
                         {filteredView.length === 0 ? (
                             <div style={styles.emptyState}>
-                                <div style={styles.emptyIcon}>📖</div>
+                                <div style={styles.emptyIcon}><BookOpen size={32} strokeWidth={1.5} /></div>
                                 <h3 style={styles.emptyTitle}>没有浏览记录</h3>
                                 <p style={styles.emptyDesc}>浏览菜谱后会自动记录</p>
                             </div>
@@ -543,7 +521,7 @@ export default function HistoryPage() {
                                                 onClick={() => router.push("/recipes")}
                                                 style={styles.viewBtn}
                                             >
-                                                <span>📖</span> 查看
+                                                <BookOpen size={14} strokeWidth={1.8} /> 查看
                                             </button>
                                         </div>
                                     </div>
@@ -562,13 +540,13 @@ export default function HistoryPage() {
                             style={{
                                 display: "flex", alignItems: "center", gap: 4,
                                 padding: "6px 12px", borderRadius: 10,
-                                background: "var(--bg)", boxShadow: "var(--shadow-raised-sm)",
+                                background: "var(--surface)", boxShadow: "var(--shadow-raised-sm)",
                                 border: "none", cursor: "pointer", fontSize: 13,
                                 fontWeight: 500, color: "var(--accent)",
                                 fontFamily: "inherit", touchAction: "manipulation",
                             }}
                         >
-                            📅 按月份筛选
+                            <Calendar size={14} strokeWidth={1.8} /> 按月份筛选
                         </button>
                     </div>
                     {filterMonth && (
@@ -579,7 +557,7 @@ export default function HistoryPage() {
                             <span>筛选：{filterMonth.replace("-", "年")}月</span>
                             <button onClick={() => setFilterMonth(null)} style={{
                                 padding: "2px 8px", borderRadius: 8, border: "none",
-                                background: "var(--bg)", boxShadow: "var(--shadow-raised-sm)",
+                                background: "var(--surface)", boxShadow: "var(--shadow-raised-sm)",
                                 cursor: "pointer", fontSize: 12, color: "var(--rose)",
                                 fontFamily: "inherit", touchAction: "manipulation",
                             }}>清除</button>
@@ -588,7 +566,7 @@ export default function HistoryPage() {
                     <div style={styles.listGap}>
                         {filteredCook.length === 0 ? (
                             <div style={styles.emptyState}>
-                                <div style={styles.emptyIcon}>👨‍🍳</div>
+                                <div style={styles.emptyIcon}><ChefHat size={32} strokeWidth={1.5} /></div>
                                 <h3 style={styles.emptyTitle}>没有烹饪记录</h3>
                                 <p style={styles.emptyDesc}>做完菜后可记录评分和笔记</p>
                             </div>
@@ -598,24 +576,23 @@ export default function HistoryPage() {
                                     <div style={styles.cookHeader}>
                                         <div style={styles.cookBody}>
                                             <div style={styles.cookDate}>
-                                                <span style={{fontSize: "11px"}}>📅</span>
+                                                <Calendar size={14} strokeWidth={1.8} />
                                                 <span style={styles.metaText}>{item.cook_date}</span>
                                             </div>
                                             <p style={styles.cookName}>{item.recipe_name}</p>
                                             <div style={styles.starRow}>
                                                 {[1, 2, 3, 4, 5].map((s) => (
-                                                    <span
+                                                    <Star
                                                         key={s}
+                                                        size={14}
+                                                        strokeWidth={1.8}
+                                                        fill={s <= item.rating ? "var(--golden)" : "none"}
                                                         style={{
-                                                            fontSize: "14px",
                                                             color: s <= item.rating
                                                                 ? "var(--golden)"
                                                                 : "var(--text-placeholder)",
-                                                            lineHeight: 1,
                                                         }}
-                                                    >
-                                                        ★
-                                                    </span>
+                                                    />
                                                 ))}
                                             </div>
                                             {item.notes && (
@@ -624,11 +601,9 @@ export default function HistoryPage() {
                                         </div>
                                         <button
                                             onClick={() => handleDeleteCook(item.id)}
-                                            onMouseEnter={() => setHoveredDelete(item.id)}
-                                            onMouseLeave={() => setHoveredDelete(null)}
-                                            style={deleteBtnHoverStyle(hoveredDelete === item.id)}
+                                            className="hover-rose" style={{...styles.iconBtn, color: "var(--text-muted)", boxShadow: "var(--shadow-raised-sm)"}}
                                         >
-                                            🗑
+                                            <Trash2 size={14} strokeWidth={1.8} />
                                         </button>
                                     </div>
                                 </div>

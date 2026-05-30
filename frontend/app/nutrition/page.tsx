@@ -6,6 +6,9 @@ import { showToast } from "@/components/Toast";
 import { AuthGuard } from "@/components/AuthGuard";
 import DatePicker from "@/components/DatePicker";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { Loading } from "@/components/Loading";
+import { UtensilsCrossed } from "lucide-react";
+import { MEAL_ICONS, NUTRIENT_ICONS, PageIcon } from "@/lib/icons";
 import { useFeishuStatus } from "@/hooks/useFeishuStatus";
 import { getToken } from "@/lib/authStore";
 
@@ -74,7 +77,6 @@ interface HealthEval {
 }
 
 const MEAL_TYPES = ["早餐", "午餐", "晚餐", "加餐"];
-const MEAL_ICONS: Record<string, string> = { "早餐": "🌅", "午餐": "☀️", "晚餐": "🌙", "加餐": "🍎" };
 
 const COMMON_FOODS: Record<string, { calories: number; protein: number; carbs: number; fat: number }> = {
   "米饭(100g)": { calories: 116, protein: 2.6, carbs: 25.6, fat: 0.3 },
@@ -121,6 +123,7 @@ export default function NutritionPage() {
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const fetchSummary = useCallback(async () => {
+    if (!getToken()) { setLoading(false); return; }
     setLoading(true);
     try {
       const resp = await fetch(`${API_BASE}/api/v1/nutrition/summary/${selectedDate}`, { headers: authHeaders() });
@@ -280,18 +283,15 @@ export default function NutritionPage() {
     <AuthGuard>
     <div className="flex flex-col h-full" style={{ background: "var(--bg)" }}>
       {/* Header */}
-      <header className="flex-shrink-0 px-6 sm:px-8 lg:px-12 xl:px-20 py-4" style={{ background: "var(--bg)" }}>
+      <header className="flex-shrink-0 px-6 sm:px-8 lg:px-12 xl:px-20 py-4" style={{ background: "var(--surface)" }}>
         <div className="relative flex items-center justify-between max-w-5xl sm:max-w-6xl md:max-w-7xl lg:max-w-[1200px] mx-auto">
           <div className="flex items-center gap-5">
             <button onClick={() => router.back()}
               style={{
-                width: 42, height: 42, background: "var(--bg)", borderRadius: 14,
+                width: 42, height: 42, background: "var(--surface)", borderRadius: 14,
                 boxShadow: "var(--shadow-raised-sm)", display: "flex", alignItems: "center", justifyContent: "center",
-                border: "none", cursor: "pointer", transition: "all 0.25s ease",
+                border: "none", cursor: "pointer", transition: "var(--transition)",
               }}
-              onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-              onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
             >
               <span style={{ fontSize: 18 }}>←</span>
             </button>
@@ -300,7 +300,7 @@ export default function NutritionPage() {
                 fontSize: 18, fontWeight: 700, color: "var(--text)",
                 fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif", letterSpacing: "-0.02em",
               }}>
-                📊 饮食记录
+                <span style={{ marginRight: 6, verticalAlign: "middle", display: "inline-flex" }}>{PageIcon.nutrition}</span>饮食记录
               </h1>
               <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>
                 拍照识别 · 营养追踪 · 健康评估
@@ -312,11 +312,8 @@ export default function NutritionPage() {
               display: "flex", alignItems: "center", gap: 8, padding: "10px 20px",
               background: "var(--accent)", color: "#fff", borderRadius: 14,
               fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer",
-              boxShadow: "var(--shadow-accent)", transition: "all 0.25s ease",
+              boxShadow: "var(--shadow-accent)", transition: "var(--transition)",
             }}
-            onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-accent-inset)"; }}
-            onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-accent)"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-accent)"; }}
           >
             <span style={{ fontSize: 16 }}>＋</span> 手动添加
           </button>
@@ -328,18 +325,16 @@ export default function NutritionPage() {
         <div className="flex items-center justify-center gap-6">
           <button onClick={() => navigateDate(-1)}
             style={{
-              width: 44, height: 44, background: "var(--bg)", borderRadius: 14,
+              width: 44, height: 44, background: "var(--surface)", borderRadius: 14,
               boxShadow: "var(--shadow-raised-sm)", border: "none", cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 16, color: "var(--text-secondary)", transition: "all 0.25s ease",
+              fontSize: 16, color: "var(--text-secondary)", transition: "var(--transition)",
             }}
-            onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-            onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
           >◀</button>
           <button
             onClick={() => setShowDatePicker(true)}
             style={{
-              padding: "10px 36px", background: "var(--bg)", borderRadius: 14,
+              padding: "10px 36px", background: "var(--surface)", borderRadius: 14,
               boxShadow: "var(--shadow-raised-sm)", fontSize: 15, fontWeight: 600, color: "var(--text)",
               border: "none", cursor: "pointer", fontFamily: "inherit",
               touchAction: "manipulation",
@@ -349,13 +344,11 @@ export default function NutritionPage() {
           </button>
           <button onClick={() => navigateDate(1)}
             style={{
-              width: 44, height: 44, background: "var(--bg)", borderRadius: 14,
+              width: 44, height: 44, background: "var(--surface)", borderRadius: 14,
               boxShadow: "var(--shadow-raised-sm)", border: "none", cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 16, color: "var(--text-secondary)", transition: "all 0.25s ease",
+              fontSize: 16, color: "var(--text-secondary)", transition: "var(--transition)",
             }}
-            onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-            onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
           >▶</button>
         </div>
       </div>
@@ -364,7 +357,7 @@ export default function NutritionPage() {
       <div className="flex-1 overflow-y-auto px-6 sm:px-8 lg:px-12 xl:px-20 py-4 max-w-5xl sm:max-w-6xl md:max-w-7xl lg:max-w-[1200px] mx-auto">
         {loading ? (
           <div className="empty-state pt-16">
-            <div style={{ fontSize: 16, color: "var(--text-muted)" }}>加载中...</div>
+            <Loading text="加载中..." />
           </div>
         ) : (
           <div className="space-y-6 pb-8">
@@ -373,7 +366,7 @@ export default function NutritionPage() {
               <h3 style={{
                 fontSize: 16, fontWeight: 700, color: "var(--accent)", marginBottom: 16,
                 fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif",
-              }}>📸 拍照识别</h3>
+              }}><span style={{marginRight:4,display:"inline-flex",verticalAlign:"middle"}}>{PageIcon.camera}</span>拍照识别</h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {MEAL_TYPES.map((mt) => (
                   <div key={mt} style={{ position: "relative" }}>
@@ -392,15 +385,12 @@ export default function NutritionPage() {
                       onClick={() => fileInputRefs.current[mt]?.click()}
                       disabled={analyzing !== null}
                       style={{
-                        width: "100%", padding: "20px 12px", background: "var(--bg)", borderRadius: 16,
+                        width: "100%", padding: "20px 12px", background: "var(--surface)", borderRadius: 16,
                         border: "none", cursor: analyzing ? "not-allowed" : "pointer",
-                        boxShadow: "var(--shadow-raised-sm)", transition: "all 0.25s ease",
+                        boxShadow: "var(--shadow-raised-sm)", transition: "var(--transition)",
                         display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
                         opacity: analyzing && analyzing !== mt ? 0.5 : 1,
                       }}
-                      onMouseDown={e => { if (!analyzing) (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-                      onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
                     >
                       <span style={{ fontSize: 28 }}>
                         {analyzing === mt ? "⏳" : MEAL_ICONS[mt]}
@@ -427,12 +417,12 @@ export default function NutritionPage() {
                   </h3>
                   <button onClick={() => setShowAnalysis(false)}
                     style={{
-                      width: 28, height: 28, background: "var(--bg)", borderRadius: 8,
+                      width: 28, height: 28, background: "var(--surface)", borderRadius: 8,
                       boxShadow: "var(--shadow-raised-xs)", border: "none", cursor: "pointer",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       fontSize: 14, color: "var(--text-muted)",
                     }}
-                  >✕</button>
+                  >{PageIcon.close}</button>
                 </div>
                 <div className="space-y-3">
                   {analysisResult.foods.map((food, idx) => (
@@ -448,10 +438,10 @@ export default function NutritionPage() {
                         )}
                       </div>
                       <div style={{ display: "flex", gap: 12, fontSize: 12, color: "var(--text-secondary)" }}>
-                        <span>🔥{food.calories}kcal</span>
-                        <span>🥩{food.protein}g</span>
-                        <span>🍚{food.carbs}g</span>
-                        <span>🧈{food.fat}g</span>
+                        <span><span style={{display:"inline-flex",verticalAlign:"middle",marginRight:2}}><span style={{color:"var(--text-secondary)",marginRight:4,fontWeight:700}}>•</span></span>{food.calories}kcal</span>
+                        <span><span style={{display:"inline-flex",verticalAlign:"middle",marginRight:2}}><span style={{color:"var(--text-secondary)",marginRight:4,fontWeight:700}}>•</span></span>{food.protein}g</span>
+                        <span><span style={{display:"inline-flex",verticalAlign:"middle",marginRight:2}}><span style={{color:"var(--text-secondary)",marginRight:4,fontWeight:700}}>•</span></span>{food.carbs}g</span>
+                        <span><span style={{display:"inline-flex",verticalAlign:"middle",marginRight:2}}><span style={{color:"var(--text-secondary)",marginRight:4,fontWeight:700}}>•</span></span>{food.fat}g</span>
                       </div>
                     </div>
                   ))}
@@ -461,7 +451,7 @@ export default function NutritionPage() {
                   borderRadius: 12, boxShadow: "var(--shadow-inset-sm)",
                   fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.6,
                 }}>
-                  💡 {analysisResult.summary}
+                  <span style={{display:"inline-flex",verticalAlign:"middle",marginRight:4}}>{PageIcon.sparkle}</span> {analysisResult.summary}
                 </div>
               </div>
             )}
@@ -488,7 +478,7 @@ export default function NutritionPage() {
                   <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6 }}>蛋白质</div>
                 </div>
                 <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 28, fontWeight: 700, color: "#3b82f6" }} className="sm:text-[36px]">
+                  <div style={{ fontSize: 28, fontWeight: 700, color: "var(--blue)" }} className="sm:text-[36px]">
                     {summary.total_carbs.toFixed(0)}
                   </div>
                   <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6 }}>碳水</div>
@@ -517,23 +507,21 @@ export default function NutritionPage() {
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                     background: "var(--accent)", color: "#fff", borderRadius: 14,
                     fontSize: 15, fontWeight: 600, border: "none", cursor: "pointer",
-                    boxShadow: "var(--shadow-accent)", transition: "all 0.25s ease",
+                    boxShadow: "var(--shadow-accent)", transition: "var(--transition)",
                     opacity: evaluating || summary.meals.length === 0 ? 0.6 : 1,
                   }}
                 >
-                  {evaluating ? "⏳ AI评估中..." : "🏥 健康评估"}
+                  {evaluating ? <><span style={{display:"inline-flex",verticalAlign:"middle",marginRight:4}}>{PageIcon.clock}</span>AI评估中...</> : <><span style={{display:"inline-flex",verticalAlign:"middle",marginRight:4}}>{PageIcon.nutrition}</span>健康评估</>}
                 </button>
                 {feishuConfigured ? (
                 <button onClick={handleShareToFeishu}
                   style={{
                     flex: 1, padding: "14px 0",
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                    background: "var(--bg)", color: "#00d6b9", borderRadius: 14,
+                    background: "var(--surface)", color: "var(--teal)", borderRadius: 14,
                     fontSize: 15, fontWeight: 600, border: "none", cursor: "pointer",
-                    boxShadow: "var(--shadow-raised-sm)", transition: "all 0.25s ease",
+                    boxShadow: "var(--shadow-raised-sm)", transition: "var(--transition)",
                   }}
-                  onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-                  onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
                 >
                   🪽 推送飞书
                 </button>
@@ -542,9 +530,9 @@ export default function NutritionPage() {
                   style={{
                     flex: 1, padding: "14px 0",
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                    background: "var(--bg)", color: "var(--text-muted)", borderRadius: 14,
+                    background: "var(--surface)", color: "var(--text-muted)", borderRadius: 14,
                     fontSize: 15, fontWeight: 600, border: "none", cursor: "pointer",
-                    boxShadow: "var(--shadow-raised-sm)", transition: "all 0.25s ease",
+                    boxShadow: "var(--shadow-raised-sm)", transition: "var(--transition)",
                     opacity: 0.6,
                   }}
                 >
@@ -560,7 +548,7 @@ export default function NutritionPage() {
                 <h3 style={{
                   fontSize: 16, fontWeight: 700, color: "var(--accent)", marginBottom: 20,
                   fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif",
-                }}>🏥 健康评估</h3>
+                }}><span style={{marginRight:4,display:"inline-flex",verticalAlign:"middle"}}><UtensilsCrossed size={16} strokeWidth={1.8}/></span>健康评估</h3>
                 <div style={{ display: "flex", alignItems: "center", gap: 24, marginBottom: 20 }}>
                   <div style={{
                     width: 80, height: 80, borderRadius: "50%",
@@ -598,10 +586,10 @@ export default function NutritionPage() {
               <h3 style={{
                 fontSize: 16, fontWeight: 700, color: "var(--accent)", marginBottom: 16,
                 fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif",
-              }}>📝 饮食记录</h3>
+              }}><span style={{marginRight:4,display:"inline-flex",verticalAlign:"middle"}}>{PageIcon.recipes}</span>饮食记录</h3>
               {summary.meals.length === 0 ? (
                 <div className="empty-state" style={{ padding: "4rem 2rem" }}>
-                  <div style={{ fontSize: 48, marginBottom: 16 }}>🍽️</div>
+                  <div style={{ fontSize: 48, marginBottom: 16 }}><UtensilsCrossed size={32} strokeWidth={1.5}/></div>
                   <p style={{ fontSize: 16, color: "var(--text-muted)" }}>今日暂无记录</p>
                   <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 8 }}>拍照或手动添加开始记录</p>
                 </div>
@@ -629,19 +617,19 @@ export default function NutritionPage() {
                                 borderRadius: 14, boxShadow: "var(--shadow-inset-sm)",
                                 display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24,
                               }}>
-                                {MEAL_ICONS[mt] || "🍽️"}
+                                {MEAL_ICONS[mt] || <UtensilsCrossed size={15} strokeWidth={1.8}/>}
                               </div>
                               <div>
                                 <span style={{ fontSize: 17, fontWeight: 700, color: "var(--text)" }}>{mt}</span>
                                 <span style={{ fontSize: 13, color: "var(--text-muted)", marginLeft: 12 }}>
-                                  {items.length}种食物 · 🔥{totalCal.toFixed(0)}kcal
+                                  {items.length}种食物 · <span style={{display:"inline-flex",verticalAlign:"middle",marginRight:2}}><span style={{color:"var(--text-secondary)",marginRight:4,fontWeight:700}}>•</span></span>{totalCal.toFixed(0)}kcal
                                 </span>
                               </div>
                             </div>
                             <div style={{ display: "flex", gap: 16, fontSize: 13, color: "var(--text-secondary)" }}>
-                              <span>🥩{totalP.toFixed(0)}g</span>
-                              <span>🍚{totalC.toFixed(0)}g</span>
-                              <span>🧈{totalF.toFixed(0)}g</span>
+                              <span><span style={{display:"inline-flex",verticalAlign:"middle",marginRight:2}}><span style={{color:"var(--text-secondary)",marginRight:4,fontWeight:700}}>•</span></span>{totalP.toFixed(0)}g</span>
+                              <span><span style={{display:"inline-flex",verticalAlign:"middle",marginRight:2}}><span style={{color:"var(--text-secondary)",marginRight:4,fontWeight:700}}>•</span></span>{totalC.toFixed(0)}g</span>
+                              <span><span style={{display:"inline-flex",verticalAlign:"middle",marginRight:2}}><span style={{color:"var(--text-secondary)",marginRight:4,fontWeight:700}}>•</span></span>{totalF.toFixed(0)}g</span>
                             </div>
                           </div>
                           <div className="space-y-2">
@@ -661,19 +649,17 @@ export default function NutritionPage() {
                                 </div>
                                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
                                   {meal.calories ? (
-                                    <span style={{ fontSize: 13, color: "var(--text-muted)" }}>🔥{meal.calories}kcal</span>
+                                    <span style={{ fontSize: 13, color: "var(--text-muted)" }}><span style={{display:"inline-flex",verticalAlign:"middle",marginRight:2}}><span style={{color:"var(--text-secondary)",marginRight:4,fontWeight:700}}>•</span></span>{meal.calories}kcal</span>
                                   ) : null}
                                   <button onClick={() => setConfirmDeleteId(meal.id)}
                                     style={{
-                                      width: 28, height: 28, background: "var(--bg)", borderRadius: 8,
+                                      width: 28, height: 28, background: "var(--surface)", borderRadius: 8,
                                       boxShadow: "var(--shadow-raised-xs)", border: "none", cursor: "pointer",
                                       display: "flex", alignItems: "center", justifyContent: "center",
-                                      fontSize: 12, color: "var(--text-muted)", transition: "all 0.25s ease",
+                                      fontSize: 12, color: "var(--text-muted)", transition: "var(--transition)",
                                     }}
-                                    onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-                                    onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-xs)"; }}
                                   >
-                                    ✕
+                                    {PageIcon.close}
                                   </button>
                                 </div>
                               </div>
@@ -689,7 +675,7 @@ export default function NutritionPage() {
             </>)}
             {!summary && (
               <div className="empty-state" style={{ padding: "4rem 2rem" }}>
-                <div style={{ fontSize: 48, marginBottom: 16 }}>🍽️</div>
+                <div style={{ fontSize: 48, marginBottom: 16 }}><UtensilsCrossed size={32} strokeWidth={1.5}/></div>
                 <p style={{ fontSize: 16, color: "var(--text-muted)" }}>今日暂无记录</p>
                 <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 8 }}>点击上方拍照或"手动添加"开始记录</p>
               </div>
@@ -706,7 +692,7 @@ export default function NutritionPage() {
           background: "rgba(0,0,0,0.25)", backdropFilter: "blur(4px)", animation: "fadeIn 0.2s ease",
         }} onClick={() => setShowForm(false)}>
           <div style={{
-            width: "100%", maxWidth: 600, background: "var(--bg)",
+            width: "100%", maxWidth: 600, background: "var(--surface)",
             borderRadius: 28, boxShadow: "var(--shadow-raised-lg)", overflow: "hidden",
             animation: "scaleIn 0.25s ease both",
           }} onClick={e => e.stopPropagation()}>
@@ -716,17 +702,15 @@ export default function NutritionPage() {
               <h3 style={{
                 fontSize: 18, fontWeight: 700, color: "var(--text)",
                 fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif",
-              }}>➕ 手动添加</h3>
+              }}><span style={{marginRight:4,display:"inline-flex",verticalAlign:"middle"}}>{PageIcon.add}</span>手动添加</h3>
               <button onClick={() => setShowForm(false)}
                 style={{
-                  width: 36, height: 36, background: "var(--bg)", borderRadius: 12,
+                  width: 36, height: 36, background: "var(--surface)", borderRadius: 12,
                   boxShadow: "var(--shadow-raised-xs)", border: "none", cursor: "pointer",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 18, color: "var(--text-muted)", transition: "all 0.25s ease",
+                  fontSize: 18, color: "var(--text-muted)", transition: "var(--transition)",
                 }}
-                onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-                onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-xs)"; }}
-              >✕</button>
+              >{PageIcon.close}</button>
             </div>
 
             <div style={{ padding: "24px 28px", maxHeight: "65vh", overflowY: "auto" }}>
@@ -737,8 +721,8 @@ export default function NutritionPage() {
                     <button key={t} type="button" onClick={() => setForm((p) => ({ ...p, meal_type: t }))}
                       style={{
                         flex: 1, padding: "12px 0", borderRadius: 12, fontSize: 15, fontWeight: 600,
-                        border: "none", cursor: "pointer", transition: "all 0.25s ease",
-                        background: "var(--bg)",
+                        border: "none", cursor: "pointer", transition: "var(--transition)",
+                        background: form.meal_type === t ? "var(--bg)" : "var(--surface)",
                         color: form.meal_type === t ? "var(--accent)" : "var(--text-secondary)",
                         boxShadow: form.meal_type === t ? "var(--shadow-inset-sm)" : "var(--shadow-raised-xs)",
                       }}
@@ -753,12 +737,10 @@ export default function NutritionPage() {
                   {Object.keys(COMMON_FOODS).map((food) => (
                     <button key={food} type="button" onClick={() => handleFoodSelect(food)}
                       style={{
-                        padding: "10px 16px", background: "var(--bg)", color: "var(--accent)",
+                        padding: "10px 16px", background: "var(--surface)", color: "var(--accent)",
                         borderRadius: 12, fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer",
-                        boxShadow: "var(--shadow-raised-xs)", transition: "all 0.25s ease",
+                        boxShadow: "var(--shadow-raised-xs)", transition: "var(--transition)",
                       }}
-                      onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-                      onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-xs)"; }}
                     >{food}</button>
                   ))}
                 </div>
@@ -771,10 +753,8 @@ export default function NutritionPage() {
                   style={{
                     width: "100%", padding: "14px 18px", background: "var(--bg)", border: "none",
                     borderRadius: 14, boxShadow: "var(--shadow-inset-sm)", fontSize: 15, color: "var(--text)",
-                    outline: "none", transition: "all 0.25s ease", boxSizing: "border-box",
+                    outline: "none", transition: "var(--transition)", boxSizing: "border-box",
                   }}
-                  onFocus={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
-                  onBlur={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
                 />
               </div>
 
@@ -793,10 +773,8 @@ export default function NutritionPage() {
                       style={{
                         width: "100%", padding: "14px 18px", background: "var(--bg)", border: "none",
                         borderRadius: 14, boxShadow: "var(--shadow-inset-sm)", fontSize: 15, color: "var(--text)",
-                        outline: "none", transition: "all 0.25s ease", boxSizing: "border-box",
+                        outline: "none", transition: "var(--transition)", boxSizing: "border-box",
                       }}
-                      onFocus={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-focus)"; }}
-                      onBlur={e => { e.currentTarget.style.boxShadow = "var(--shadow-inset-sm)"; }}
                     />
                   </div>
                 ))}
@@ -806,21 +784,17 @@ export default function NutritionPage() {
             <div style={{ padding: "24px 28px", display: "flex", gap: 18 }}>
               <button onClick={() => setShowForm(false)}
                 style={{
-                  flex: 1, padding: "14px 0", background: "var(--bg)", color: "var(--text-secondary)",
+                  flex: 1, padding: "14px 0", background: "var(--surface)", color: "var(--text-secondary)",
                   borderRadius: 14, fontSize: 16, fontWeight: 600, border: "none", cursor: "pointer",
-                  boxShadow: "var(--shadow-raised-sm)", transition: "all 0.25s ease",
+                  boxShadow: "var(--shadow-raised-sm)", transition: "var(--transition)",
                 }}
-                onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)"; }}
-                onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)"; }}
               >取消</button>
               <button onClick={handleSubmit}
                 style={{
                   flex: 1, padding: "14px 0", background: "var(--accent)", color: "#fff",
                   borderRadius: 14, fontSize: 16, fontWeight: 700, border: "none", cursor: "pointer",
-                  boxShadow: "var(--shadow-accent)", transition: "all 0.25s ease",
+                  boxShadow: "var(--shadow-accent)", transition: "var(--transition)",
                 }}
-                onMouseDown={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-accent-inset)"; }}
-                onMouseUp={e => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-accent)"; }}
               >保存</button>
             </div>
           </div>

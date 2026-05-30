@@ -49,6 +49,7 @@ class RecipeCreate(BaseModel):
     reason: Optional[str] = None
     source_url: Optional[str] = None
     video_url: Optional[str] = None
+    videos: Optional[List[dict]] = []
 
 
 class RecipeUpdate(BaseModel):
@@ -65,6 +66,7 @@ class RecipeUpdate(BaseModel):
     reason: Optional[str] = None
     source_url: Optional[str] = None
     video_url: Optional[str] = None
+    videos: Optional[List[dict]] = None
     is_expanded: Optional[bool] = None
 
 
@@ -83,6 +85,7 @@ class RecipeResponse(BaseModel):
     reason: Optional[str] = None
     source_url: Optional[str] = None
     video_url: Optional[str] = None
+    videos: Optional[List[dict]] = []
     is_expanded: Optional[bool] = False
     created_at: int
     updated_at: int
@@ -116,6 +119,7 @@ class ShoppingListItemCreate(BaseModel):
     in_stock: bool = False
     stock_amount: float = 0
     checked: bool = False
+    recipe_names: Optional[List[str]] = None
 
 
 class ShoppingListCreate(BaseModel):
@@ -138,6 +142,7 @@ class ShoppingListItemResponse(BaseModel):
     in_stock: bool
     stock_amount: float
     checked: bool
+    recipe_names: Optional[List[str]] = None
 
 
 class ShoppingListResponse(BaseModel):
@@ -178,6 +183,7 @@ class UserResponse(BaseModel):
     id: str
     username: str
     email: str
+    avatar: Optional[str] = None
     created_at: int
 
 

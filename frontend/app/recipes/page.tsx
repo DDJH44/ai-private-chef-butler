@@ -1,17 +1,18 @@
 "use client";
 
 import {useState, useEffect, useCallback} from "react";
-import {useRouter} from "next/navigation";
 import {Recipe} from "@/types/recipe";
 import {RecipeCard} from "@/components/RecipeCard";
 import {RecipeDetailModal} from "@/components/RecipeDetailModal";
 import { Loading } from "@/components/Loading";
 import { showToast } from "@/components/Toast";
 import { AuthGuard } from "@/components/AuthGuard";
+import { getToken } from "@/lib/authStore";
 import {loadRecipes, RECIPE_CHANGE_EVENT, deleteRecipesBatch} from "@/lib/recipeStore";
+import { Search, X, BookOpen } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 
 export default function RecipesPage() {
-    const router = useRouter();
     const [recipes, setRecipes] = useState<Recipe[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
@@ -24,6 +25,7 @@ export default function RecipesPage() {
     const [loading, setLoading] = useState(true);
 
     const loadRecipeList = useCallback(async () => {
+        if (!getToken()) { setLoading(false); return; }
         const allRecipes = await loadRecipes();
         setRecipes(allRecipes);
         setLoading(false);
@@ -90,72 +92,7 @@ export default function RecipesPage() {
             height: "100%",
             background: "var(--bg)",
         }}>
-            {/* Header */}
-            <header style={{
-                flexShrink: 0,
-                padding: "12px 16px",
-                background: "var(--bg)",
-                boxShadow: "var(--shadow-raised-sm)",
-            }}>
-                <div style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    maxWidth: "1280px",
-                    margin: "0 auto",
-                }}>
-                    <div style={{display: "flex", alignItems: "center", gap: "12px"}}>
-                        <button
-                            onClick={() => router.back()}
-                            style={{
-                                width: "36px",
-                                height: "36px",
-                                borderRadius: "12px",
-                                border: "none",
-                                background: "var(--bg)",
-                                boxShadow: "var(--shadow-raised-sm)",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                cursor: "pointer",
-                                fontSize: "16px",
-                                color: "var(--text)",
-                                transition: "all 0.25s ease",
-                            }}
-                            onMouseDown={(e) => {
-                                (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-inset-sm)";
-                            }}
-                            onMouseUp={(e) => {
-                                (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)";
-                            }}
-                            onMouseLeave={(e) => {
-                                (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-raised-sm)";
-                            }}
-                        >
-                            ←
-                        </button>
-                        <div>
-                            <h1 style={{
-                                fontSize: "15px",
-                                fontWeight: 700,
-                                color: "var(--text)",
-                                letterSpacing: "-0.02em",
-                                margin: 0,
-                                fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif",
-                            }}>
-                                我的菜谱
-                            </h1>
-                            <p style={{
-                                fontSize: "11px",
-                                color: "var(--text-muted)",
-                                margin: "2px 0 0 0",
-                            }}>
-                                {recipes.length} 道菜谱
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </header>
+            <PageHeader title="我的菜谱" subtitle={`${recipes.length} 道菜谱`} />
 
             {/* Search */}
             <div style={{
@@ -167,17 +104,15 @@ export default function RecipesPage() {
                 marginRight: "auto",
             }}>
                 <div style={{position: "relative"}}>
-                    <span style={{
+                    <Search size={16} strokeWidth={1.8} style={{
                         position: "absolute",
                         left: "12px",
                         top: "50%",
                         transform: "translateY(-50%)",
-                        fontSize: "14px",
                         lineHeight: 1,
                         pointerEvents: "none",
-                    }}>
-                        🔍
-                    </span>
+                        color: "var(--text-muted)",
+                    }} />
                     <input
                         type="text"
                         placeholder="搜索菜谱..."
@@ -195,7 +130,7 @@ export default function RecipesPage() {
                             color: "var(--text)",
                             background: "var(--bg)",
                             boxShadow: searchFocused ? "var(--shadow-inset-focus)" : "var(--shadow-inset-sm)",
-                            transition: "all 0.25s ease",
+                            transition: "var(--transition)",
                         }}
                     />
                     {searchQuery && (
@@ -213,10 +148,10 @@ export default function RecipesPage() {
                                 fontSize: "13px",
                                 color: "var(--text-muted)",
                                 lineHeight: 1,
-                                transition: "all 0.25s ease",
+                                transition: "var(--transition)",
                             }}
                         >
-                            ✕
+                            <X size={14} strokeWidth={1.8} />
                         </button>
                     )}
                 </div>
@@ -230,8 +165,8 @@ export default function RecipesPage() {
                   <button key={tag} onClick={() => setActiveTag(activeTag === tag ? null : tag)}
                     style={{
                       padding: "5px 12px", borderRadius: 999, border: "none", cursor: "pointer",
-                      fontSize: 11, fontWeight: 600, transition: "all 0.25s ease",
-                      background: activeTag === tag ? "var(--accent)" : "var(--bg)",
+                      fontSize: 11, fontWeight: 600, transition: "var(--transition)",
+                      background: activeTag === tag ? "var(--accent)" : "var(--surface)",
                       color: activeTag === tag ? "#fff" : "var(--text-secondary)",
                       boxShadow: activeTag === tag ? "var(--shadow-accent)" : "var(--shadow-raised-xs)",
                     }}
@@ -248,8 +183,8 @@ export default function RecipesPage() {
               <button onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
                 style={{
                   padding: "5px 12px", borderRadius: 999, border: "none", cursor: "pointer",
-                  fontSize: 11, fontWeight: 600, transition: "all 0.25s ease",
-                  background: selectMode ? "var(--accent)" : "var(--bg)",
+                  fontSize: 11, fontWeight: 600, transition: "var(--transition)",
+                  background: selectMode ? "var(--accent)" : "var(--surface)",
                   color: selectMode ? "#fff" : "var(--text-secondary)",
                   boxShadow: selectMode ? "var(--shadow-accent)" : "var(--shadow-raised-xs)",
                 }}
@@ -259,7 +194,7 @@ export default function RecipesPage() {
                   <button onClick={toggleSelectAll}
                     style={{
                       padding: "5px 12px", borderRadius: 999, border: "none", cursor: "pointer",
-                      fontSize: 11, fontWeight: 600, background: "var(--bg)", color: "var(--text-secondary)",
+                      fontSize: 11, fontWeight: 600, background: "var(--surface)", color: "var(--text-secondary)",
                       boxShadow: "var(--shadow-raised-xs)",
                     }}
                   >{selectedIds.size === filteredRecipes.length ? "取消全选" : "全选"}</button>
@@ -303,7 +238,7 @@ export default function RecipesPage() {
                             width: "64px",
                             height: "64px",
                             borderRadius: "20px",
-                            background: "var(--bg)",
+                            background: "var(--surface)",
                             boxShadow: "var(--shadow-raised)",
                             display: "flex",
                             alignItems: "center",
@@ -311,7 +246,7 @@ export default function RecipesPage() {
                             fontSize: "28px",
                             marginBottom: "16px",
                         }}>
-                            🍽
+                            <BookOpen size={32} strokeWidth={1.5} />
                         </div>
                         <h3 style={{
                             fontSize: "16px",
