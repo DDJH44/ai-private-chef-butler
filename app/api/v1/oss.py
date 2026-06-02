@@ -5,7 +5,12 @@ from app.models.schemas import OSSUploadRequest, OSSUploadResponse
 from app.common.logger import logger
 import os
 from datetime import datetime
-import oss2
+try:
+    import oss2
+    OSS_AVAILABLE = True
+except ImportError:
+    oss2 = None  # type: ignore
+    OSS_AVAILABLE = False
 import httpx
 import urllib.parse
 from dotenv import load_dotenv
@@ -16,6 +21,8 @@ router = APIRouter()
 
 def _get_bucket():
     """延迟初始化 OSS Bucket，确保环境变量已加载"""
+    if not OSS_AVAILABLE:
+        raise RuntimeError("OSS SDK (oss2) 未安装，OSS 功能不可用")
     auth = oss2.Auth(
         os.getenv("OSS_ACCESS_KEY_ID"),
         os.getenv("OSS_ACCESS_KEY_SECRET")

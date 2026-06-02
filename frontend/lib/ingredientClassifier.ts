@@ -1,6 +1,8 @@
+import { IngredientCategory } from "@/types/ingredient";
+
 /** Keyword-based ingredient category classifier */
 
-const RULES: [string[], string][] = [
+const RULES: [string[], IngredientCategory][] = [
   // 调味料 — salt, sugar, oil, sauces, spices (match first: 酱油/料酒/生抽 etc)
   [
     ["盐", "糖", "酱油", "生抽", "老抽", "蚝油", "醋", "料酒", "黄酒",
@@ -52,7 +54,7 @@ const RULES: [string[], string][] = [
 ];
 
 /** Classify an ingredient name → category string */
-export function classifyIngredient(name: string): string {
+export function classifyIngredient(name: string): IngredientCategory {
   if (!name?.trim()) return "其他";
   const n = name.trim();
 

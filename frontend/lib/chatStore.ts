@@ -145,7 +145,7 @@ export function saveCurrentSession() {
             id: m.id,
             role: m.role === "assistant" ? "ai" : "user",
             content: m.content,
-            imageUrl: m.imageUrl || null,
+            imageUrl: m.imageUrl || undefined,
             timestamp: new Date(m.timestamp).toISOString(),
         })),
     });

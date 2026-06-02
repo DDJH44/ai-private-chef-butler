@@ -11,6 +11,7 @@ export interface ChatHistoryMessage {
     role: "user" | "ai";
     content: string;
     timestamp: string;
+    imageUrl?: string;
 }
 
 export interface ViewHistoryItem {

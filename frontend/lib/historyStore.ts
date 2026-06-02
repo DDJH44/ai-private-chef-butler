@@ -118,24 +118,37 @@ export function clearViewHistory(): void {
     notifyChange();
 }
 
+let _mergePending = false;
+
 export function loadCookHistory(): CookHistoryItem[] {
     const local = loadStore().cook_history;
-    // 异步拉取远程记录合并
+    // 异步拉取远程记录合并（防并发）
+    if (_mergePending) return local;
+    _mergePending = true;
     fetchRemoteCookHistory().then(remote => {
+      _mergePending = false;
       if (remote.length === 0) return;
+      // 重新读取最新本地数据，避免竞态覆盖
+      const fresh = loadStore().cook_history;
       const merged = new Map<string, CookHistoryItem>();
       for (const r of remote) merged.set(r.id, r);
-      for (const r of local) {
+      for (const r of fresh) {
         if (!merged.has(r.id) || new Date(r.created_at) > new Date(merged.get(r.id)!.created_at)) {
           merged.set(r.id, r);
         }
       }
-      const store = loadStore();
-      store.cook_history = [...merged.values()].sort((a, b) =>
+      const merged_arr = [...merged.values()].sort((a, b) =>
         new Date(b.cook_date).getTime() - new Date(a.cook_date).getTime()
       );
-      saveStore(store);
-      notifyChange();
+      // 只有数据真的变了才写，避免 notifyChange 死循环
+      const prev = JSON.stringify((loadStore().cook_history || []).map((r: CookHistoryItem) => r.id));
+      const next = JSON.stringify(merged_arr.map((r: CookHistoryItem) => r.id));
+      if (prev !== next) {
+        const store = loadStore();
+        store.cook_history = merged_arr;
+        saveStore(store);
+        notifyChange();
+      }
     });
     return local;
 }

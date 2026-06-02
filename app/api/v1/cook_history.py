@@ -12,6 +12,7 @@ router = APIRouter()
 
 
 class CookRecordCreate(BaseModel):
+    id: Optional[str] = None
     recipe_id: str = ""
     recipe_name: str
     cook_date: str
@@ -49,7 +50,7 @@ def list_records(current_user: dict = Depends(get_current_user)):
 @router.post("")
 def create_record(data: CookRecordCreate, current_user: dict = Depends(get_current_user)):
     uid = current_user["user_id"]
-    record_id = f"cook_{uuid.uuid4().hex[:12]}"
+    record_id = data.id or f"cook_{uuid.uuid4().hex[:12]}"
     now = int(time.time())
     with get_db() as session:
         record = CookRecord(

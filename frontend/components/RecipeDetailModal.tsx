@@ -85,6 +85,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
   const [cookNotes, setCookNotes] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   // Fetch full recipe content if the list view stripped it
   useEffect(() => {
@@ -171,9 +172,12 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
   };
 
   const handleSaveCookRecord = () => {
+    if (saving) return;
+    setSaving(true);
     addCookRecord({ id: generateUUID(), recipe_id: fullRecipe.id, recipe_name: fullRecipe.title, cook_date: new Date().toISOString().split("T")[0], rating: cookRating, notes: cookNotes, photos: [], created_at: new Date().toISOString() });
     showToast("烹饪记录已保存", "success");
     setShowCookModal(false); setCookRating(5); setCookNotes("");
+    setSaving(false);
   };
 
   const modalStyle: React.CSSProperties = {
@@ -579,14 +583,15 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
                   boxShadow: "var(--shadow-raised-sm)", transition: "var(--transition)",
                 }}
               >取消</button>
-              <button onClick={handleSaveCookRecord}
+              <button onClick={handleSaveCookRecord} disabled={saving}
                 style={{
                   flex: 1, padding: "10px 0", borderRadius: 12,
                   background: "var(--accent)", color: "#fff",
-                  fontSize: 14, fontWeight: 700, border: "none", cursor: "pointer",
+                  fontSize: 14, fontWeight: 700, border: "none", cursor: saving ? "not-allowed" : "pointer",
                   boxShadow: "var(--shadow-accent)", transition: "var(--transition)",
+                  opacity: saving ? 0.6 : 1,
                 }}
-              >保存</button>
+              >{saving ? "保存中..." : "保存"}</button>
             </div>
           </div>
         </div>
