@@ -31,6 +31,7 @@ dependencies = [
     "chromadb>=1.5",
     "onnxruntime>=1.26",
     "openai>=2.38",
+    "python-multipart>=0.0.30",
 ]
 
 [project.optional-dependencies]
