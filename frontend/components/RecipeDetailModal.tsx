@@ -154,8 +154,8 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
   };
 
   const handleGenerateShoppingList = async () => {
-    await generateShoppingListFromRecipes([fullRecipe]);
-    showToast(`已为「${fullRecipe.title}」生成购物清单`, "success");
+    const lists = await generateShoppingListFromRecipes([fullRecipe]);
+    showToast(`已为「${lists[0]?.source_recipe_names?.[0] || fullRecipe.title}」生成购物清单`, "success");
     router.push("/shopping-list");
   };
 

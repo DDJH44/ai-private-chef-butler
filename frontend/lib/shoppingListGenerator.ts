@@ -10,25 +10,6 @@ interface ParsedIngredient {
     unit: string;
 }
 
-interface MergedIngredient {
-    name: string;
-    totalAmount: number;
-    unit: string;
-}
-
-interface RecipeIngredientsInput {
-    recipeName: string;
-    ingredients: string[];
-    seasonings: string[];
-}
-
-interface GroupedIngredient {
-    name: string;
-    totalAmount: number;
-    unit: string;
-    recipeNames: string[];
-}
-
 const UNIT_PATTERNS: [RegExp, string][] = [
     [/(\d+(?:\.\d+)?)\s*(千克|公斤|kg)/i, '千克'],
     [/(\d+(?:\.\d+)?)\s*(克|g)/i, '克'],
@@ -61,71 +42,6 @@ export function parseIngredientString(raw: string): ParsedIngredient {
     return {name: trimmed, amount: 1, unit: '份'};
 }
 
-export function mergeIngredients(ingredientLists: string[][]): MergedIngredient[] {
-    const map = new Map<string, MergedIngredient>();
-
-    for (const list of ingredientLists) {
-        for (const raw of list) {
-            const parsed = parseIngredientString(raw);
-            const key = parsed.name;
-            const existing = map.get(key);
-            if (existing) {
-                if (existing.unit === parsed.unit || existing.unit === '份' || parsed.unit === '份') {
-                    existing.totalAmount += parsed.amount;
-                    if (existing.unit === '份' && parsed.unit !== '份') {
-                        existing.unit = parsed.unit;
-                    }
-                } else {
-                    existing.totalAmount += parsed.amount;
-                }
-            } else {
-                map.set(key, {
-                    name: parsed.name,
-                    totalAmount: parsed.amount,
-                    unit: parsed.unit,
-                });
-            }
-        }
-    }
-
-    return Array.from(map.values());
-}
-
-export function groupIngredientsByRecipe(inputs: RecipeIngredientsInput[]): GroupedIngredient[] {
-    const map = new Map<string, GroupedIngredient>();
-
-    for (const input of inputs) {
-        const allRaw = [...input.ingredients, ...input.seasonings];
-        for (const raw of allRaw) {
-            const parsed = parseIngredientString(raw);
-            const key = parsed.name;
-            const existing = map.get(key);
-            if (existing) {
-                if (existing.unit === parsed.unit || existing.unit === '份' || parsed.unit === '份') {
-                    existing.totalAmount += parsed.amount;
-                    if (existing.unit === '份' && parsed.unit !== '份') {
-                        existing.unit = parsed.unit;
-                    }
-                } else {
-                    existing.totalAmount += parsed.amount;
-                }
-                if (!existing.recipeNames.includes(input.recipeName)) {
-                    existing.recipeNames.push(input.recipeName);
-                }
-            } else {
-                map.set(key, {
-                    name: parsed.name,
-                    totalAmount: parsed.amount,
-                    unit: parsed.unit,
-                    recipeNames: [input.recipeName],
-                });
-            }
-        }
-    }
-
-    return Array.from(map.values());
-}
-
 const IGNORE_NAMES = new Set(['盐', '糖', '味精', '鸡精', '料酒', '生抽', '老抽', '醋', '胡椒', '花椒', '姜', '蒜', '葱', '油', '淀粉']);
 
 function extractIngredientsFromContent(content: string): string[] {
@@ -143,48 +59,53 @@ function extractIngredientsFromContent(content: string): string[] {
 
 export async function generateShoppingListFromRecipes(
     recipes: Recipe[],
-): Promise<ShoppingList> {
+): Promise<ShoppingList[]> {
     const inventory = loadIngredients();
+    const lists: ShoppingList[] = [];
 
-    const inputs: RecipeIngredientsInput[] = recipes.map(r => ({
-        recipeName: r.title,
-        ingredients: (r.ingredients && r.ingredients.length > 0)
-            ? r.ingredients
-            : extractIngredientsFromContent(r.content || ''),
-        seasonings: r.seasonings || [],
-    }));
+    for (const recipe of recipes) {
+        const rawIngredients = recipe.ingredients && recipe.ingredients.length > 0
+            ? recipe.ingredients
+            : extractIngredientsFromContent(recipe.content || '');
+        const allRaw = [
+            ...rawIngredients.flatMap(s => s.split(/[，,]/).map(x => x.trim()).filter(Boolean)),
+            ...(recipe.seasonings || []).flatMap(s => s.split(/[，,]/).map(x => x.trim()).filter(Boolean)),
+        ];
 
-    const grouped = groupIngredientsByRecipe(inputs);
+        const items: ShoppingListItem[] = allRaw
+            .map(raw => parseIngredientString(raw))
+            .filter(parsed => !IGNORE_NAMES.has(parsed.name) || parsed.amount >= 2)
+            .map(parsed => {
+                const stockItem = inventory.find(
+                    inv => inv.name === parsed.name || inv.name.includes(parsed.name) || parsed.name.includes(inv.name)
+                );
+                const stockAmount = stockItem ? stockItem.quantity : 0;
+                const inStock = stockItem !== undefined && stockAmount >= parsed.amount;
 
-    const items: ShoppingListItem[] = grouped
-        .filter(item => !IGNORE_NAMES.has(item.name) || item.totalAmount >= 2)
-        .map(item => {
-            const stockItem = inventory.find(
-                inv => inv.name === item.name || inv.name.includes(item.name) || item.name.includes(inv.name)
-            );
-            const stockAmount = stockItem ? stockItem.quantity : 0;
-            const inStock = stockItem !== undefined && stockAmount >= item.totalAmount;
+                return {
+                    id: generateUUID(),
+                    ingredient_name: parsed.name,
+                    required_amount: parsed.amount,
+                    unit: parsed.unit,
+                    in_stock: inStock,
+                    stock_amount: stockAmount,
+                    checked: inStock,
+                    recipe_names: [recipe.title],
+                };
+            });
 
-            return {
-                id: generateUUID(),
-                ingredient_name: item.name,
-                required_amount: item.totalAmount,
-                unit: item.unit,
-                in_stock: inStock,
-                stock_amount: stockAmount,
-                checked: inStock,
-                recipe_names: item.recipeNames.length > 0 ? item.recipeNames : undefined,
-            };
-        });
+        const list: ShoppingList = {
+            id: `list_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+            created_at: new Date().toISOString(),
+            source_recipes: [recipe.id],
+            source_recipe_names: [recipe.title],
+            items,
+            status: 'pending',
+        };
 
-    const list: ShoppingList = {
-        id: `list_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
-        created_at: new Date().toISOString(),
-        source_recipes: recipes.map(r => r.id),
-        source_recipe_names: recipes.map(r => r.title),
-        items,
-        status: 'pending',
-    };
+        const created = await addShoppingList(list);
+        lists.push(created);
+    }
 
-    return await addShoppingList(list);
+    return lists;
 }

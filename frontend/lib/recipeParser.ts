@@ -204,10 +204,10 @@ function parseList(text: string): string[] {
     .map(line => line.replace(/^[-*•]\s*/, '').replace(/^\d+\.\s*/, '').trim())
     .filter(line => line.length > 0 && !line.startsWith('#'));
 
-  // 如果只有单行且包含中文分号，可能是SAVE块压缩的步骤列表
-  if (items.length === 1 && /[；;]/.test(items[0])) {
+  // 单行含分隔符：拆分逗号/分号（食材和调味料通常逗号分隔）
+  if (items.length === 1 && /[；;，,]/.test(items[0])) {
     return items[0]
-      .split(/[；;]/)
+      .split(/[；;，,]/)
       .map(s => s.trim())
       .filter(s => s.length > 0);
   }

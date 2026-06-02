@@ -692,8 +692,8 @@ export default function MealPlanPage() {
             showToast("本周还没有安排带食材的菜品，请先生成膳食计划", "info");
             return;
         }
-        await generateShoppingListFromRecipes(recipesWithIngredients);
-        showToast(`已为本周 ${recipesWithIngredients.length} 道菜生成购物清单`, "success");
+        const lists = await generateShoppingListFromRecipes(recipesWithIngredients);
+        showToast(`已为本周 ${lists.length} 道菜分别生成购物清单`, "success");
         router.push("/shopping-list");
     }, [plan, router]);
 
