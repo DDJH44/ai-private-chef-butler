@@ -21,7 +21,7 @@ RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.li
 RUN pip install --no-cache-dir uv -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple/
 
 COPY pyproject.toml ./
-RUN uv pip install --system -e .
+RUN uv pip install --system .
 
 COPY app/ ./app/
 COPY main.py ./
