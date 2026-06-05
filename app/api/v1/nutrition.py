@@ -12,7 +12,7 @@ from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage
 from dotenv import load_dotenv
 from app.common.database import get_db
-from app.models.db import NutritionRecord
+from app.models.db import NutritionRecord, Preference
 
 load_dotenv()
 
@@ -263,6 +263,43 @@ async def analyze_photo(
         json_str = _extract_json(result_text)
         analysis = json.loads(json_str)
 
+        # RAG enrichment: replace LLM-estimated nutrition with authoritative data
+        try:
+            from app.rag.vector_store import rag_store
+            for food_data in analysis.get("foods", []):
+                food_name = food_data.get("food_name", "")
+                if not food_name or food_name == "未知食物":
+                    continue
+                hits = rag_store.search(f"{food_name} 营养成分 每100克", "nutrition", k=1)
+                if hits:
+                    doc = hits[0]["content"]
+                    # Parse nutrition from "每100g：热量Xkcal，蛋白质Xg，碳水Xg，脂肪Xg，纤维Xg，钠Xmg"
+                    # Extract estimated weight for proportional calculation
+                    weight_str = food_data.get("estimated_weight", "")
+                    weight = 100  # Default to 100g
+                    weight_match = re.search(r'(\d+)\s*(?:g|克)', weight_str)
+                    if weight_match:
+                        weight = float(weight_match.group(1))
+                    ratio = weight / 100.0
+
+                    cal_match = re.search(r'热量(\d+)kcal', doc)
+                    pro_match = re.search(r'蛋白质(\d+\.?\d*)g', doc)
+                    carb_match = re.search(r'碳水(\d+\.?\d*)g', doc)
+                    fat_match = re.search(r'脂肪(\d+\.?\d*)g', doc)
+                    fib_match = re.search(r'纤维(\d+\.?\d*)g', doc)
+                    sod_match = re.search(r'钠(\d+\.?\d*)mg', doc)
+
+                    if cal_match:
+                        food_data["calories"] = round(float(cal_match.group(1)) * ratio, 1)
+                        food_data["protein"] = round(float(pro_match.group(1)) * ratio, 1) if pro_match else food_data.get("protein", 0)
+                        food_data["carbs"] = round(float(carb_match.group(1)) * ratio, 1) if carb_match else food_data.get("carbs", 0)
+                        food_data["fat"] = round(float(fat_match.group(1)) * ratio, 1) if fat_match else food_data.get("fat", 0)
+                        food_data["fiber"] = round(float(fib_match.group(1)) * ratio, 1) if fib_match else food_data.get("fiber", 0)
+                        food_data["sodium"] = round(float(sod_match.group(1)) * ratio, 1) if sod_match else food_data.get("sodium", 0)
+                        logger.info(f"[RAG] 富营养数据: {food_name} (weight={weight}g, ratio={ratio:.2f})")
+        except Exception as rag_err:
+            logger.warning(f"[RAG] 营养数据增强失败，回退到LLM估算: {rag_err}")
+
         now = int(datetime.now().timestamp())
         foods = []
         with get_db() as session:
@@ -346,7 +383,22 @@ async def health_evaluation(date_str: str, current_user: dict = Depends(get_curr
 总碳水：{total_carbs:.0f}g
 总脂肪：{total_fat:.0f}g
 
-各餐详情：{meal_summary}
+各餐详情：{meal_summary}"""
+
+    # Inject RAG sports nutrition knowledge for fitness users
+    try:
+        from app.rag.vector_store import rag_store
+        pref = session.query(Preference).filter(Preference.user_id == uid).first()
+        diet_type_user = (pref.data.get("diet_type", "normal") if pref and pref.data else "normal")
+        if diet_type_user in ("fitness", "low_calorie"):
+            hits = rag_store.search(diet_type_user + " 每日营养标准 蛋白质 碳水 推荐摄入", "fitness", k=2)
+            if hits:
+                rag_text = "\n".join(h["content"] for h in hits)
+                prompt += f"\n\n专业知识参考（用户为{diet_type_user}类型，请参考以下运动营养学标准进行评分）：\n{rag_text}"
+    except Exception as e:
+        logger.warning(f"[RAG] 健康评估知识注入失败: {e}")
+
+    prompt += """
 
 请严格按照以下JSON格式返回：
 {{

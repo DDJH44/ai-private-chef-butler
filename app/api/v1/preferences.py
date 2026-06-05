@@ -1,6 +1,7 @@
 """用户偏好设置 API"""
 import time
 from fastapi import APIRouter, Depends
+from typing import Optional
 from pydantic import BaseModel
 from app.auth import get_current_user
 from app.common.database import get_db
@@ -15,6 +16,7 @@ class PreferenceData(BaseModel):
     diet_type: str = "normal"
     taste: dict = {}
     family_members: list[dict] = []
+    nutrition_targets: Optional[dict] = None  # {daily_calories, protein_target, carbs_target, fat_target, fiber_target, goal_type}
 
 
 @router.get("")

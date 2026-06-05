@@ -1,10 +1,13 @@
 import os
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
-from app.api.v1 import chat, oss, recipes, meal_plan, shopping, speech, nutrition, feishu, auth, preferences, ingredients, cook_history
+from app.api.v1 import chat, oss, recipes, meal_plan, shopping, speech, nutrition, feishu, auth, preferences, ingredients, cook_history, body_metrics
 from app.common.logger import setup_logging, logger
 
 setup_logging()
@@ -36,6 +39,7 @@ app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(preferences.router, prefix="/api/v1/preferences", tags=["preferences"])
 app.include_router(ingredients.router, prefix="/api/v1/ingredients", tags=["ingredients"])
 app.include_router(cook_history.router, prefix="/api/v1/cook-history", tags=["cook-history"])
+app.include_router(body_metrics.router, prefix="/api/v1/body-metrics", tags=["body-metrics"])
 
 
 @app.exception_handler(RequestValidationError)

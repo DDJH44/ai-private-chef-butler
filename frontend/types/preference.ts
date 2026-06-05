@@ -12,12 +12,34 @@ export interface TastePreference {
     oil: number;
 }
 
+export interface NutritionTargets {
+    daily_calories?: number;
+    protein_target?: number;
+    carbs_target?: number;
+    fat_target?: number;
+    fiber_target?: number;
+    goal_type?: "muscle_gain" | "fat_loss" | "maintain" | "custom";
+}
+
+export interface BodyMetric {
+    id: string;
+    user_id: string;
+    date: string;
+    weight?: number;
+    body_fat?: number;
+    muscle_mass?: number;
+    waist?: number;
+    notes?: string;
+    created_at: number;
+}
+
 export interface Preference {
     allergies: string[];
     custom_allergies: string[];
     diet_type: string;
     taste: TastePreference;
     family_members: FamilyMember[];
+    nutrition_targets?: NutritionTargets;
 }
 
 export interface PreferenceStore {
@@ -64,4 +86,11 @@ export const ROLE_OPTIONS = [
     {value: "child", label: "儿童"},
     {value: "elderly", label: "老人"},
     {value: "baby", label: "婴儿"},
+];
+
+export const GOAL_TYPES = [
+    {value: "muscle_gain", label: "增肌", desc: "热量盈余 + 高蛋白", icon: "💪"},
+    {value: "fat_loss", label: "减脂", desc: "热量缺口 + 高蛋白", icon: "🔥"},
+    {value: "maintain", label: "维持", desc: "保持当前体重和体型", icon: "⚖"},
+    {value: "custom", label: "自定义", desc: "手动设置各项营养目标", icon: "🎯"},
 ];

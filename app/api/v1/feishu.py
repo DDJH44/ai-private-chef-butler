@@ -65,7 +65,7 @@ def _save_config(uid: str, url: str, step: str, enabled: bool, existing: dict | 
 # ── Pydantic Models ──
 
 class FeishuConfigRequest(BaseModel):
-    webhook_url: str
+    webhook_url: Optional[str] = None
 
 
 class FeishuMessage(BaseModel):
@@ -151,7 +151,7 @@ def delete_feishu_config(current_user: dict = Depends(get_current_user)):
 @router.post("/test")
 async def test_feishu(data: FeishuConfigRequest | None = None, current_user: dict = Depends(get_current_user)):
     url = ""
-    if data and data.webhook_url.strip():
+    if data and data.webhook_url and data.webhook_url.strip():
         url = data.webhook_url.strip()
     else:
         cfg = get_user_config(current_user["user_id"])

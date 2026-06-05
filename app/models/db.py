@@ -166,3 +166,18 @@ class ImageCache(Base):
     dish_query = Column(String(200), primary_key=True, nullable=False)
     oss_url = Column(Text, nullable=False)
     created_at = Column(BigInteger, nullable=False)
+
+
+class BodyMetric(Base):
+    """身体指标追踪 — 体重、体脂、肌肉量等"""
+    __tablename__ = "body_metrics"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    date = Column(String(20), nullable=False, index=True)
+    weight = Column(Float, nullable=True)
+    body_fat = Column(Float, nullable=True)
+    muscle_mass = Column(Float, nullable=True)
+    waist = Column(Float, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(BigInteger, nullable=False)

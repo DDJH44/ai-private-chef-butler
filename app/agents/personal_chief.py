@@ -12,6 +12,7 @@ import requests
 from dotenv import load_dotenv
 from app.api.v1.oss import proxy_image_url, _get_bucket
 from app.agents.image_agent import fetch_dish_image
+from app.rag.vector_store import rag_store
 load_dotenv()
 
 # 常见中餐菜品的中英对照，用于提升 Pexels 英文搜索准确度
@@ -368,6 +369,57 @@ def generate_recipe_image(query: str):
         )
 
 
+@tool
+def rag_search(query: str, knowledge_type: str = "auto"):
+    """搜索专业知识库获取准确的营养数据、菜谱知识或运动营养学建议。
+
+    参数：
+    - query: 搜索查询，如"鸡胸肉的营养成分"或"增肌期碳水摄入建议"
+    - knowledge_type: 知识库类型，可选 "nutrition"（营养数据）、"recipe"（菜谱知识）、"fitness"（运动营养学）、"auto"（自动判断）
+
+    返回匹配的专业知识片段，包含权威营养数据和菜谱信息。
+    """
+    nutrition_keywords = ["热量", "营养", "蛋白质", "碳水", "脂肪", "卡路里", "成分",
+                          "每100克", "kcal", "多少克", "含量"]
+    recipe_keywords = ["做法", "怎么做", "菜谱", "步骤", "食材搭配", "调味", "烹饪",
+                       "食谱", "怎么炒", "怎么炖", "怎么煮"]
+    fitness_keywords = ["增肌", "减脂", "健身", "训练", "补剂", "碳水循环", "蛋白粉",
+                        "减重", "增重", "塑形", "肌肉", "体脂"]
+
+    types_to_search = []
+    if knowledge_type == "auto":
+        if any(kw in query for kw in nutrition_keywords):
+            types_to_search.append("nutrition")
+        if any(kw in query for kw in recipe_keywords):
+            types_to_search.append("recipe")
+        if any(kw in query for kw in fitness_keywords):
+            types_to_search.append("fitness")
+        if not types_to_search:
+            types_to_search = ["nutrition"]
+    else:
+        types_to_search = [knowledge_type]
+
+    results = []
+    for ktype in types_to_search:
+        try:
+            hits = rag_store.search(query, ktype, k=5)
+            for h in hits:
+                if h["score"] >= 0.15:  # Filter low-quality matches
+                    results.append({
+                        "knowledge_type": ktype,
+                        "content": h["content"],
+                        "source": h.get("source", "unknown"),
+                        "score": h["score"],
+                    })
+        except Exception as e:
+            logger.error(f"[rag_search] {ktype} 搜索异常: {e}")
+
+    if not results:
+        return json.dumps([{"message": "未找到相关知识"}], ensure_ascii=False)
+
+    return json.dumps(results, ensure_ascii=False)
+
+
 model = init_chat_model(
     model=os.getenv("MIMO_MODEL_NAME") or os.getenv("DOUBAO_MODEL_NAME", "doubao-seed-1-8-251228"),
     model_provider="openai",
@@ -375,7 +427,7 @@ model = init_chat_model(
     api_key=os.getenv("MIMO_API_KEY") or os.getenv("DOUBAO_API_KEY"),
 )
 
-model_with_tools = model.bind_tools([bilibili_search, fetch_dish_image])
+model_with_tools = model.bind_tools([bilibili_search, fetch_dish_image, rag_search])
 
 checkpointer = MySQLSaver()
 
@@ -409,7 +461,7 @@ def should_continue(state: AgentState):
 
 workflow = StateGraph(AgentState)
 workflow.add_node("agent", agent_node)
-workflow.add_node("tools", ToolNode([fetch_dish_image, bilibili_search]))
+workflow.add_node("tools", ToolNode([fetch_dish_image, bilibili_search, rag_search]))
 workflow.add_edge(START, "agent")
 workflow.add_conditional_edges("agent", should_continue)
 workflow.add_edge("tools", "agent")
@@ -477,6 +529,54 @@ def _build_preference_context(preference: dict) -> str:
         return ""
     
     return "\n【用户饮食偏好】\n" + "\n".join(f"- {p}" for p in parts) + "\n请在推荐时严格遵守以上偏好要求。\n"
+
+
+def _build_rag_context(user_message: str, preference: dict = None) -> str:
+    """根据用户消息预检索 RAG 知识库，构建上下文注入"""
+    if not rag_store.is_ready:
+        return ""  # RAG not loaded yet, skip to avoid blocking the response
+    parts = []
+    diet_type = (preference or {}).get("diet_type", "normal")
+
+    # 1. 检测食材名词 → 预注入营养数据
+    food_pattern = _re.compile(
+        r'(?:鸡胸肉|鸡腿|鸡翅|猪瘦肉|五花肉|排骨|牛腱|牛腩|三文鱼|虾仁|带鱼|鲈鱼|鳕鱼|'
+        r'鸡蛋|牛奶|酸奶|豆腐|番茄|黄瓜|菠菜|西兰花|生菜|胡萝卜|土豆|红薯|青椒|'
+        r'大白菜|洋葱|冬瓜|茄子|芹菜|金针菇|香菇|玉米|山药|苹果|香蕉|橙子|'
+        r'核桃|杏仁|花生|燕麦|米饭|馒头|面条|牛肉|猪肉|鸡肉|羊肉|鱼|虾|蛋)'
+    )
+    food_items = list(set(food_pattern.findall(user_message)))
+    for food in food_items[:3]:
+        try:
+            hits = rag_store.search(f"{food} 营养成分", "nutrition", k=1)
+            if hits:
+                parts.append(f"【{food}营养数据】{hits[0]['content']}")
+        except Exception as e:
+            logger.warning(f"[RAG] 食材检索失败 {food}: {e}")
+
+    # 2. 检测健身场景 → 预注入运动营养知识
+    fitness_keywords = ["增肌", "减脂", "健身", "训练", "减重", "增重", "塑形", "碳水循环"]
+    if any(kw in user_message for kw in fitness_keywords) or diet_type in ("fitness", "low_calorie"):
+        try:
+            hits = rag_store.search(user_message, "fitness", k=2)
+            for h in hits:
+                parts.append(f"【运动营养知识】{h['content']}")
+        except Exception as e:
+            logger.warning(f"[RAG] 运动营养检索失败: {e}")
+
+    # 3. 检测菜谱/烹饪相关 → 预注入菜谱知识
+    recipe_keywords = ["怎么做", "做法", "步骤", "怎么炒", "怎么炖", "菜谱", "食谱", "烹饪"]
+    if any(kw in user_message for kw in recipe_keywords):
+        try:
+            hits = rag_store.search(user_message, "recipe", k=2)
+            for h in hits:
+                parts.append(f"【菜谱参考资料】{h['content']}")
+        except Exception as e:
+            logger.warning(f"[RAG] 菜谱检索失败: {e}")
+
+    if not parts:
+        return ""
+    return "\n【专业知识库参考 — 请在回答中优先使用以下数据】\n" + "\n".join(parts) + "\n"
 
 
 import re as _re
@@ -582,16 +682,11 @@ def search_recipes(prompt: str, image: str, thread_id: str, preference: dict = N
     # 预生成图片：从用户消息中提取菜名，提前生成 AI 图片 URL
     pregen_context = ""
     # 提取可能的中文菜名（包含烹饪特征字）
-    potential_dishes = _re.findall(r'[一-鿿]{2,6}(?:炒|烧|炖|蒸|煮|炸|煎|焖|煲|烤|拌|烩|煨|熘|爆|焗|汤|羹|面|饭|粥|饼|饺|包|卷|丝|片|丁|块|丸|球)[一-鿿]{0,4}', prompt)
+    potential_dishes = _re.findall(r'[一-鿿]{2,6}(?:炒|烧|炖|蒸|煮|炸|煎|焖|煲|烤|拌|烩|煨|熘|爆|焗|汤|羹|面|饭|粥|饼|饺|包|卷|丝|片|丁|块|丸|球)', prompt)
     simple_dishes = _re.findall(r'(?:做[个份道]?|来[个份道]?|要[个份道]?|想吃)([一-鿿]{2,10})', prompt)
     all_hints = list(set(potential_dishes + [m for m in simple_dishes if m]))
     if all_hints:
         dish = all_hints[0].strip()
-        # 去掉问题后缀，只保留菜名
-        for suffix in ['怎么做', '怎么烧', '怎么炖', '怎么煮', '如何做', '怎样做', '的做法', '的视频', '教程', '的做法教程']:
-            if dish.endswith(suffix):
-                dish = dish[:-len(suffix)]
-                break
         if len(dish) >= 2:
             logger.info(f"[pregen] 预生成图片: {dish}")
             try:
@@ -603,28 +698,14 @@ def search_recipes(prompt: str, image: str, thread_id: str, preference: dict = N
             except Exception as pe:
                 logger.warning(f"[pregen] 失败: {pe}")
 
-            # 预搜索视频
-            logger.info(f"[pregen] 预搜索视频: {dish}")
-            try:
-                video_result = json.loads(bilibili_search.invoke({"query": dish}))
-                if video_result and isinstance(video_result, list) and video_result[0].get("url"):
-                    has_exact = any(dish in str(v.get("title", "")) for v in video_result)
-                    video_lines = "\n".join(
-                        f'- [{v.get("title", "教学视频")}]({v.get("url", "")})'
-                        for v in video_result[:3]
-                    )
-                    if has_exact:
-                        pregen_context += f"\n【预搜索视频】已找到「{dish}」的教学视频，直接列出（不要加说明文字）：\n{video_lines}\n"
-                    else:
-                        pregen_context += f"\n【预搜索视频】未找到「{dish}」的精准视频，以下是相似菜品视频（先说明未找到，再列出）：\n{video_lines}\n"
-                    logger.info(f"[pregen] 视频搜索成功: {len(video_result)} 个")
-            except Exception as ve:
-                logger.warning(f"[pregen] 视频搜索失败: {ve}")
+    rag_context = _build_rag_context(prompt, preference)
 
-    # 将预生成内容、偏好记忆等作为 SystemMessage，不混入用户消息也不在历史中展示
+    # 将预生成内容、偏好、RAG 知识等作为 SystemMessage，不混入用户消息也不在历史中展示
     context_parts = []
     if preference_context:
         context_parts.append(preference_context)
+    if rag_context:
+        context_parts.append(rag_context)
     if pregen_context:
         context_parts.append(pregen_context)
     if inventory_context:

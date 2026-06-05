@@ -191,3 +191,37 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+
+
+# ========================================
+# 身体指标 & 营养素目标
+# ========================================
+
+class BodyMetricCreate(BaseModel):
+    date: str
+    weight: Optional[float] = None
+    body_fat: Optional[float] = None
+    muscle_mass: Optional[float] = None
+    waist: Optional[float] = None
+    notes: Optional[str] = None
+
+
+class BodyMetricResponse(BaseModel):
+    id: str
+    user_id: str
+    date: str
+    weight: Optional[float] = None
+    body_fat: Optional[float] = None
+    muscle_mass: Optional[float] = None
+    waist: Optional[float] = None
+    notes: Optional[str] = None
+    created_at: int
+
+
+class NutritionTargets(BaseModel):
+    daily_calories: Optional[int] = None
+    protein_target: Optional[int] = None
+    carbs_target: Optional[int] = None
+    fat_target: Optional[int] = None
+    fiber_target: Optional[int] = None
+    goal_type: Optional[str] = "maintain"  # muscle_gain | fat_loss | maintain | custom
