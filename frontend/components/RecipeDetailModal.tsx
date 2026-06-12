@@ -14,6 +14,15 @@ import { generateUUID } from "@/lib/utils";
 import { Star, Flame, Clock, X, Check, Clipboard, Trash2, ChefHat, CookingPot, ShoppingCart, Video } from "lucide-react";
 import { RecipeSaveBlock, stripSaveBlocks, difficultyColor } from "./RecipeSaveBlock";
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 /** Plain-text formatContent for print (HTML output, can't use JSX) */
 function formatContentForPrint(content: string): string {
   return content.replace(
@@ -125,7 +134,14 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
   const handlePrint = () => {
     const pw = window.open("", "_blank");
     if (pw) {
-      pw.document.write(`<html><head><title>${fullRecipe.title}</title><style>body{font-family:sans-serif;max-width:720px;margin:32px auto;padding:0 24px;line-height:1.8;color:#1F1D1A}h1{font-size:28px}h2{font-size:18px;margin:24px 0 12px}.step{display:flex;gap:12px;margin-bottom:16px;padding:14px;background:#faf8f5;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.06)}.step-num{width:30px;height:30px;background:#6c5ce7;color:#fff;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0}img{max-width:100%;border-radius:16px;margin:16px 0}</style></head><body>${fullRecipe.imageUrl?`<img src="${proxyImageUrl(fullRecipe.imageUrl)}">`:""}<h1>${fullRecipe.title}</h1>${fullRecipe.steps?fullRecipe.steps.map((s,i)=>`<div class="step"><div class="step-num">${i+1}</div><div>${s}</div></div>`).join(""):`<div>${formatContentForPrint(fullRecipe.content)}</div>`}</body></html>`);
+      const title = escapeHtml(fullRecipe.title);
+      const imgHtml = fullRecipe.imageUrl ? `<img src="${escapeHtml(proxyImageUrl(fullRecipe.imageUrl))}">` : "";
+      const stepsHtml = fullRecipe.steps
+        ? fullRecipe.steps.map((s, i) =>
+            `<div class="step"><div class="step-num">${i + 1}</div><div>${escapeHtml(s)}</div></div>`
+          ).join("")
+        : `<div>${formatContentForPrint(fullRecipe.content)}</div>`;
+      pw.document.write(`<html><head><title>${title}</title><style>body{font-family:sans-serif;max-width:720px;margin:32px auto;padding:0 24px;line-height:1.8;color:#1F1D1A}h1{font-size:28px}h2{font-size:18px;margin:24px 0 12px}.step{display:flex;gap:12px;margin-bottom:16px;padding:14px;background:#faf8f5;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.06)}.step-num{width:30px;height:30px;background:#6c5ce7;color:#fff;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0}img{max-width:100%;border-radius:16px;margin:16px 0}</style></head><body>${imgHtml}<h1>${title}</h1>${stepsHtml}</body></html>`);
       pw.document.close(); pw.print();
     }
   };

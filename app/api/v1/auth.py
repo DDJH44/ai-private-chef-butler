@@ -22,6 +22,17 @@ class AvatarUpdate(BaseModel):
 
 # 简易内存速率限制器
 _rate_limits: dict[str, list[float]] = defaultdict(list)
+_last_cleanup: float = time.time()
+
+
+def _cleanup_rate_limits(now: float) -> None:
+    global _last_cleanup
+    if now - _last_cleanup < 300:  # Cleanup every 5 minutes
+        return
+    stale = [k for k, v in _rate_limits.items() if not v]
+    for k in stale:
+        del _rate_limits[k]
+    _last_cleanup = now
 
 
 def _check_rate_limit(key: str, max_requests: int = 10, window: int = 60) -> None:
@@ -30,6 +41,7 @@ def _check_rate_limit(key: str, max_requests: int = 10, window: int = 60) -> Non
     if len(_rate_limits[key]) >= max_requests:
         raise HTTPException(429, f"请求过于频繁，请 {window} 秒后重试")
     _rate_limits[key].append(now)
+    _cleanup_rate_limits(now)
 
 
 def _get_client_ip(request: Request) -> str:

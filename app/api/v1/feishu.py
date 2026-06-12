@@ -187,15 +187,15 @@ async def test_feishu(data: FeishuConfigRequest | None = None, current_user: dic
 
 @router.put("/toggle")
 def toggle_feishu(current_user: dict = Depends(get_current_user)):
-    cfg = get_user_config(current_user["user_id"])
-    if not cfg:
-        raise HTTPException(400, "请先配置飞书 Webhook 地址")
-    new_enabled = not cfg["enabled"]
+    uid = current_user["user_id"]
     now = int(time.time() * 1000)
     with get_db() as session:
-        session.query(FeishuConfig).filter(FeishuConfig.user_id == current_user["user_id"]).update(
-            {"enabled": new_enabled, "updated_at": now}, synchronize_session=False
-        )
+        cfg = session.query(FeishuConfig).filter(FeishuConfig.user_id == uid).first()
+        if not cfg:
+            raise HTTPException(400, "请先配置飞书 Webhook 地址")
+        new_enabled = not cfg.enabled
+        cfg.enabled = new_enabled
+        cfg.updated_at = now
     return {"enabled": new_enabled}
 
 
@@ -297,24 +297,35 @@ async def send_daily_report(report: DailyReportRequest, current_user: dict = Dep
     return {"status": "ok", "message": "每日报告推送成功"}
 
 
+class RecipeSharePayload(BaseModel):
+    title: str = ""
+    cookingTime: str = ""
+    difficulty: str = ""
+    score: float = 0.0
+    ingredients: list[str] = []
+    reason: str = ""
+    videoUrl: str | None = None
+
+    model_config = {"extra": "allow"}
+
+
 @router.post("/recipe-share")
-async def share_recipe(recipe: dict, current_user: dict = Depends(get_current_user)):
+async def share_recipe(recipe: RecipeSharePayload, current_user: dict = Depends(get_current_user)):
     url = get_user_webhook_url(current_user["user_id"])
     if not url:
         raise HTTPException(400, "飞书未配置，请在个人中心 → 飞书集成中设置")
 
-    ingredients = recipe.get("ingredients", [])
-    ingredients_str = "、".join(ingredients[:8]) if ingredients else "无"
+    ingredients_str = "、".join(str(i) for i in recipe.ingredients[:8]) if recipe.ingredients else "无"
 
-    content = f"""🍳 **{recipe.get('title', '未知菜品')}**
+    content = f"""🍳 **{recipe.title or '未知菜品'}**
 
-⏱ 烹饪时间: {recipe.get('cookingTime', '未知')}
-🎯 难度: {recipe.get('difficulty', '未知')}
-⭐ 推荐指数: {recipe.get('score', 'N/A')}
+⏱ 烹饪时间: {recipe.cookingTime or '未知'}
+🎯 难度: {recipe.difficulty or '未知'}
+⭐ 推荐指数: {recipe.score or 'N/A'}
 
 📝 **食材**: {ingredients_str}
 
-💡 **推荐理由**: {recipe.get('reason', '无')}"""
+💡 **推荐理由**: {recipe.reason or '无'}"""
 
     card = {
         "msg_type": "interactive",
@@ -323,10 +334,10 @@ async def share_recipe(recipe: dict, current_user: dict = Depends(get_current_us
             "elements": [{"tag": "markdown", "content": content}],
         },
     }
-    if recipe.get("videoUrl"):
+    if recipe.videoUrl:
         card["card"]["elements"].append({
             "tag": "action",
-            "actions": [{"tag": "button", "text": {"tag": "plain_text", "content": "🎬 观看视频教程"}, "url": recipe["videoUrl"], "type": "primary"}],
+            "actions": [{"tag": "button", "text": {"tag": "plain_text", "content": "🎬 观看视频教程"}, "url": recipe.videoUrl, "type": "primary"}],
         })
 
     await send_to_feishu(url, card)

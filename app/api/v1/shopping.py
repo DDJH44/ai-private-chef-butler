@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.orm.attributes import flag_modified
 from app.models.schemas import (
@@ -163,7 +164,7 @@ async def delete_shopping_list(list_id: str, current_user: dict = Depends(get_cu
 async def toggle_shopping_item(
     list_id: str,
     item_id: str,
-    expected_updated_at: int = Query(..., description="客户端上次读取的 updated_at，用于乐观锁检测"),
+    expected_updated_at: Optional[int] = Query(None, description="客户端上次读取的 updated_at，用于乐观锁检测"),
     current_user: dict = Depends(get_current_user),
 ):
     try:
@@ -175,7 +176,7 @@ async def toggle_shopping_item(
             if not sl:
                 raise HTTPException(status_code=404, detail="购物清单不存在")
 
-            if sl.updated_at != expected_updated_at:
+            if expected_updated_at is not None and sl.updated_at != expected_updated_at:
                 raise HTTPException(
                     status_code=409,
                     detail="购物清单已被其他操作修改，请刷新后重试"

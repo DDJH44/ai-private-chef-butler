@@ -75,7 +75,7 @@ export function updateMealInPlan(
     );
 
     saveMealPlans(plans);
-    notifyChange();
+    // 不触发全局事件 —— 调用方自行更新 UI state，避免全量刷新导致滚动丢失
 }
 
 export function removeMealFromPlan(planId: string, date: string, mealType: "breakfast" | "lunch" | "dinner"): void {

@@ -5,8 +5,11 @@ from typing import Optional, List, Literal
 from app.agents.personal_chief import model, _build_preference_context
 from langchain_core.messages import HumanMessage
 from app.common.json_utils import repair_truncated_json
+from app.common.logger import logger
 import json
 import re
+import asyncio
+from datetime import datetime, timedelta
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -37,15 +40,27 @@ def _repair_truncated_json(raw: str) -> str:
     return repair_truncated_json(raw)
 
 
-async def _call_llm(prompt: str) -> str:
-    """Call the LLM (non-streaming) with sufficient max_tokens for 21 meals."""
+async def _call_llm_day(prompt: str, max_tokens: int = 1024) -> dict | None:
+    """调用 LLM 生成单日膳食计划，返回解析后的 meal dict 或 None"""
     msg = HumanMessage(content=prompt)
-    bound = model.bind(max_tokens=8192)
+    bound = model.bind(max_tokens=max_tokens)
     resp = await bound.ainvoke([msg])
     content = resp.content
     if isinstance(content, list):
-        return "".join(str(c) for c in content)
-    return str(content)
+        content = "".join(str(c) for c in content)
+    if not content:
+        return None
+    json_match = re.search(r'\{[\s\S]*\}', content)
+    if not json_match:
+        return None
+    json_str = json_match.group()
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError:
+        try:
+            return json.loads(repair_truncated_json(json_str))
+        except json.JSONDecodeError:
+            return None
 
 
 def _build_existing_context(existing_plan: dict, mode: str) -> str:
@@ -87,7 +102,7 @@ def _get_target_meals(mode: str) -> list[str]:
 
 @router.post("/meal-plan/generate")
 async def generate_meal_plan(request: MealPlanRequest):
-    """AI 生成一周膳食计划"""
+    """AI 生成一周膳食计划 — 7 天并行生成，大幅缩短等待时间"""
     preference_ctx = _build_preference_context(request.preference or {})
 
     inventory_ctx = ""
@@ -96,79 +111,117 @@ async def generate_meal_plan(request: MealPlanRequest):
         if items:
             inventory_ctx = f"当前冰箱库存：{'; '.join(items)}。优先使用库存食材。"
 
-    existing_ctx = _build_existing_context(request.existing_plan, request.mode)
     target_meals = _get_target_meals(request.mode)
     target_desc = "、".join({"breakfast": "早餐", "lunch": "午餐", "dinner": "晚餐"}[k] for k in target_meals)
-    mode_desc = MODE_LABELS[request.mode]
     req_text = f"额外要求：{request.requirements}" if request.requirements else ""
 
-    # 构建未生成餐次的 null JSON 模板
-    null_meals = {}
-    for key in MEAL_KEYS:
-        if key not in target_meals:
-            null_meals[key] = "null"
+    # 构建已有计划的日期索引（用户已编辑的餐次保持不变）
+    preserved: dict[str, dict[str, dict]] = {}
+    if request.existing_plan:
+        for day in (request.existing_plan.get("days") or []):
+            date = day.get("date", "")
+            meals = day.get("meals", {})
+            preserved[date] = {}
+            for key in MEAL_KEYS:
+                m = meals.get(key)
+                if m and m.get("recipe_name"):
+                    preserved[date][key] = m
 
-    prompt = f"""你是一名专业的营养师和膳食规划师。请根据以下信息生成一周的膳食计划。
+    # 生成日期列表
+    start = datetime.strptime(request.week_start, "%Y-%m-%d")
+    dates = [(start + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
 
-日期范围：{request.week_start} 至 {request.week_end}
-规划模式：{mode_desc}
-本次只生成：{target_desc}
+    # 并发信号量，限制同时最多 4 个请求
+    semaphore = asyncio.Semaphore(4)
+
+    async def generate_day(date: str) -> tuple[str, dict | None, str | None]:
+        """生成单日膳食计划，返回 (date, meals_dict, error)"""
+        async with semaphore:
+            # 构建当天已有餐次的保留上下文
+            day_preserved = preserved.get(date, {})
+            preserved_lines = []
+            for key in MEAL_KEYS:
+                if key in day_preserved:
+                    m = day_preserved[key]
+                    preserved_lines.append(f"  {key}: {m['recipe_name']} ({m.get('calories', 0)}kcal) — 已保留，不要修改")
+            preserved_ctx = ""
+            if preserved_lines:
+                preserved_ctx = "\n【当天已保留的餐次 — 以下内容不要修改，保持原样】\n" + "\n".join(preserved_lines)
+
+            # 当天已保留的餐次不需要 AI 再生成
+            day_target = [k for k in target_meals if k not in day_preserved]
+
+            # 构建当天目标 JSON 结构
+            meal_template = {}
+            for key in MEAL_KEYS:
+                if key in day_target:
+                    meal_template[key] = '{"recipe_name": "菜品名", "ingredients": ["食材1", "食材2"], "calories": 热量, "protein": 蛋白克数, "carbs": 碳水克数, "fat": 脂肪克数}'
+                elif key in day_preserved:
+                    meal_template[key] = '"保留"'
+                else:
+                    meal_template[key] = "null"
+
+            prompt = f"""你是专业营养师。为 {date} 生成当天膳食计划。
+
+规划范围：{target_desc}
 {req_text}
 {preference_ctx}
 {inventory_ctx}
-{existing_ctx}
+{preserved_ctx}
 
-请生成一个 JSON 格式的膳食计划，严格按照下面的结构输出。只输出 JSON，不要有任何解释性文字。
-
-输出 JSON 结构（注意：不在生成范围内的餐次必须设为 null）：
+只返回如下 JSON，不要任何解释：
 {{
-  "days": [
-    {{
-      "date": "YYYY-MM-DD",
-      "meals": {{
-        "breakfast": {"null" if "breakfast" not in target_meals else '{{"recipe_name": "菜品名", "ingredients": ["食材1", "食材2"], "calories": 热量整数, "protein": 蛋白质克数, "carbs": 碳水克数, "fat": 脂肪克数}}'},
-        "lunch": {"null" if "lunch" not in target_meals else '{{"recipe_name": "菜品名", "ingredients": ["食材1", "食材2"], "calories": 热量整数, "protein": 蛋白质克数, "carbs": 碳水克数, "fat": 脂肪克数}}'},
-        "dinner": {"null" if "dinner" not in target_meals else '{{"recipe_name": "菜品名", "ingredients": ["食材1", "食材2"], "calories": 热量整数, "protein": 蛋白质克数, "carbs": 碳水克数, "fat": 脂肪克数}}'}
-      }}
-    }}
-  ]
+  "date": "{date}",
+  "meals": {{
+    "breakfast": {meal_template.get("breakfast", "null")},
+    "lunch": {meal_template.get("lunch", "null")},
+    "dinner": {meal_template.get("dinner", "null")}
+  }}
 }}
 
 规则：
-- 只生成 {target_desc}，其余餐次字段必须设为 null
-- 若提供了"用户已保留的餐次"，不要修改这些餐次的菜品名，可以直接复用或保持原样
-- 每餐的菜谱选择独立考虑，不需要因为早餐做了某道菜就在午晚餐刻意避开
-- 菜品名用中文，符合用户的口味偏好和库存食材
-- 营养均衡，每天总热量在 1800-2400 kcal 之间
-- 不要添加任何解释性文字，仅返回上述 JSON
-"""
+- 当天总热量 1600-2400 kcal
+- 菜品名用中文，营养数值为整数
+- 只返回 JSON，不要任何解释"""
 
-    try:
-        raw = await _call_llm(prompt)
-        json_match = re.search(r'\{[\s\S]*\}', raw)
-        if not json_match:
-            raise HTTPException(status_code=500, detail="AI 返回的内容无法解析")
+            try:
+                result = await _call_llm_day(prompt)
+                if result:
+                    return (date, result.get("meals"), None)
+                return (date, None, f"{date} 返回数据无法解析")
+            except Exception as e:
+                logger.error(f"[meal_plan] {date} 生成失败: {e}")
+                return (date, None, str(e))
 
-        json_str = json_match.group()
-        try:
-            data = json.loads(json_str)
-        except json.JSONDecodeError:
-            # 尝试修复截断的 JSON
-            repaired = _repair_truncated_json(json_str)
-            data = json.loads(repaired)
+    # 并行生成所有日期
+    tasks = [generate_day(date) for date in dates]
+    results = await asyncio.gather(*tasks)
 
-        # 规范化：确保未生成餐次为 null
-        days = data.get("days", [])
-        for day in days:
-            meals = day.get("meals", {})
-            for key in MEAL_KEYS:
-                if key not in target_meals:
-                    meals[key] = None
+    # 组装完整计划
+    errors = []
+    days = []
+    for date, meals, error in results:
+        if error:
+            errors.append(error)
+        days.append({
+            "date": date,
+            "meals": meals or {k: None for k in MEAL_KEYS},
+        })
 
-        return {"plan": data}
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=500, detail="膳食计划生成失败，请重试")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"生成失败: {str(e)}")
+    if len(errors) >= 7:
+        raise HTTPException(status_code=500, detail="所有日期生成均失败，请重试")
+
+    # 规范化：未生成和已保留的餐次
+    for day in days:
+        meals = day["meals"]
+        date = day["date"]
+        day_preserved = preserved.get(date, {})
+        for key in MEAL_KEYS:
+            if key in day_preserved:
+                meals[key] = day_preserved[key]
+            elif key not in target_meals:
+                meals[key] = None
+
+    logger.info(f"[meal_plan] 生成完成: {len(days)} 天, {sum(1 for d in days for k in target_meals if d['meals'].get(k) and d['meals'][k] != '保留')} 个新餐次, {len(errors)} 个错误")
+
+    return {"plan": {"days": days}}

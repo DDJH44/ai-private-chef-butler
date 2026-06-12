@@ -14,6 +14,7 @@ from langchain_core.messages import HumanMessage
 from dotenv import load_dotenv
 from app.common.database import get_db
 from app.models.db import NutritionRecord, Preference
+from app.common.logger import logger
 
 load_dotenv()
 
@@ -23,10 +24,29 @@ _summary_cache: dict[str, dict] = {}
 _summary_cache_ttl: dict[str, float] = {}
 _SUMMARY_CACHE_TTL = 300
 
+_nutrition_model = None
+
+def _get_nutrition_model():
+    global _nutrition_model
+    if _nutrition_model is None:
+        _nutrition_model = init_chat_model(
+            model=os.getenv("MIMO_MODEL_NAME") or os.getenv("DOUBAO_MODEL_NAME", "doubao-seed-1-8-251228"),
+            model_provider="openai",
+            base_url=os.getenv("MIMO_BASE_URL") or os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v1"),
+            api_key=os.getenv("MIMO_API_KEY") or os.getenv("DOUBAO_API_KEY")
+        ).bind(extra_body={"thinking": {"type": "disabled"}})
+    return _nutrition_model
+
 
 def _invalidate_summary_cache(uid: str):
+    now = time.time()
     keys_to_remove = [k for k in _summary_cache if k.startswith(f"{uid}:")]
     for k in keys_to_remove:
+        _summary_cache.pop(k, None)
+        _summary_cache_ttl.pop(k, None)
+    # Global TTL cleanup: evict expired entries across all users
+    stale = [k for k, t in _summary_cache_ttl.items() if now > t]
+    for k in stale:
         _summary_cache.pop(k, None)
         _summary_cache_ttl.pop(k, None)
 
@@ -259,12 +279,7 @@ async def analyze_photo(
 4. summary用中文，50字以内"""
 
     try:
-        model = init_chat_model(
-            model=os.getenv("MIMO_MODEL_NAME") or os.getenv("DOUBAO_MODEL_NAME", "doubao-seed-1-8-251228"),
-            model_provider="openai",
-            base_url=os.getenv("MIMO_BASE_URL") or os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v1"),
-            api_key=os.getenv("MIMO_API_KEY") or os.getenv("DOUBAO_API_KEY")
-        ).bind(extra_body={"thinking": {"type": "disabled"}})
+        model = _get_nutrition_model()
 
         message = HumanMessage(content=[
             {"type": "image_url", "image_url": {"url": data_uri}},
@@ -340,6 +355,8 @@ async def analyze_photo(
                     created_at=now,
                 )
                 session.add(nr)
+
+        _invalidate_summary_cache(uid)
 
         return PhotoAnalysisResult(
             meal_type=meal_type,
@@ -422,12 +439,7 @@ async def health_evaluation(date_str: str, current_user: dict = Depends(get_curr
 }}"""
 
     try:
-        model = init_chat_model(
-            model=os.getenv("MIMO_MODEL_NAME") or os.getenv("DOUBAO_MODEL_NAME", "doubao-seed-1-8-251228"),
-            model_provider="openai",
-            base_url=os.getenv("MIMO_BASE_URL") or os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v1"),
-            api_key=os.getenv("MIMO_API_KEY") or os.getenv("DOUBAO_API_KEY")
-        ).bind(extra_body={"thinking": {"type": "disabled"}})
+        model = _get_nutrition_model()
 
         response = model.invoke([HumanMessage(content=prompt)])
         result_text = response.content if isinstance(response.content, str) else str(response.content)

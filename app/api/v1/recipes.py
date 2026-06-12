@@ -143,6 +143,9 @@ async def search_recipes(
 ):
     try:
         uid = current_user["user_id"]
+        q = q.strip()[:100]  # Limit search length to prevent abuse
+        if not q:
+            return {'items': [], 'total': 0}
         search_pattern = f"%{q}%"
         with get_db() as session:
             query = session.query(Recipe).filter(

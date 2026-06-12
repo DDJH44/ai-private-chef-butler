@@ -3,6 +3,7 @@ from langchain_core.messages import HumanMessage, AIMessageChunk, AIMessage, Sys
 from langchain.tools import tool
 from langgraph.graph import StateGraph, MessagesState, START, END
 from langgraph.prebuilt import ToolNode
+import base64
 from app.common.logger import logger
 import os
 import time
@@ -11,272 +12,21 @@ import json
 import requests
 from dotenv import load_dotenv
 load_dotenv()
-from app.api.v1.oss import proxy_image_url, _get_bucket
+
+def _image_url_to_data_url(url: str) -> str:
+    if url.startswith("data:"):
+        return url
+    try:
+        resp = requests.get(url, timeout=15)
+        resp.raise_for_status()
+        ct = resp.headers.get("content-type", "image/jpeg")
+        b64 = base64.b64encode(resp.content).decode()
+        return f"data:{ct};base64,{b64}"
+    except Exception as e:
+        logger.warning(f"图片转Base64失败: {e}")
+        return url
 from app.agents.image_agent import fetch_dish_image
 from app.rag.vector_store import rag_store
-
-# 常见中餐菜品的中英对照，用于提升 Pexels 英文搜索准确度
-_DISH_NAME_MAP: dict[str, list[str]] = {
-    "宫保鸡丁": ["kung pao chicken", "spicy diced chicken with peanuts"],
-    "番茄炒蛋": ["tomato scrambled eggs", "tomato egg stir fry"],
-    "麻婆豆腐": ["mapo tofu", "spicy tofu with minced pork"],
-    "红烧肉": ["braised pork belly", "red braised pork"],
-    "糖醋里脊": ["sweet and sour pork", "sweet sour pork tenderloin"],
-    "水煮鱼": ["boiled fish in chili sauce", "sichuan boiled fish"],
-    "鱼香肉丝": ["yu xiang shredded pork", "fish fragrant pork"],
-    "回锅肉": ["twice cooked pork", "double cooked pork"],
-    "北京烤鸭": ["peking duck", "beijing roast duck"],
-    "烤鸭": ["roast duck", "peking duck"],
-    "饺子": ["chinese dumplings", "jiaozi dumplings"],
-    "炒面": ["chow mein", "stir fried noodles"],
-    "炒饭": ["fried rice", "egg fried rice"],
-    "蛋炒饭": ["egg fried rice", "fried rice"],
-    "扬州炒饭": ["yangzhou fried rice", "fried rice"],
-    "酸辣汤": ["hot and sour soup", "sour and spicy soup"],
-    "春卷": ["spring rolls", "chinese spring rolls"],
-    "火锅": ["hot pot", "chinese hotpot"],
-    "红烧排骨": ["braised spare ribs", "braised pork ribs"],
-    "清蒸鱼": ["steamed fish", "steamed whole fish"],
-    "椒盐虾": ["salt and pepper shrimp", "pepper salt prawns"],
-    "干煸四季豆": ["dry fried green beans", "stir fried string beans"],
-    "可乐鸡翅": ["cola chicken wings", "coca cola chicken wings"],
-    "蛋花汤": ["egg drop soup", "egg flower soup"],
-    "西红柿鸡蛋汤": ["tomato egg soup", "tomato and egg soup"],
-    "皮蛋豆腐": ["century egg tofu", "preserved egg tofu"],
-    "蒜蓉西兰花": ["garlic broccoli", "stir fried broccoli with garlic"],
-    "蚝油生菜": ["lettuce in oyster sauce", "oyster sauce lettuce"],
-    "锅包肉": ["guo bao rou", "sweet and sour pork"],
-    "地三鲜": ["di san xian", "sauteed potato green pepper and eggplant"],
-    "小鸡炖蘑菇": ["chicken with mushrooms", "braised chicken with mushroom"],
-    "西红柿牛腩": ["tomato beef brisket", "beef stew with tomato"],
-    "辣子鸡": ["spicy chicken", "chongqing spicy chicken"],
-    "葱油饼": ["scallion pancake", "green onion pancake"],
-    "小笼包": ["xiaolongbao", "soup dumplings"],
-    "烧卖": ["siu mai", "shumai"],
-    "叉烧": ["char siu", "bbq pork"],
-    "白切鸡": ["white cut chicken", "poached chicken"],
-}
-
-def _build_search_queries(query: str) -> list[str]:
-    """为中文菜品名构造最优的英文搜索词组合"""
-    queries: list[str] = []
-
-    # 1. 查中英对照表，用精确英文名优先
-    mapped = _DISH_NAME_MAP.get(query, [])
-    for en in mapped:
-        queries.append(f"{en} dish food photography")
-        queries.append(f"{en} authentic chinese")
-
-    # 2. 中文原词 + food/chinese food 作为兜底
-    queries.append(f"{query} food photography")
-    queries.append(f"{query} dish")
-
-    # 3. 如果 query 全中文，额外用拼音尝试
-    if all('一' <= c <= '鿿' or c == ' ' for c in query):
-        import pypinyin
-        try:
-            pinyin_name = ''.join(pypinyin.lazy_pinyin(query, style=pypinyin.Style.NORMAL))
-            queries.append(f"{pinyin_name} chinese food")
-        except Exception:
-            pass
-
-    return queries
-
-def _score_photo(photo: dict, query_keywords: list[str]) -> int:
-    """对 Pexels 图片进行相关性打分，越高越匹配"""
-    score = 0
-    alt = (photo.get("alt") or "").lower()
-    photographer = (photo.get("photographer") or "").lower()
-    photo_url = (photo.get("url") or "").lower()
-    combined = f"{alt} {photographer}"
-
-    for kw in query_keywords:
-        kw_lower = kw.lower()
-        parts = kw_lower.split()
-        for part in parts:
-            if len(part) < 3:
-                continue
-            if part in alt:
-                score += 5
-            if part in photographer:
-                score += 3
-            if part in photo_url:
-                score += 2
-
-    # 处罚泛化标签
-    generic_terms = ["restaurant", "table", "plate", "bowl", "kitchen", "interior", "people", "person", "woman", "man", "chef", "cook", "market", "store", "shop"]
-    for term in generic_terms:
-        if term in alt:
-            score -= 2
-
-    # 加分项：明确食物标签
-    food_terms = ["food", "dish", "cuisine", "meal", "dinner", "lunch", "cooking", "homemade", "traditional", "authentic", "chinese", "spicy", "soup", "sauce", "fried", "steamed", "boiled", "braised", "roast"]
-    for term in food_terms:
-        if term in alt:
-            score += 1
-
-    return score
-
-def _search_pexels_candidates(query: str, query_keywords: list[str]) -> list[dict]:
-    """从 Pexels 搜索候选图片，返回带原始 URL 和代理 URL 的列表"""
-    pexels_key = os.getenv("PEXELS_API_KEY", "")
-    results: list[dict] = []
-    seen_urls: set[str] = set()
-
-    queries = _build_search_queries(query)
-    for search_query in queries:
-        try:
-            pexels_url = f"https://api.pexels.com/v1/search?query={requests.utils.quote(search_query)}&per_page=12&orientation=landscape&locale=zh-CN"
-            pexels_resp = requests.get(pexels_url, headers={"Authorization": pexels_key}, timeout=10)
-        except Exception:
-            continue
-        if pexels_resp.status_code != 200:
-            continue
-
-        for photo in pexels_resp.json().get("photos", []):
-            original_url = photo.get("src", {}).get("large", "")
-            if not original_url or original_url in seen_urls:
-                continue
-            seen_urls.add(original_url)
-
-            score = _score_photo(photo, query_keywords)
-            results.append({
-                "original_url": original_url,       # 视觉验证用原始 URL
-                "url": proxy_image_url(original_url),  # 前端展示用代理 URL
-                "content": photo.get("alt", query),
-                "photographer": photo.get("photographer", ""),
-                "score": score,
-            })
-
-    results.sort(key=lambda r: r.get("score", 0), reverse=True)
-    return results
-
-
-def _verify_images_with_vision(query: str, candidates: list[dict]) -> list[dict]:
-    """用视觉模型验证候选图片，使用原始 URL"""
-    if not candidates:
-        return []
-
-    try:
-        content_parts: list[dict] = []
-        for c in candidates:
-            content_parts.append({
-                "type": "image_url",
-                "image_url": {"url": c["original_url"]},  # 用原始 Pexels URL
-            })
-
-        content_parts.append({
-            "type": "text",
-            "text": f"""上面有 {len(candidates)} 张图片，编号 0-{len(candidates)-1}。
-逐一判断每张是否确实是菜品「{query}」的成品照片：
-- 图片主体是该菜品的成品 → 匹配
-- 图片是其他菜/食材/厨房/人物/餐厅 → 不匹配
-- 不确定就判不匹配
-
-只返回 JSON：{{"matches":[编号],"reasons":{{"0":"理由"}}}}"""
-        })
-
-        response = vision_model.invoke([HumanMessage(content=content_parts)])
-        response_text = response.content if isinstance(response.content, str) else str(response.content)
-
-        json_match = _re.search(r'\{[\s\S]*\}', response_text)
-        if not json_match:
-            return []
-
-        result = json.loads(json_match.group())
-        match_ids: list[int] = result.get("matches", [])
-
-        verified: list[dict] = []
-        for idx in match_ids:
-            if 0 <= idx < len(candidates):
-                c = candidates[idx]
-                verified.append({
-                    "title": f"{query}",
-                    "url": c["url"],
-                    "content": c["content"],
-                    "photographer": c.get("photographer", ""),
-                })
-
-        logger.info(f"[vision_verify] {query}: {len(candidates)}候选 → {len(verified)}通过")
-        return verified
-
-    except Exception as e:
-        logger.warning(f"[vision_verify] 异常: {e}")
-        return []
-
-
-def _search_unsplash_candidates(query: str, query_keywords: list[str]) -> list[dict]:
-    """从 Unsplash 搜索候选图片作为补充"""
-    access_key = os.getenv("UNSPLASH_ACCESS_KEY", "")
-    if not access_key:
-        return []
-
-    results: list[dict] = []
-    seen_urls: set[str] = set()
-
-    try:
-        queries = _build_search_queries(query)[:3]
-        for search_query in queries:
-            unsplash_url = f"https://api.unsplash.com/search/photos?query={requests.utils.quote(search_query)}&per_page=8&orientation=landscape"
-            resp = requests.get(unsplash_url, headers={"Authorization": f"Client-ID {access_key}"}, timeout=10)
-            if resp.status_code != 200:
-                continue
-            for photo in resp.json().get("results", []):
-                original_url = photo.get("urls", {}).get("regular", "")
-                if not original_url or original_url in seen_urls:
-                    continue
-                seen_urls.add(original_url)
-                score = _score_photo({"alt": (photo.get("alt_description") or "") + " " + (photo.get("description") or ""), "photographer": photo.get("user", {}).get("name", "")}, query_keywords)
-                results.append({
-                    "original_url": original_url,
-                    "url": proxy_image_url(original_url),
-                    "content": photo.get("alt_description") or query,
-                    "photographer": photo.get("user", {}).get("name", ""),
-                    "score": score,
-                })
-    except Exception:
-        pass
-
-    return results
-
-
-@tool
-def recipe_search(query: str):
-    """搜索指定菜品的真实成品照片。输入准确的菜品名称如'宫保鸡丁'或'番茄炒蛋'，返回该菜品的高质量食物摄影图片URL"""
-    pexels_key = os.getenv("PEXELS_API_KEY", "")
-    if not pexels_key:
-        return json.dumps([{"title": "错误", "content": "PEXELS_API_KEY 未配置"}], ensure_ascii=False)
-
-    try:
-        query_keywords = [query] + _DISH_NAME_MAP.get(query, [])
-
-        # 1. Pexels 搜索
-        pexels_results = _search_pexels_candidates(query, query_keywords)
-
-        # 2. Unsplash 补充搜索
-        unsplash_results = _search_unsplash_candidates(query, query_keywords)
-
-        # 3. 合并去重，按文本相关性排序
-        all_results = pexels_results + unsplash_results
-        all_results.sort(key=lambda r: r.get("score", 0), reverse=True)
-
-        if not all_results:
-            return json.dumps([{"title": "无结果", "content": f"未找到'{query}'的图片"}], ensure_ascii=False)
-
-        # 4. 视觉验证 top 8
-        candidates = all_results[:8]
-        verified = _verify_images_with_vision(query, candidates)
-
-        # 5. 验证通过的直接返回；否则退回文本 top 5
-        final = verified if verified else all_results[:5]
-        for r in final:
-            r.pop("score", None)
-            r.pop("original_url", None)
-
-        return json.dumps(final, ensure_ascii=False)
-
-    except Exception as e:
-        return json.dumps([{"title": "异常", "content": str(e)}], ensure_ascii=False)
 
 
 @tool
@@ -333,149 +83,6 @@ def bilibili_search(query: str):
         return json.dumps(results, ensure_ascii=False)
     except Exception as e:
         return json.dumps([{"title": "异常", "content": str(e)}], ensure_ascii=False)
-
-
-def _build_image_prompt(query: str) -> str:
-    """从中文菜名构建英文图像生成提示词"""
-    mapped = _DISH_NAME_MAP.get(query, [query])
-    en_name = mapped[0] if mapped else query
-    return f"professional food photography of {en_name},{_IMAGE_PROMPT_SUFFIX}"
-
-
-def _lookup_image_cache(dish_query: str) -> str | None:
-    """从 MySQL 缓存查找已生成的图片 URL"""
-    from app.models.db import ImageCache
-    from app.common.database import SessionLocal
-    session = SessionLocal()
-    try:
-        row = session.query(ImageCache).filter(
-            ImageCache.dish_query == dish_query
-        ).first()
-        return row.oss_url if row else None
-    except Exception as e:
-        logger.warning(f"[image_cache] 查询失败: {e}")
-        return None
-    finally:
-        session.close()
-
-
-def _save_image_cache(dish_query: str, oss_url: str):
-    """将生成的图片 URL 写入 MySQL 缓存"""
-    from app.models.db import ImageCache
-    from app.common.database import SessionLocal
-    session = SessionLocal()
-    try:
-        existing = session.query(ImageCache).filter(
-            ImageCache.dish_query == dish_query
-        ).first()
-        if existing:
-            existing.oss_url = oss_url
-            existing.created_at = int(time.time() * 1000)
-        else:
-            session.add(ImageCache(
-                dish_query=dish_query, oss_url=oss_url,
-                created_at=int(time.time() * 1000),
-            ))
-        session.commit()
-    except Exception as e:
-        session.rollback()
-        logger.warning(f"[image_cache] 写入失败: {e}")
-    finally:
-        session.close()
-
-
-def _generate_and_upload_image(query: str) -> str | None:
-    """通过火山引擎 ARK Seedream 生成菜品图片并上传 OSS"""
-    api_key = os.getenv("DOUBAO_API_KEY")
-    base_url = os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v1")
-    model_name = os.getenv("IMAGE_GEN_MODEL", "doubao-seedream-4-5-251128")
-
-    prompt = _build_image_prompt(query)
-
-    resp = requests.post(
-        f"{base_url}/images/generations",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": model_name,
-            "prompt": prompt,
-            "n": 1,
-            "size": "1920x1920",
-        },
-        timeout=120,
-    )
-    if resp.status_code != 200:
-        logger.warning(f"[image_gen] ARK API 返回 {resp.status_code}: {resp.text[:300]}")
-        return None
-
-    data = resp.json()
-    image_url = (data.get("data") or [{}])[0].get("url", "")
-    if not image_url:
-        logger.warning(f"[image_gen] ARK 响应中未找到图片 URL: {str(data)[:300]}")
-        return None
-
-    img_resp = requests.get(image_url, timeout=60)
-    if img_resp.status_code != 200:
-        logger.warning(f"[image_gen] 下载图片失败 HTTP {img_resp.status_code}")
-        return None
-
-    image_bytes = img_resp.content
-    hash_prefix = hashlib.md5(query.encode("utf-8")).hexdigest()[:12]
-    filename = f"ai-generated/{hash_prefix}_{int(time.time() * 1000)}.jpg"
-
-    try:
-        bucket = _get_bucket()
-        bucket.put_object(filename, image_bytes, headers={
-            "Content-Type": "image/jpeg",
-            "x-oss-object-acl": "public-read",
-        })
-    except Exception as e:
-        logger.warning(f"[image_gen] OSS 上传失败: {e}")
-        return None
-
-    endpoint = os.getenv("OSS_ENDPOINT", "oss-cn-beijing.aliyuncs.com")
-    bucket_name = os.getenv("OSS_BUCKET")
-    oss_url = f"https://{bucket_name}.{endpoint}/{filename}"
-    proxy_url = proxy_image_url(oss_url)
-    logger.info(f"[image_gen] {query} -> {proxy_url}")
-    return proxy_url
-
-
-@tool
-def generate_recipe_image(query: str):
-    """AI生成指定菜品的成品照片。输入准确的菜品名称如'宫保鸡丁'或'番茄炒蛋'，返回AI生成的高质量菜品图片URL。用于没有现成照片的定制菜品或创意菜。"""
-    try:
-        cached_url = _lookup_image_cache(query)
-        if cached_url:
-            logger.info(f"[generate_recipe_image] 缓存命中: {query}")
-            return json.dumps(
-                [{"title": query, "url": cached_url, "content": f"{query}（AI生成）"}],
-                ensure_ascii=False
-            )
-
-        logger.info(f"[generate_recipe_image] 生成新图片: {query}")
-        oss_url = _generate_and_upload_image(query)
-
-        if oss_url:
-            _save_image_cache(query, oss_url)
-            return json.dumps(
-                [{"title": query, "url": oss_url, "content": f"{query}（AI生成）"}],
-                ensure_ascii=False
-            )
-
-        logger.info(f"[generate_recipe_image] AI 生成失败: {query}")
-        return json.dumps(
-            [{"title": "生成失败", "content": f"未能为'{query}'生成图片，请稍后重试"}],
-            ensure_ascii=False
-        )
-    except Exception as e:
-        logger.error(f"[generate_recipe_image] 异常: {e}")
-        return json.dumps(
-            [{"title": "异常", "content": str(e)}],
-            ensure_ascii=False
-        )
 
 
 @tool
@@ -676,34 +283,41 @@ def search_recipes(prompt: str, image: str, thread_id: str, preference: dict = N
         if items:
             inventory_context = f"\n【冰箱库存】\n当前冰箱中有：{', '.join(items)}\n以上是用户冰箱中的食材。请根据用户的实际问题来回应，不要自动推荐菜品，除非用户明确请求推荐。\n"
 
-    # 预生成图片：从用户消息中提取菜名，提前生成 AI 图片 URL
+    # 预生成图片+视频：后台线程并行执行，最多等待 5 秒，超时则跳过（LLM 工具兜底）
     pregen_context = ""
-    # 提取可能的中文菜名（包含烹饪特征字）
-    potential_dishes = _re.findall(r'[一-鿿]{2,6}(?:炒|烧|炖|蒸|煮|炸|煎|焖|煲|烤|拌|烩|煨|熘|爆|焗|汤|羹|面|饭|粥|饼|饺|包|卷|丝|片|丁|块|丸|球)[一-鿿]{0,4}', prompt)
+    potential_dishes = _re.findall(r'[一-鿿]{1,6}(?:炒|烧|炖|蒸|煮|炸|煎|焖|煲|烤|拌|烩|煨|熘|爆|焗|汤|羹|面|饭|粥|饼|饺|包|卷|丝|片|丁|块|丸|球)[一-鿿]{0,4}', prompt)
     simple_dishes = _re.findall(r'(?:做[个份道]?|来[个份道]?|要[个份道]?|想吃)([一-鿿]{2,10})', prompt)
     all_hints = list(set(potential_dishes + [m for m in simple_dishes if m]))
     if all_hints:
         dish = all_hints[0].strip()
-        # 去掉问题后缀，只保留菜名
         for suffix in ['怎么做', '怎么烧', '怎么炖', '怎么煮', '如何做', '怎样做', '的做法', '的视频', '教程', '的做法教程']:
             if dish.endswith(suffix):
                 dish = dish[:-len(suffix)]
                 break
         if len(dish) >= 2:
-            logger.info(f"[pregen] 预生成图片: {dish}")
+            from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+            def _run_image_gen(d):
+                try: return json.loads(fetch_dish_image.invoke(d))
+                except Exception: return None
+            def _run_video_search(d):
+                try: return json.loads(bilibili_search.invoke({"query": d}))
+                except Exception: return None
+            executor = ThreadPoolExecutor(max_workers=2)
+            img_future = executor.submit(_run_image_gen, dish)
+            video_future = executor.submit(_run_video_search, dish)
             try:
-                result = json.loads(fetch_dish_image.invoke(dish))
-                if result and isinstance(result, list) and result[0].get("url", "").startswith("/api/"):
-                    img_url = result[0]["url"]
-                    pregen_context = f"\n【预生成图片】{dish}: {img_url}\n请在菜谱中使用此图片URL。\n"
-                    logger.info(f"[pregen] 成功: {img_url[:60]}")
-            except Exception as pe:
-                logger.warning(f"[pregen] 失败: {pe}")
-
-            # 预搜索视频
-            logger.info(f"[pregen] 预搜索视频: {dish}")
+                result = img_future.result(timeout=5)
+                if result and isinstance(result, list):
+                    img_url = result[0].get("url", "")
+                    if img_url and (img_url.startswith("/api/") or img_url.startswith("http://") or img_url.startswith("https://")):
+                        pregen_context = f"\n【预生成图片】{dish}: {img_url}\n请在菜谱中使用此图片URL。\n"
+                        logger.info(f"[pregen] 图片成功: {img_url[:60]}")
+            except FutureTimeoutError:
+                logger.info(f"[pregen] 图片超时，交给 LLM 工具调用兜底")
+            except Exception as e:
+                logger.warning(f"[pregen] 图片异常: {e}")
             try:
-                video_result = json.loads(bilibili_search.invoke({"query": dish}))
+                video_result = video_future.result(timeout=5)
                 if video_result and isinstance(video_result, list) and video_result[0].get("url"):
                     has_exact = any(dish in str(v.get("title", "")) for v in video_result)
                     video_lines = "\n".join(
@@ -714,9 +328,12 @@ def search_recipes(prompt: str, image: str, thread_id: str, preference: dict = N
                         pregen_context += f"\n【预搜索视频】已找到「{dish}」的教学视频，直接列出（不要加说明文字）：\n{video_lines}\n"
                     else:
                         pregen_context += f"\n【预搜索视频】未找到「{dish}」的精准视频，以下是相似菜品视频（先说明未找到，再列出）：\n{video_lines}\n"
-                    logger.info(f"[pregen] 视频搜索成功: {len(video_result)} 个")
-            except Exception as ve:
-                logger.warning(f"[pregen] 视频搜索失败: {ve}")
+                    logger.info(f"[pregen] 视频成功: {len(video_result)} 个")
+            except FutureTimeoutError:
+                logger.info(f"[pregen] 视频超时，交给 LLM 工具调用兜底")
+            except Exception as e:
+                logger.warning(f"[pregen] 视频异常: {e}")
+            executor.shutdown(wait=False)
 
     # 将预生成内容、偏好记忆等作为 SystemMessage，不混入用户消息也不在历史中展示
     context_parts = []
@@ -735,8 +352,9 @@ def search_recipes(prompt: str, image: str, thread_id: str, preference: dict = N
         if not image or image.strip() == "":
             messages.append(HumanMessage(content=prompt))
         else:
+            data_url = _image_url_to_data_url(image)
             messages.append(HumanMessage(content=[
-                {"type": "image_url", "image_url": {"url": image}},
+                {"type": "image_url", "image_url": {"url": data_url}},
                 {"type": "text", "text": prompt}
             ]))
 

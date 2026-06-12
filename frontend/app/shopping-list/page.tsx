@@ -71,11 +71,11 @@ export default function ShoppingListPage() {
     }, []);
 
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-    const [forceMerged, setForceMerged] = useState(false);
+    const [forceMerged, setForceMerged] = useState<Set<string>>(new Set());
     const [sectionCollapsed, setSectionCollapsed] = useState<Set<string>>(new Set());
 
     const getViewMode = useCallback((list: ShoppingList): 'merged' | 'grouped' => {
-        if (forceMerged) return 'merged';
+        if (forceMerged.has(list.id)) return 'merged';
         return list.source_recipes.length > 1 ? 'grouped' : 'merged';
     }, [forceMerged]);
 
@@ -517,15 +517,19 @@ export default function ShoppingListPage() {
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        setForceMerged(v => !v);
+                                                        setForceMerged(v => {
+                                                            const next = new Set(v);
+                                                            next.has(list.id) ? next.delete(list.id) : next.add(list.id);
+                                                            return next;
+                                                        });
                                                     }}
                                                     style={{
                                                         padding: "4px 10px",
                                                         borderRadius: 10,
-                                                        background: forceMerged ? "var(--bg)" : "var(--accent)",
+                                                        background: forceMerged.has(list.id) ? "var(--bg)" : "var(--accent)",
                                                         border: "none",
                                                         cursor: "pointer",
-                                                        color: forceMerged ? "var(--text-secondary)" : "#fff",
+                                                        color: forceMerged.has(list.id) ? "var(--text-secondary)" : "#fff",
                                                         fontSize: 11,
                                                         fontWeight: 600,
                                                         transition: "var(--transition)",
@@ -533,7 +537,7 @@ export default function ShoppingListPage() {
                                                         whiteSpace: "nowrap",
                                                     }}
                                                 >
-                                                    {forceMerged ? "按菜谱分组" : "合并显示"}
+                                                    {forceMerged.has(list.id) ? "按菜谱分组" : "合并显示"}
                                                 </button>
                                             )}
                                             <button

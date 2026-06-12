@@ -3,6 +3,7 @@
 import { Recipe } from "@/types/recipe";
 import { Clock, Check, ChefHat, Video } from "lucide-react";
 import { RecipeSaveBlock, stripSaveBlocks, difficultyColor } from "./RecipeSaveBlock";
+import { proxyImageUrl } from "@/lib/imageUtils";
 
 interface RecipeCardProps {
   recipe: Recipe;
@@ -50,7 +51,7 @@ export function RecipeCard({ recipe, onClick, className, selectMode, selected, o
       {recipe.imageUrl && (
         <div style={{ position: "relative", height: 180, overflow: "hidden" }}>
           <img
-            src={recipe.imageUrl}
+            src={proxyImageUrl(recipe.imageUrl)}
             alt={recipe.title}
             style={{ width: "100%", height: "100%", objectFit: "cover", transition: "transform 0.5s ease" }}
             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}

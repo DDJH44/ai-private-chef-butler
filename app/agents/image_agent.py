@@ -69,14 +69,21 @@ def _build_prompt(query: str) -> str:
 
 
 def _lookup_cache(query: str) -> str | None:
-    """MySQL 缓存查询"""
+    """MySQL 缓存查询。返回的 URL 始终经过代理处理。"""
     try:
         from app.models.db import ImageCache
         from app.common.database import SessionLocal
         session = SessionLocal()
         try:
             row = session.query(ImageCache).filter(ImageCache.dish_query == query).first()
-            return row.oss_url if row else None
+            if not row:
+                return None
+            url = row.oss_url
+            # 兼容旧缓存：如果是外部 URL 且未代理，自动包装为代理 URL
+            if url and (url.startswith("http://") or url.startswith("https://")):
+                if "/api/v1/oss/proxy-image" not in url:
+                    url = proxy_image_url(url)
+            return url
         finally:
             session.close()
     except Exception as e:

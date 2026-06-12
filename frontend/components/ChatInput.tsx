@@ -135,22 +135,19 @@ export function ChatInput({ onSendMessage, onImageUpload, disabled, defaultValue
       base64 = await compressAndToBase64(localUrl);
     } catch { /* keep localUrl as preview */ }
     // Try OSS in background, but don't block — base64 is the reliable fallback
+    let uploaded = false;
     try {
       const ossUrl = await onImageUpload(file);
       if (ossUrl) {
-        URL.revokeObjectURL(localUrl);
         setImagePreview(ossUrl);
-        setUploading(false);
-        if (fileInputRef.current) fileInputRef.current.value = "";
-        if (cameraInputRef.current) cameraInputRef.current.value = "";
-        return;
+        uploaded = true;
       }
     } catch { /* OSS unavailable, use base64 */ }
     // Fallback to compressed base64
-    if (base64) {
-      URL.revokeObjectURL(localUrl);
+    if (!uploaded && base64) {
       setImagePreview(base64);
     }
+    URL.revokeObjectURL(localUrl);
     setUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (cameraInputRef.current) cameraInputRef.current.value = "";

@@ -64,7 +64,7 @@ async function pushRemote(ingredients: Ingredient[]): Promise<Ingredient[]> {
         await fetch(`${ING_API}/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders() });
       }
     }
-  } catch { /* 静默 */ }
+  } catch (e) { console.warn("食材同步到远程失败:", e); }
   return ingredients;
 }
 

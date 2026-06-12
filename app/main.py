@@ -30,6 +30,17 @@ app.add_middleware(
 
 
 @app.middleware("http")
+async def auth_cookie_middleware(request: Request, call_next):
+    """将 auth_token cookie 转换为 Authorization header，使 <img> 标签等请求可通过 cookie 认证"""
+    auth_cookie = request.cookies.get("auth_token")
+    if auth_cookie and "authorization" not in (h.lower() for h in request.headers):
+        request.scope["headers"] = list(request.scope["headers"]) + [
+            (b"authorization", f"Bearer {auth_cookie}".encode())
+        ]
+    return await call_next(request)
+
+
+@app.middleware("http")
 async def request_id_middleware(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID") or str(_uuid.uuid4())
     request.state.request_id = request_id

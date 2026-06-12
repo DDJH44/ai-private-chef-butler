@@ -7,6 +7,7 @@ WORKDIR /app/frontend
 RUN npm ci --registry=https://registry.npmmirror.com
 
 COPY frontend/ ./
+ENV NODE_ENV=production
 RUN npm run build
 
 FROM python:3.13-slim
@@ -30,6 +31,9 @@ COPY --from=frontend-builder /app/frontend/out /app/app/static/
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+
+RUN useradd --create-home --shell /bin/bash appuser && chown -R appuser:appuser /app
+USER appuser
 
 EXPOSE 8001
 

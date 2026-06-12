@@ -10,9 +10,7 @@ import {showToast} from "@/components/Toast";
 import { AuthGuard } from "@/components/AuthGuard";
 import DatePicker from "@/components/DatePicker";
 import ConfirmDialog from "@/components/ConfirmDialog";
-import {generateMealPlan} from "@/lib/api";
-import { getPreference } from "@/lib/api";
-import {loadIngredients} from "@/lib/ingredientStore";
+import { startMealPlanGeneration, hasActiveMealPlanGen, subscribeToMealPlanGen } from "@/lib/mealPlanGenStore";
 import { Sparkles, Calendar, X, BookOpen, ShoppingCart, Clock } from "lucide-react";
 
 /* ---------- inline style tokens ---------- */
@@ -492,11 +490,16 @@ export default function MealPlanPage() {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [plan, setPlan] = useState<MealPlan | null>(null);
     const [showGenerate, setShowGenerate] = useState(false);
-    const [generating, setGenerating] = useState(false);
     const [genRequirements, setGenRequirements] = useState("");
     const [genMode, setGenMode] = useState<"full" | "breakfast_only" | "lunch_only" | "dinner_only">("full");
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+    // 全局生成状态（页面切换不中断）
+    const [generating, setGenerating] = useState(() => hasActiveMealPlanGen());
+    useEffect(() => {
+        return subscribeToMealPlanGen(() => setGenerating(hasActiveMealPlanGen()));
+    }, []);
 
     // Edit meal modal state
     const [showEdit, setShowEdit] = useState(false);
@@ -533,6 +536,29 @@ export default function MealPlanPage() {
         setShowEdit(true);
     }, [plan]);
 
+    // 本地更新单个餐次，不读 localStorage，保留滚动位置
+    const updateMealLocally = useCallback((prev: MealPlan | null, date: string, mealType: string, meal: MealItem): MealPlan | null => {
+        if (!prev) return null;
+        const newDays = prev.days.map(d => {
+            if (d.date !== date) return d;
+            const newMeals = { ...d.meals, [mealType]: meal };
+            const newDaily = {
+                calories: (newMeals.breakfast.calories || 0) + (newMeals.lunch.calories || 0) + (newMeals.dinner.calories || 0),
+                protein: (newMeals.breakfast.protein || 0) + (newMeals.lunch.protein || 0) + (newMeals.dinner.protein || 0),
+                carbs: (newMeals.breakfast.carbs || 0) + (newMeals.lunch.carbs || 0) + (newMeals.dinner.carbs || 0),
+                fat: (newMeals.breakfast.fat || 0) + (newMeals.lunch.fat || 0) + (newMeals.dinner.fat || 0),
+            };
+            return { ...d, meals: newMeals, daily_total: newDaily };
+        });
+        const weeklyTotal = newDays.reduce((acc, d) => ({
+            calories: acc.calories + d.daily_total.calories,
+            protein: acc.protein + d.daily_total.protein,
+            carbs: acc.carbs + d.daily_total.carbs,
+            fat: acc.fat + d.daily_total.fat,
+        }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+        return { ...prev, days: newDays, weekly_total: weeklyTotal };
+    }, []);
+
     const handleSaveMeal = useCallback(() => {
         if (!plan || !editName.trim()) return;
         const meal: MealItem = {
@@ -545,6 +571,7 @@ export default function MealPlanPage() {
             fat: Number(editFat) || 0,
             status: "planned",
         };
+        setPlan(prev => updateMealLocally(prev, editingDate, editingMealType, meal));
         updateMealInPlan(plan.id, editingDate, editingMealType, meal);
         setShowEdit(false);
     }, [plan, editName, editIngredients, editCalories, editProtein, editCarbs, editFat, editingDate, editingMealType]);
@@ -566,7 +593,11 @@ export default function MealPlanPage() {
     useEffect(() => {
         const handler = () => refreshPlan();
         window.addEventListener(MEAL_PLAN_CHANGE_EVENT, handler);
-        return () => window.removeEventListener(MEAL_PLAN_CHANGE_EVENT, handler);
+        window.addEventListener("mealplan:generated", handler);
+        return () => {
+            window.removeEventListener(MEAL_PLAN_CHANGE_EVENT, handler);
+            window.removeEventListener("mealplan:generated", handler);
+        };
     }, [refreshPlan]);
 
     const goWeek = useCallback((offset: number) => {
@@ -579,96 +610,58 @@ export default function MealPlanPage() {
 
     const handleRemove = useCallback((date: string, mealType: "breakfast" | "lunch" | "dinner") => {
         if (!plan) return;
+        const emptyMeal: MealItem = {
+            recipe_id: null, recipe_name: null,
+            ingredients: [], calories: 0, protein: 0, carbs: 0, fat: 0, status: "empty",
+        };
+        setPlan(prev => updateMealLocally(prev, date, mealType, emptyMeal));
         removeMealFromPlan(plan.id, date, mealType);
     }, [plan]);
 
-    const handleGenerate = useCallback(async () => {
+    const handleGenerate = useCallback(() => {
         if (!plan) return;
-        setGenerating(true);
-        try {
-            const inventory = loadIngredients().map(i => ({
-                name: i.name, quantity: i.quantity, unit: i.unit, status: i.status,
-            }));
+        setShowGenerate(false);
 
-            // Pass existing plan so AI can preserve user-edited meals
-            const existingPlan = {
-                days: plan.days.map(d => ({
-                    date: d.date,
-                    meals: {
-                        breakfast: d.meals.breakfast.status === "planned" ? {
-                            recipe_name: d.meals.breakfast.recipe_name,
-                            calories: d.meals.breakfast.calories,
-                            protein: d.meals.breakfast.protein,
-                            carbs: d.meals.breakfast.carbs,
-                            fat: d.meals.breakfast.fat,
-                        } : null,
-                        lunch: d.meals.lunch.status === "planned" ? {
-                            recipe_name: d.meals.lunch.recipe_name,
-                            calories: d.meals.lunch.calories,
-                            protein: d.meals.lunch.protein,
-                            carbs: d.meals.lunch.carbs,
-                            fat: d.meals.lunch.fat,
-                        } : null,
-                        dinner: d.meals.dinner.status === "planned" ? {
-                            recipe_name: d.meals.dinner.recipe_name,
-                            calories: d.meals.dinner.calories,
-                            protein: d.meals.dinner.protein,
-                            carbs: d.meals.dinner.carbs,
-                            fat: d.meals.dinner.fat,
-                        } : null,
-                    },
-                })),
-            };
+        const existingPlan = {
+            days: plan.days.map(d => ({
+                date: d.date,
+                meals: {
+                    breakfast: d.meals.breakfast.status === "planned" ? {
+                        recipe_name: d.meals.breakfast.recipe_name,
+                        calories: d.meals.breakfast.calories,
+                        protein: d.meals.breakfast.protein,
+                        carbs: d.meals.breakfast.carbs,
+                        fat: d.meals.breakfast.fat,
+                    } : null,
+                    lunch: d.meals.lunch.status === "planned" ? {
+                        recipe_name: d.meals.lunch.recipe_name,
+                        calories: d.meals.lunch.calories,
+                        protein: d.meals.lunch.protein,
+                        carbs: d.meals.lunch.carbs,
+                        fat: d.meals.lunch.fat,
+                    } : null,
+                    dinner: d.meals.dinner.status === "planned" ? {
+                        recipe_name: d.meals.dinner.recipe_name,
+                        calories: d.meals.dinner.calories,
+                        protein: d.meals.dinner.protein,
+                        carbs: d.meals.dinner.carbs,
+                        fat: d.meals.dinner.fat,
+                    } : null,
+                },
+            })),
+        };
 
-            const result = await generateMealPlan({
-                week_start: plan.week_start,
-                week_end: plan.week_end,
-                mode: genMode,
-                requirements: genRequirements || undefined,
-                preference: getPreference() as unknown as Record<string, unknown>,
-                inventory,
-                existing_plan: existingPlan,
-            } as Parameters<typeof generateMealPlan>[0]);
-
-            const data = result as { plan?: { days?: Array<{ date: string; meals: Record<string, { recipe_name: string; ingredients?: string[]; calories: number; protein: number; carbs: number; fat: number } | null> }> }; error?: string; raw?: string };
-            if (data.error || !data.plan?.days) {
-                showToast(data.error || "生成失败，请重试", "error");
-                return;
-            }
-
-            for (const day of data.plan.days) {
-                for (const mealType of MEAL_TYPES) {
-                    const mealData = day.meals?.[mealType.key];
-                    // null means "not generated" — skip to preserve existing
-                    if (mealData === null || mealData === undefined) continue;
-                    if (mealData?.recipe_name) {
-                        const meal: MealItem = {
-                            recipe_id: null,
-                            recipe_name: mealData.recipe_name,
-                            ingredients: mealData.ingredients || [],
-                            calories: mealData.calories || 0,
-                            protein: mealData.protein || 0,
-                            carbs: mealData.carbs || 0,
-                            fat: mealData.fat || 0,
-                            status: "planned",
-                        };
-                        updateMealInPlan(plan.id, day.date, mealType.key, meal);
-                    }
-                }
-            }
-            refreshPlan();
-            showToast("膳食计划已生成", "success");
-            setShowGenerate(false);
-        } catch (e) {
-            if (e instanceof DOMException && e.name === "AbortError") {
-                showToast("生成超时，请尝试分餐生成（早餐/午餐/晚餐单独生成）或稍后重试", "error");
-            } else {
-                showToast("生成失败: " + (e instanceof Error ? e.message : "未知错误"), "error");
-            }
-        } finally {
-            setGenerating(false);
-        }
-    }, [plan, genMode, genRequirements, refreshPlan]);
+        // 全局任务，页面切换不中断
+        startMealPlanGeneration({
+            week_start: plan.week_start,
+            week_end: plan.week_end,
+            mode: genMode,
+            requirements: genRequirements || undefined,
+            planId: plan.id,
+            weekLabel: formatWeekRange(plan.week_start, plan.week_end),
+            existingPlan,
+        });
+    }, [plan, genMode, genRequirements]);
 
     const handleGenerateWeekShoppingList = useCallback(async () => {
         if (!plan) return;

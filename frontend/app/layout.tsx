@@ -18,7 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: `try{if(localStorage.getItem("theme")==="dark")document.documentElement.classList.add("dark")}catch(e){}` }} />
+        <script>{`try{if(localStorage.getItem("theme")==="dark")document.documentElement.classList.add("dark")}catch(e){}`}</script>
       </head>
       <body className="antialiased" style={{ fontFamily: '"Noto Sans SC", "Microsoft YaHei", "PingFang SC", system-ui, -apple-system, sans-serif' }}>
         <ErrorBoundary>

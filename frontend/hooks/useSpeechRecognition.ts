@@ -48,6 +48,7 @@ export function useSpeechRecognition() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const resolveRef = useRef<((t: string) => void) | null>(null);
+  const whisperPromiseRef = useRef<Promise<string> | null>(null);
   const transcriptRef = useRef("");
   const isRecordingRef = useRef(false);
 
@@ -129,6 +130,7 @@ export function useSpeechRecognition() {
 
       return new Promise<string>((resolve) => {
         resolveRef.current = resolve;
+        whisperPromiseRef.current = null; // will be resolved by onstop
         recorder.onstop = async () => {
           stream.getTracks().forEach((t) => t.stop());
           setUploading(true);
@@ -150,6 +152,7 @@ export function useSpeechRecognition() {
             resolve("");
           } finally {
             setUploading(false);
+            resolveRef.current = null;
           }
         };
         recorder.start();
@@ -186,19 +189,40 @@ export function useSpeechRecognition() {
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       recognitionRef.current = null;
+      isRecordingRef.current = false;
+      setIsRecording(false);
+      // Browser speech: resolve after a short delay for final results
+      return new Promise<string>((resolve) => {
+        setTimeout(() => {
+          resolveRef.current?.("");
+          resolve(transcriptRef.current);
+        }, 200);
+      });
     }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      // Whisper path: stop triggers onstop which does transcription and resolves
+      // Return a promise that resolves after the onstop handler completes
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current = null;
+      isRecordingRef.current = false;
+      setIsRecording(false);
+      return new Promise<string>((resolve) => {
+        const check = (): void => {
+          if (!resolveRef.current) {
+            // onstop handler completed, resolveRef was cleared
+            resolve(transcriptRef.current);
+          } else {
+            setTimeout(check, 50);
+          }
+        };
+        check();
+        // Safety timeout after 60s
+        setTimeout(() => resolve(transcriptRef.current), 60000);
+      });
     }
     isRecordingRef.current = false;
     setIsRecording(false);
-    return new Promise<string>((resolve) => {
-      setTimeout(() => {
-        resolveRef.current?.("");
-        resolve(transcriptRef.current);
-      }, 200);
-    });
+    return Promise.resolve(transcriptRef.current);
   }, []);
 
   const cancel = useCallback(() => {

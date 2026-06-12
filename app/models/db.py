@@ -1,6 +1,6 @@
 """SQLAlchemy ORM 模型 —— 映射原 SQLite 表到 MySQL"""
 from sqlalchemy import Column, String, Integer, Float, Text, JSON, Boolean, BigInteger, Index, LargeBinary
-from sqlalchemy.dialects.mysql import LONGTEXT
+from sqlalchemy.dialects.mysql import LONGTEXT, MEDIUMBLOB
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -142,8 +142,8 @@ class CheckpointRow(Base):
     checkpoint_id = Column(String(64), primary_key=True, nullable=False)
     parent_checkpoint_id = Column(String(64), nullable=True)
     type = Column(String(100), nullable=True)
-    checkpoint = Column(LargeBinary, nullable=True)
-    meta = Column("metadata", LargeBinary, nullable=True)
+    checkpoint = Column(MEDIUMBLOB, nullable=True)
+    meta = Column("metadata", MEDIUMBLOB, nullable=True)
 
 
 class WriteRow(Base):
@@ -156,7 +156,7 @@ class WriteRow(Base):
     idx = Column(Integer, primary_key=True, nullable=False)
     channel = Column(String(100), nullable=False)
     type = Column(String(100), nullable=True)
-    value = Column(LargeBinary, nullable=True)
+    value = Column(MEDIUMBLOB, nullable=True)
 
 
 class ImageCache(Base):

@@ -39,10 +39,18 @@ app/static/
 # Claude Code
 .claude/
 
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
 # OS
 .DS_Store
 Thumbs.db
-nginx/ssl/*.pem
+
+# SSL certificates (entire directory — never commit keys/certs)
+nginx/ssl/
 
 # Test and outputs
 test_screenshots/

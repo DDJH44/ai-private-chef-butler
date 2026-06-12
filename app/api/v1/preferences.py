@@ -9,6 +9,7 @@ from app.models.db import Preference
 
 router = APIRouter()
 
+VALID_DIET_TYPES = {"normal", "vegetarian", "vegan", "keto", "low_carb", "high_protein", "mediterranean", "pescatarian", "gluten_free", "dairy_free"}
 
 class PreferenceData(BaseModel):
     allergies: list[str] = []
@@ -16,7 +17,7 @@ class PreferenceData(BaseModel):
     diet_type: str = "normal"
     taste: dict = {}
     family_members: list[dict] = []
-    nutrition_targets: Optional[dict] = None  # {daily_calories, protein_target, carbs_target, fat_target, fiber_target, goal_type}
+    nutrition_targets: Optional[dict] = None
 
 
 @router.get("")
@@ -33,6 +34,9 @@ def get_preferences(current_user: dict = Depends(get_current_user)):
 def save_preferences(data: PreferenceData, current_user: dict = Depends(get_current_user)):
     uid = current_user["user_id"]
     data_dict = data.model_dump()
+    # Validate diet_type (Pydantic model_validator behaves inconsistently with FastAPI)
+    if data_dict.get("diet_type", "normal") not in VALID_DIET_TYPES:
+        data_dict["diet_type"] = "normal"
     now = int(time.time() * 1000)
     with get_db() as session:
         pref = session.query(Preference).filter(Preference.user_id == uid).first()

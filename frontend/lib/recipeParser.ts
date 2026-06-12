@@ -54,7 +54,8 @@ function extractFieldsFromBlock(block: string): Partial<Recipe> {
  */
 function extractImageUrls(content: string): string[] {
   const seen = new Set<string>();
-  const imgRegex = /!\[.*?\]\((https?:\/\/[^)]+)\)/gi;
+  // 匹配绝对 URL (https?://...) 和相对代理路径 (/api/...)
+  const imgRegex = /!\[.*?\]\(((?:https?:\/\/|\/)[^)]+)\)/gi;
   let match;
   while ((match = imgRegex.exec(content)) !== null) {
     if (!seen.has(match[1])) seen.add(match[1]);
@@ -125,7 +126,7 @@ function parseAllRecipesFromText(content: string): Array<{index: number; content
       }
     }
 
-    const imgMatch = section.match(/!\[.*?\]\((https?:\/\/[^)]+)\)/i);
+    const imgMatch = section.match(/!\[.*?\]\(((?:https?:\/\/|\/)[^)]+)\)/i);
     if (imgMatch) recipe.imageUrl = imgMatch[1];
 
     const videoMatch = section.match(/###?\s*🎬\s*视频教程[\s\S]*?\[(?:[^\]]*)\]\((https?:\/\/[^)]+)\)/i)
@@ -151,7 +152,7 @@ function parseAllRecipesFromText(content: string): Array<{index: number; content
         }
       }
     }
-    const imgMatch = content.match(/!\[.*?\]\((https?:\/\/[^)]+)\)/i);
+    const imgMatch = content.match(/!\[.*?\]\(((?:https?:\/\/|\/)[^)]+)\)/i);
     if (imgMatch) recipe.imageUrl = imgMatch[1];
     const videoMatch = content.match(/###?\s*🎬\s*视频教程[\s\S]*?\[(?:[^\]]*)\]\((https?:\/\/[^)]+)\)/i)
       || content.match(/\[.*?\]\((https?:\/\/(?:www\.)?bilibili\.com\/video\/[^)]+)\)/i);

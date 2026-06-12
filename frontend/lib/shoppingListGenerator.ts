@@ -77,7 +77,13 @@ export async function generateShoppingListFromRecipes(
             .filter(parsed => !IGNORE_NAMES.has(parsed.name) || parsed.amount >= 2)
             .map(parsed => {
                 const stockItem = inventory.find(
-                    inv => inv.name === parsed.name || inv.name.includes(parsed.name) || parsed.name.includes(inv.name)
+                    inv => {
+                      if (inv.name === parsed.name) return true;
+                      if (inv.name.length >= 3 && parsed.name.length >= 3) {
+                        return inv.name.includes(parsed.name) || parsed.name.includes(inv.name);
+                      }
+                      return false;
+                    }
                 );
                 const stockAmount = stockItem ? stockItem.quantity : 0;
                 const inStock = stockItem !== undefined && stockAmount >= parsed.amount;

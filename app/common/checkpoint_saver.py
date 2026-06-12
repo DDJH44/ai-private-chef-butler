@@ -150,17 +150,30 @@ class MySQLSaver(BaseCheckpointSaver[str]):
             if limit:
                 query = query.limit(limit)
 
-            for row in query.all():
-                writes = (
-                    session.query(WriteRow)
-                    .filter(
-                        WriteRow.thread_id == row.thread_id,
-                        WriteRow.checkpoint_ns == row.checkpoint_ns,
-                        WriteRow.checkpoint_id == row.checkpoint_id,
-                    )
-                    .order_by(WriteRow.task_id, WriteRow.idx)
-                    .all()
+            rows = query.all()
+            if not rows:
+                return
+
+            # Batch-fetch all writes for all returned checkpoints (avoids N+1)
+            checkpoint_ids = [(r.thread_id, r.checkpoint_ns, r.checkpoint_id) for r in rows]
+            all_writes = (
+                session.query(WriteRow)
+                .filter(
+                    WriteRow.thread_id.in_([c[0] for c in checkpoint_ids]),
+                    WriteRow.checkpoint_ns.in_([c[1] for c in checkpoint_ids]),
+                    WriteRow.checkpoint_id.in_([c[2] for c in checkpoint_ids]),
                 )
+                .order_by(WriteRow.task_id, WriteRow.idx)
+                .all()
+            )
+            writes_map: dict[tuple, list] = {}
+            for w in all_writes:
+                key = (w.thread_id, w.checkpoint_ns, w.checkpoint_id)
+                writes_map.setdefault(key, []).append(w)
+
+            for row in rows:
+                key = (row.thread_id, row.checkpoint_ns, row.checkpoint_id)
+                writes = writes_map.get(key, [])
                 yield CheckpointTuple(
                     {
                         "configurable": {

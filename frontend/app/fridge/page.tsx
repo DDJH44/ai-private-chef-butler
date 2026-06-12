@@ -564,6 +564,7 @@ export default function FridgePage() {
                                         onClick={() => setForm(prev => ({
                                             ...prev,
                                             name: s.name,
+                                            category: classifyIngredient(s.name),
                                             shelf_life_days: s.days,
                                             expiry_date: calculateExpiryDate(
                                                 prev.purchase_date || new Date().toISOString().split("T")[0], s.days

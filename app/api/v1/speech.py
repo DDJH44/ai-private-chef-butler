@@ -8,6 +8,8 @@ import tempfile
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
+MAX_AUDIO_SIZE = 25 * 1024 * 1024  # 25MB max audio upload
+
 
 def _get_client():
     from openai import OpenAI
@@ -31,6 +33,8 @@ async def transcribe_audio(file: UploadFile = File(...)):
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="音频文件为空")
+    if len(content) > MAX_AUDIO_SIZE:
+        raise HTTPException(status_code=413, detail=f"音频文件不能超过{MAX_AUDIO_SIZE // (1024*1024)}MB")
 
     suffix = ".webm"
     if file.filename:

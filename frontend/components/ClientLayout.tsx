@@ -4,6 +4,8 @@ import { SideNav, BottomNav } from "./ResponsiveNav";
 import { ToastContainer } from "./Toast";
 import { AuthProvider } from "@/hooks/useAuth";
 import ErrorBoundary from "./ErrorBoundary";
+import { PhotoAnalysisOverlay } from "./PhotoAnalysisOverlay";
+import { MealPlanGenOverlay } from "./MealPlanGenOverlay";
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -18,6 +20,8 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
             <BottomNav />
           </main>
           <ToastContainer />
+          <PhotoAnalysisOverlay />
+          <MealPlanGenOverlay />
         </div>
       </ErrorBoundary>
     </AuthProvider>

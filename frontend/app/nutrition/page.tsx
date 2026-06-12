@@ -11,6 +11,15 @@ import { UtensilsCrossed } from "lucide-react";
 import { MEAL_ICONS, NUTRIENT_ICONS, PageIcon } from "@/lib/icons";
 import { useFeishuStatus } from "@/hooks/useFeishuStatus";
 import { getToken } from "@/lib/authStore";
+import {
+  getNutritionState,
+  subscribeToNutrition,
+  startPhotoAnalysis,
+  dismissAnalysisResult,
+  hasActiveAnalysis,
+  type PhotoAnalysisResult,
+  type FoodItem,
+} from "@/lib/nutritionStore";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -47,27 +56,6 @@ interface DailySummary {
   total_sodium: number;
   meals: NutritionRecord[];
   analysis: string;
-}
-
-interface FoodItem {
-  food_name: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  fiber?: number;
-  sodium?: number;
-  estimated_weight?: string;
-}
-
-interface PhotoAnalysisResult {
-  meal_type: string;
-  foods: FoodItem[];
-  total_calories: number;
-  total_protein: number;
-  total_carbs: number;
-  total_fat: number;
-  summary: string;
 }
 
 interface HealthEval {
@@ -113,25 +101,49 @@ export default function NutritionPage() {
     notes: "",
   });
 
-  const [analyzing, setAnalyzing] = useState<string | null>(null);
-  const [analysisResult, setAnalysisResult] = useState<PhotoAnalysisResult | null>(null);
-  const [showAnalysis, setShowAnalysis] = useState(false);
   const [healthEval, setHealthEval] = useState<HealthEval | null>(null);
   const [evaluating, setEvaluating] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
+  // 全局拍照识别状态
+  const [nutritionState, setNutritionState] = useState(getNutritionState());
+  const fetchSummaryRef = useRef<() => void>(() => {});
+
   const fetchSummary = useCallback(async () => {
     if (!getToken()) { setLoading(false); return; }
+    const controller = new AbortController();
     setLoading(true);
     try {
-      const resp = await fetch(`${API_BASE}/api/v1/nutrition/summary/${selectedDate}`, { headers: authHeaders() });
+      const resp = await fetch(`${API_BASE}/api/v1/nutrition/summary/${selectedDate}`, { headers: authHeaders(), signal: controller.signal });
       if (resp.ok) { setSummary(await resp.json()); }
       else { showToast("加载饮食记录失败", "error"); }
-    } catch (e) { showToast("网络错误，请稍后重试", "error"); }
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") showToast("网络错误，请稍后重试", "error");
+    }
     setLoading(false);
+    return () => controller.abort();
   }, [selectedDate]);
+
+  fetchSummaryRef.current = fetchSummary;
+
+  useEffect(() => {
+    return subscribeToNutrition(() => {
+      setNutritionState(getNutritionState());
+    });
+  }, []);
+
+  // 监听分析完成事件，刷新 summary
+  useEffect(() => {
+    const handler = () => { fetchSummaryRef.current(); };
+    window.addEventListener("nutrition:analysis-done", handler);
+    return () => { window.removeEventListener("nutrition:analysis-done", handler); };
+  }, []);
+
+  const analyzing = nutritionState.tasks.find((t) => t.status === "analyzing")?.mealType ?? null;
+  const analysisResult = nutritionState.tasks.findLast((t) => t.status === "done")?.result ?? null;
+  const showAnalysis = nutritionState.showResult;
 
   useEffect(() => { fetchSummary(); }, [fetchSummary]);
 
@@ -206,35 +218,7 @@ export default function NutritionPage() {
   };
 
   const handlePhotoUpload = async (mealType: string, file: File) => {
-    setAnalyzing(mealType);
-    setAnalysisResult(null);
-    setShowAnalysis(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("meal_type", mealType);
-      formData.append("date", selectedDate);
-
-      const token = getToken();
-      const resp = await fetch(`${API_BASE}/api/v1/nutrition/analyze-photo`, {
-        method: "POST",
-        body: formData,
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-
-      if (resp.ok) {
-        const result: PhotoAnalysisResult = await resp.json();
-        setAnalysisResult(result);
-        showToast(`${mealType}分析完成`, "success");
-        fetchSummary();
-      } else {
-        const err = await resp.json();
-        showToast(err.detail || "分析失败", "error");
-      }
-    } catch (e) {
-      showToast("网络错误，分析失败", "error");
-    }
-    setAnalyzing(null);
+    startPhotoAnalysis(mealType, selectedDate, file);
   };
 
   const handleHealthEval = async () => {
@@ -415,7 +399,7 @@ export default function NutritionPage() {
                   }}>
                     {MEAL_ICONS[analysisResult.meal_type]} {analysisResult.meal_type}分析结果
                   </h3>
-                  <button onClick={() => setShowAnalysis(false)}
+                  <button onClick={() => dismissAnalysisResult()}
                     style={{
                       width: 28, height: 28, background: "var(--surface)", borderRadius: 8,
                       boxShadow: "var(--shadow-raised-xs)", border: "none", cursor: "pointer",

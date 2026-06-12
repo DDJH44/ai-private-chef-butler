@@ -42,6 +42,12 @@ CONTENT_TYPE_MAP = {
 
 ALLOWED_SCHEMES = ("http", "https")
 BLOCKED_HOSTS = {"localhost", "0.0.0.0"}
+TRUSTED_DOMAINS = {
+    "personalcook.oss-cn-beijing.aliyuncs.com",
+    "ark-cn-beijing.volces.com",
+    "volces.com",
+    "volcengine.com",
+}
 BLOCKED_NETWORKS = [
     ipaddress.ip_network("127.0.0.0/8"),
     ipaddress.ip_network("10.0.0.0/8"),
@@ -76,6 +82,11 @@ def is_safe_image_url(url: str) -> bool:
         return False
     if hostname in BLOCKED_HOSTS:
         return False
+    if hostname in TRUSTED_DOMAINS:
+        return True
+    # 支持子域名匹配，如 xxx.oss-cn-beijing.aliyuncs.com
+    if any(hostname.endswith("." + d) for d in TRUSTED_DOMAINS):
+        return True
     if _is_private_ip(hostname):
         return False
     try:
@@ -96,7 +107,7 @@ def proxy_image_url(external_url: str) -> str:
     return f"/api/v1/oss/proxy-image?url={encoded}"
 
 @router.get("/oss/proxy-image")
-async def proxy_image(url: str = Query(...)):
+async def proxy_image(url: str = Query(...), current_user: dict = Depends(get_current_user)):
     try:
         original_url = urllib.parse.unquote(url)
 
@@ -157,10 +168,13 @@ MAX_UPLOAD_SIZE = 20 * 1024 * 1024
 async def upload_to_oss(request: Request, file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     """通过后端代理上传图片到 OSS，避免浏览器跨域问题"""
     content_length = request.headers.get("content-length")
-    if content_length and int(content_length) > MAX_UPLOAD_SIZE:
+    if not content_length:
+        return JSONResponse(status_code=411, content={"detail": "需要 Content-Length 请求头"})
+    size = int(content_length)
+    if size > MAX_UPLOAD_SIZE:
         return JSONResponse(status_code=413, content={"detail": "文件大小不能超过20MB"})
     try:
-        file_content = await file.read()
+        file_content = await file.read(size if size > 0 else MAX_UPLOAD_SIZE + 1)
         if len(file_content) > MAX_UPLOAD_SIZE:
             return JSONResponse(status_code=413, content={"detail": "文件大小不能超过20MB"})
         logger.info(f"OSS上传: 文件名={file.filename}, 大小={len(file_content)} bytes")
@@ -214,18 +228,26 @@ async def get_upload_url(request: OSSUploadRequest, current_user: dict = Depends
 
 @router.get("/oss/presign")
 def presign_endpoint(filename: str, current_user: dict = Depends(get_current_user)):
-    ext = filename.split(".")[-1].lower() if "." in filename else "jpg"
+    # Sanitize filename: strip path traversal, enforce safe pattern
+    safe = filename.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+    if not safe or safe.startswith("."):
+        safe = "upload.jpg"
+    if len(safe) > 255:
+        safe = safe[-255:]
+    ext = safe.split(".")[-1].lower() if "." in safe else "jpg"
     content_type = CONTENT_TYPE_MAP.get(ext, "application/octet-stream")
+    # Prepend user-scoped prefix to isolate uploads per user
+    key = f"uploads/{current_user['user_id']}/{safe}"
 
     upload_url = _get_bucket().sign_url(
         "PUT",
-        filename,
+        key,
         3600,
         headers={"Content-Type": content_type}
     )
 
     endpoint = os.getenv("OSS_ENDPOINT", "oss-cn-beijing.aliyuncs.com")
-    access_url = f"https://{os.getenv('OSS_BUCKET')}.{endpoint}/{filename}"
+    access_url = f"https://{os.getenv('OSS_BUCKET')}.{endpoint}/{key}"
 
     return {
         "uploadUrl": upload_url,
