@@ -1,10 +1,12 @@
 import threading
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, HTTPException
 from app.models.schemas import ChatRequest
 from fastapi.responses import StreamingResponse
 from app.agents.personal_chief import search_recipes, get_messages, clear_messages
 from app.auth import get_current_user
 from app.common.logger import logger
+
+MAX_MESSAGE_LENGTH = 10000
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -13,6 +15,8 @@ def _user_thread(user_id: str, thread_id: str) -> str:
 
 @router.post("/chat/stream")
 def chat_endpoint(chat_request: ChatRequest, current_user: dict = Depends(get_current_user)):
+    if len(chat_request.message) > MAX_MESSAGE_LENGTH:
+        raise HTTPException(status_code=400, detail=f"消息内容不能超过{MAX_MESSAGE_LENGTH}个字符")
     uid = current_user["user_id"]
     isolated_thread = _user_thread(uid, chat_request.thread_id)
     stop_event = threading.Event()

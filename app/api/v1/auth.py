@@ -51,7 +51,7 @@ def register(req: UserRegister, request: Request):
 
     user_id = str(uuid.uuid4())
     hashed = hash_password(req.password)
-    created_at = int(time.time())
+    created_at = int(time.time() * 1000)
 
     with get_db() as session:
         existing = session.query(User).filter(

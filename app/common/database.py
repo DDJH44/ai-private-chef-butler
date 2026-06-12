@@ -7,10 +7,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "mysql+pymysql://ai_chef:ai_chef_2024@localhost:3306/ai_private_chef",
-)
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL 环境变量未设置，请参考 .env.example 配置 MySQL 连接")
 
 engine = create_engine(
     DATABASE_URL,

@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import Optional, List, Literal
 from app.agents.personal_chief import model, _build_preference_context
 from langchain_core.messages import HumanMessage
+from app.common.json_utils import repair_truncated_json
 import json
 import re
 
@@ -33,21 +34,7 @@ class MealPlanRequest(BaseModel):
 
 def _repair_truncated_json(raw: str) -> str:
     """尝试修复被截断的 JSON：补全缺失的闭合括号"""
-    # 移除模型可能输出的 markdown 代码块标记
-    raw = raw.strip()
-    if raw.startswith("```"):
-        raw = re.sub(r"^```\w*\s*", "", raw)
-        raw = re.sub(r"\s*```$", "", raw)
-    # 统计未闭合的括号
-    open_braces = raw.count("{") - raw.count("}")
-    open_brackets = raw.count("[") - raw.count("]")
-    # 移除末尾不完整的字符串（如 "recipe_name": "番茄）
-    if raw.rfind('"') > max(raw.rfind('}'), raw.rfind(']')):
-        raw = raw[:raw.rfind('"')] + '"'
-    # 补全缺失的闭合符号
-    raw += "]" * max(open_brackets, 0)
-    raw += "}" * max(open_braces, 0)
-    return raw
+    return repair_truncated_json(raw)
 
 
 async def _call_llm(prompt: str) -> str:

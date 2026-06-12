@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.orm.attributes import flag_modified
 from app.models.schemas import (
     ShoppingListCreate, ShoppingListUpdate,
@@ -75,7 +75,7 @@ async def get_shopping_lists(current_user: dict = Depends(get_current_user)):
             total = session.query(ShoppingList).filter(ShoppingList.user_id == uid).count()
 
         logger.info(f"获取购物清单列表成功，总数：{total}")
-        return {"shopping_lists": [_list_to_dict(r) for r in rows], "total": total}
+        return {"items": [_list_to_dict(r) for r in rows], "total": total}
     except Exception as e:
         logger.error(f"获取购物清单列表失败：{e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -160,7 +160,12 @@ async def delete_shopping_list(list_id: str, current_user: dict = Depends(get_cu
 
 
 @router.patch("/{list_id}/items/{item_id}/toggle", response_model=ShoppingListResponse)
-async def toggle_shopping_item(list_id: str, item_id: str, current_user: dict = Depends(get_current_user)):
+async def toggle_shopping_item(
+    list_id: str,
+    item_id: str,
+    expected_updated_at: int = Query(..., description="客户端上次读取的 updated_at，用于乐观锁检测"),
+    current_user: dict = Depends(get_current_user),
+):
     try:
         uid = current_user["user_id"]
         with get_db() as session:
@@ -169,6 +174,12 @@ async def toggle_shopping_item(list_id: str, item_id: str, current_user: dict = 
             ).first()
             if not sl:
                 raise HTTPException(status_code=404, detail="购物清单不存在")
+
+            if sl.updated_at != expected_updated_at:
+                raise HTTPException(
+                    status_code=409,
+                    detail="购物清单已被其他操作修改，请刷新后重试"
+                )
 
             items = list(sl.items or [])
             found = False

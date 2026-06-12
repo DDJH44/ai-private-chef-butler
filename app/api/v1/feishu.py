@@ -47,7 +47,7 @@ async def send_to_feishu(webhook_url: str, card: dict) -> None:
 
 
 def _save_config(uid: str, url: str, step: str, enabled: bool, existing: dict | None = None) -> None:
-    now = int(time.time())
+    now = int(time.time() * 1000)
     with get_db() as session:
         cfg = session.query(FeishuConfig).filter(FeishuConfig.user_id == uid).first()
         if cfg:
@@ -191,7 +191,7 @@ def toggle_feishu(current_user: dict = Depends(get_current_user)):
     if not cfg:
         raise HTTPException(400, "请先配置飞书 Webhook 地址")
     new_enabled = not cfg["enabled"]
-    now = int(time.time())
+    now = int(time.time() * 1000)
     with get_db() as session:
         session.query(FeishuConfig).filter(FeishuConfig.user_id == current_user["user_id"]).update(
             {"enabled": new_enabled, "updated_at": now}, synchronize_session=False

@@ -254,7 +254,7 @@ export async function addRecipeToPanel(req: AddRecipeRequest): Promise<RecipeOpe
 export async function getRecipes(): Promise<Recipe[]> {
     try {
         const data = await authRequest<RecipeListResponse>("/api/v1/recipes");
-        return data.recipes;
+        return data.items;
     } catch (error) {
         console.error("获取菜谱失败:", error);
         return [];
@@ -276,7 +276,7 @@ export async function batchCreateRecipes(reqs: AddRecipeRequest[]): Promise<Reci
         method: "POST",
         body: JSON.stringify(reqs),
     });
-    return data.recipes;
+    return data.items;
 }
 
 export async function batchDeleteRecipes(ids: string[]): Promise<RecipeOperationResponse> {
@@ -336,7 +336,7 @@ export async function searchRecipes(query: string): Promise<Recipe[]> {
         const data = await authRequest<RecipeListResponse>(
             `/api/v1/recipes/search?${new URLSearchParams({ q: query })}`
         );
-        return data.recipes;
+        return data.items;
     } catch (error) {
         console.error("搜索菜谱失败:", error);
         return [];

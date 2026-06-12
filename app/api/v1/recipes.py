@@ -81,7 +81,7 @@ async def get_recipes(
             rows = query.all()
 
         logger.info(f"获取菜谱列表成功，总数：{total}")
-        return {"recipes": [_recipe_to_dict(r) for r in rows], "total": total}
+        return {"items": [_recipe_to_dict(r) for r in rows], "total": total}
     except Exception as e:
         logger.error(f"获取菜谱列表失败：{e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -113,7 +113,7 @@ async def batch_create_recipes(recipes_data: List[RecipeCreate] = Body(...), cur
                 session.flush()
                 results.append(_recipe_to_dict(r))
         logger.info(f"批量创建菜谱成功，数量：{len(results)}")
-        return {"recipes": results, "total": len(results)}
+        return {"items": results, "total": len(results)}
     except Exception as e:
         logger.error(f"批量创建菜谱失败：{e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -135,17 +135,24 @@ async def batch_delete_recipes(ids: List[str] = Body(...), current_user: dict = 
 
 
 @router.get("/search", response_model=RecipeListResponse)
-async def search_recipes(q: str = Query(..., description="搜索关键词"), current_user: dict = Depends(get_current_user)):
+async def search_recipes(
+    q: str = Query(..., description="搜索关键词"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: dict = Depends(get_current_user),
+):
     try:
         uid = current_user["user_id"]
         search_pattern = f"%{q}%"
         with get_db() as session:
-            rows = session.query(Recipe).filter(
+            query = session.query(Recipe).filter(
                 (Recipe.title.like(search_pattern) | Recipe.content.like(search_pattern)),
                 Recipe.user_id == uid
-            ).order_by(Recipe.created_at.desc()).all()
+            ).order_by(Recipe.created_at.desc())
+            total = query.count()
+            rows = query.offset((page - 1) * page_size).limit(page_size).all()
         recipes = [_recipe_to_dict(r) for r in rows]
-        return {'recipes': recipes, 'total': len(recipes)}
+        return {'items': recipes, 'total': total}
     except Exception as e:
         logger.error(f"搜索菜谱失败：{e}")
         raise HTTPException(status_code=500, detail=str(e))

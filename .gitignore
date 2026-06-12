@@ -19,9 +19,15 @@ wheels/
 app/db/*.db
 app/db/*.db-shm
 app/db/*.db-wal
+app/data/*.db
+app/data/*.db-shm
+app/data/*.db-wal
+app/data/chroma_db/
 data/*.db
 data/*.db-shm
 data/*.db-wal
+logs/
+.pytest_cache/
 
 # Frontend
 frontend/node_modules/
@@ -37,3 +43,16 @@ app/static/
 .DS_Store
 Thumbs.db
 nginx/ssl/*.pem
+
+# Test and outputs
+test_screenshots/
+outputs/
+release/
+scripts/
+tests/
+*.md.bak
+user_info.txt
+verify_output.md
+report_content.md
+generate_business_plan.*
+AGENTS.md

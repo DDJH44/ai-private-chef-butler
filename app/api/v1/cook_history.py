@@ -44,14 +44,14 @@ def list_records(current_user: dict = Depends(get_current_user)):
         rows = session.query(CookRecord).filter(
             CookRecord.user_id == uid
         ).order_by(CookRecord.cook_date.desc()).limit(200).all()
-    return {"records": [_record_to_dict(r) for r in rows]}
+    return {"items": [_record_to_dict(r) for r in rows], "total": len(rows)}
 
 
 @router.post("")
 def create_record(data: CookRecordCreate, current_user: dict = Depends(get_current_user)):
     uid = current_user["user_id"]
     record_id = data.id or f"cook_{uuid.uuid4().hex[:12]}"
-    now = int(time.time())
+    now = int(time.time() * 1000)
     with get_db() as session:
         record = CookRecord(
             id=record_id, user_id=uid, recipe_id=data.recipe_id,

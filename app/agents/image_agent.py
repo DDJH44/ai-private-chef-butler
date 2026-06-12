@@ -94,9 +94,9 @@ def _write_cache(query: str, url: str):
             existing = session.query(ImageCache).filter(ImageCache.dish_query == query).first()
             if existing:
                 existing.oss_url = url
-                existing.created_at = int(time.time())
+                existing.created_at = int(time.time() * 1000)
             else:
-                session.add(ImageCache(dish_query=query, oss_url=url, created_at=int(time.time())))
+                session.add(ImageCache(dish_query=query, oss_url=url, created_at=int(time.time() * 1000)))
             session.commit()
         except Exception as e:
             session.rollback()
@@ -114,12 +114,16 @@ def _call_seedream(query: str) -> str | None:
     model_name = os.getenv("IMAGE_GEN_MODEL", "doubao-seedream-4-5-251128")
     prompt = _build_prompt(query)
 
-    resp = requests.post(
-        f"{base_url}/images/generations",
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json={"model": model_name, "prompt": prompt, "n": 1, "size": "1920x1920"},
-        timeout=120,
-    )
+    try:
+        resp = requests.post(
+            f"{base_url}/images/generations",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={"model": model_name, "prompt": prompt, "n": 1, "size": "1920x1920"},
+            timeout=120,
+        )
+    except Exception as e:
+        logger.warning(f"[image_agent] Seedream request failed: {e}")
+        return None
     if resp.status_code != 200:
         logger.warning(f"[image_agent] Seedream {resp.status_code}: {resp.text[:200]}")
         return None
@@ -136,7 +140,7 @@ def _call_seedream(query: str) -> str | None:
         if img_resp.status_code == 200:
             image_bytes = img_resp.content
             h = hashlib.md5(query.encode()).hexdigest()[:12]
-            filename = f"ai-generated/{h}_{int(time.time())}.jpg"
+            filename = f"ai-generated/{h}_{int(time.time() * 1000)}.jpg"
             bucket = _get_bucket()
             bucket.put_object(filename, image_bytes, headers={"Content-Type": "image/jpeg", "x-oss-object-acl": "public-read"})
             endpoint = os.getenv("OSS_ENDPOINT", "oss-cn-beijing.aliyuncs.com")

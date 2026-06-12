@@ -33,7 +33,7 @@ async function fetchRemotePreference(): Promise<Preference | null> {
     const resp = await fetch(PREF_API, { headers: authHeaders() });
     if (!resp.ok) return null;
     const data = await resp.json();
-    return data.preference || null;
+    return data.data || null;
   } catch { return null; }
 }
 

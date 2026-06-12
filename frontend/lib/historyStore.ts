@@ -25,7 +25,7 @@ async function fetchRemoteCookHistory(): Promise<CookHistoryItem[]> {
     const resp = await fetch(COOK_API, { headers: authHeaders() });
     if (!resp.ok) return [];
     const data = await resp.json();
-    return (data.records || []).map((r: Record<string, unknown>) => ({
+    return (data.items || []).map((r: Record<string, unknown>) => ({
       ...r, created_at: String(r.created_at || ''),
     })) as CookHistoryItem[];
   } catch { return []; }

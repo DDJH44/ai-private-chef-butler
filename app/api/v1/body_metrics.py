@@ -17,7 +17,7 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 async def create_metric(body: BodyMetricCreate, current_user: dict = Depends(get_current_user)):
     """Record a new body measurement."""
     uid = current_user["user_id"]
-    now = int(datetime.now().timestamp())
+    now = int(datetime.now().timestamp() * 1000)
     metric_id = str(uuid.uuid4())
 
     with get_db() as session:
@@ -36,7 +36,7 @@ async def create_metric(body: BodyMetricCreate, current_user: dict = Depends(get
         )
 
 
-@router.get("", response_model=List[BodyMetricResponse])
+@router.get("")
 async def list_metrics(
     days: int = Query(default=30, ge=7, le=365),
     current_user: dict = Depends(get_current_user),
@@ -48,7 +48,7 @@ async def list_metrics(
             BodyMetric.user_id == uid
         ).order_by(BodyMetric.date.desc()).limit(days).all()
 
-        return [
+        items = [
             BodyMetricResponse(
                 id=r.id, user_id=r.user_id, date=r.date,
                 weight=r.weight, body_fat=r.body_fat,
@@ -57,6 +57,7 @@ async def list_metrics(
             )
             for r in rows
         ]
+        return {"items": items, "total": len(items)}
 
 
 @router.delete("/{metric_id}")

@@ -19,6 +19,6 @@ export interface ShoppingList {
 }
 
 export interface ShoppingListStore {
-    shopping_lists: ShoppingList[];
+    items: ShoppingList[];
     lastUpdated: number;
 }

@@ -1,6 +1,6 @@
-from fastapi import APIRouter, UploadFile, File, Query, Depends
+from fastapi import APIRouter, UploadFile, File, Query, Depends, Request
 from app.auth import get_current_user
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from app.models.schemas import OSSUploadRequest, OSSUploadResponse
 from app.common.logger import logger
 import os
@@ -13,6 +13,8 @@ except ImportError:
     OSS_AVAILABLE = False
 import httpx
 import urllib.parse
+import socket
+import ipaddress
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -38,20 +40,53 @@ CONTENT_TYPE_MAP = {
     "png": "image/png", "gif": "image/gif", "webp": "image/webp",
 }
 
-DANGEROUS_PATTERNS = [
-    "localhost", "127.0.0.1", "0.0.0.0", "::1",
-    "10.", "172.16.", "192.168.", "169.254.",
-    "file://", "ftp://", "javascript:", "data:",
+ALLOWED_SCHEMES = ("http", "https")
+BLOCKED_HOSTS = {"localhost", "0.0.0.0"}
+BLOCKED_NETWORKS = [
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("0.0.0.0/8"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+    ipaddress.ip_network("fe80::/10"),
 ]
+MAX_PROXY_SIZE = 10 * 1024 * 1024
+
+def _is_private_ip(ip_str: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(ip_str)
+        return any(ip in net for net in BLOCKED_NETWORKS)
+    except ValueError:
+        return True
 
 def is_safe_image_url(url: str) -> bool:
-    """验证图片 URL 是否安全"""
     if not url or not isinstance(url, str):
         return False
-    if not url.startswith("http"):
+    try:
+        parsed = urllib.parse.urlparse(url)
+    except Exception:
         return False
-    url_lower = url.lower()
-    return not any(p in url_lower for p in DANGEROUS_PATTERNS)
+    if parsed.scheme not in ALLOWED_SCHEMES:
+        return False
+    hostname = parsed.hostname
+    if not hostname:
+        return False
+    if hostname in BLOCKED_HOSTS:
+        return False
+    if _is_private_ip(hostname):
+        return False
+    try:
+        resolved_ips = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+    except (socket.gaierror, OSError):
+        return False
+    for _, _, _, _, sockaddr in resolved_ips:
+        ip_str = sockaddr[0]
+        if _is_private_ip(ip_str):
+            return False
+    return True
 
 def proxy_image_url(external_url: str) -> str:
     """将外部图片 URL 转换为我们后端的代理 URL"""
@@ -62,43 +97,72 @@ def proxy_image_url(external_url: str) -> str:
 
 @router.get("/oss/proxy-image")
 async def proxy_image(url: str = Query(...)):
-    """图片代理接口，解决外部图片 CORS 问题"""
     try:
         original_url = urllib.parse.unquote(url)
 
         if not is_safe_image_url(original_url):
             return JSONResponse(status_code=400, content={"detail": "Invalid URL"})
 
-        async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
-            response = await client.get(
+        client = httpx.AsyncClient(follow_redirects=True, timeout=10.0)
+        response = await client.send(
+            client.build_request(
+                "GET",
                 original_url,
-                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-            )
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+            ),
+            stream=True,
+        )
 
         if response.status_code != 200:
+            await response.aclose()
+            await client.aclose()
             return JSONResponse(status_code=404, content={"detail": "Image not found"})
 
         content_type = response.headers.get("content-type", "image/jpeg")
         if "image" not in content_type.lower():
             content_type = "image/jpeg"
 
-        return Response(
-            content=response.content,
+        content_length = response.headers.get("content-length")
+        if content_length and int(content_length) > MAX_PROXY_SIZE:
+            await response.aclose()
+            await client.aclose()
+            return JSONResponse(status_code=413, content={"detail": "Image too large"})
+
+        async def stream_with_limit():
+            total_size = 0
+            try:
+                async for chunk in response.aiter_bytes(8192):
+                    total_size += len(chunk)
+                    if total_size > MAX_PROXY_SIZE:
+                        return
+                    yield chunk
+            finally:
+                await client.aclose()
+
+        return StreamingResponse(
+            stream_with_limit(),
             media_type=content_type,
             headers={
                 "Cache-Control": "public, max-age=86400",
                 "Access-Control-Allow-Origin": "*",
                 "Cross-Origin-Resource-Policy": "cross-origin",
-            }
+            },
         )
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": f"Proxy failed: {str(e)}"})
 
+MAX_UPLOAD_SIZE = 20 * 1024 * 1024
+
 @router.post("/oss/upload")
-async def upload_to_oss(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+async def upload_to_oss(request: Request, file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     """通过后端代理上传图片到 OSS，避免浏览器跨域问题"""
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > MAX_UPLOAD_SIZE:
+        return JSONResponse(status_code=413, content={"detail": "文件大小不能超过20MB"})
     try:
         file_content = await file.read()
+        if len(file_content) > MAX_UPLOAD_SIZE:
+            return JSONResponse(status_code=413, content={"detail": "文件大小不能超过20MB"})
         logger.info(f"OSS上传: 文件名={file.filename}, 大小={len(file_content)} bytes")
 
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f")

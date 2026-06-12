@@ -76,6 +76,12 @@ docker-compose logs -f app
 | `OSS_ENDPOINT` | ❌ | OSS 区域节点 |
 | `OSS_BUCKET` | ❌ | OSS 存储桶名称 |
 | `FEISHU_WEBHOOK_URL` | ❌ | 飞书机器人 Webhook 地址 |
+| `DATABASE_URL` | ✅ | MySQL SQLAlchemy 连接串 |
+| `MYSQL_HOST` | ✅ | MySQL 服务地址 |
+| `MYSQL_DATABASE` | ✅ | MySQL 数据库名 |
+| `MYSQL_USER` | ✅ | MySQL 用户名 |
+| `MYSQL_PASSWORD` | ✅ | MySQL 用户密码 |
+| `MYSQL_ROOT_PASSWORD` | ✅ | MySQL root 密码 |
 
 ### 数据持久化
 
@@ -83,7 +89,8 @@ docker-compose logs -f app
 
 | 容器路径 | 宿主机路径 | 说明 |
 |----------|------------|------|
-| `/app/data` | `./data` | SQLite 数据库 |
+| `/var/lib/mysql` | `mysql_data` | MySQL 数据卷 |
+| `/app/data/chroma_db` | `./app/data/chroma_db` | ChromaDB 向量库 |
 | `/app/logs` | `./logs` | 应用日志 |
 
 ---
@@ -177,11 +184,11 @@ docker exec ai-chef env | grep DOUBAO
 ### 数据库问题
 
 ```bash
-# 进入容器
-docker exec -it ai-chef bash
+# 检查 MySQL 服务健康状态
+docker exec -it ai-chef-db mysqladmin ping -h localhost -u root -p
 
-# 检查数据库
-sqlite3 /app/data/recipes.db ".tables"
+# 查看业务表
+docker exec -it ai-chef-db mysql -u "$MYSQL_USER" -p "$MYSQL_DATABASE" -e "SHOW TABLES;"
 ```
 
 ### SSL 证书问题
@@ -241,7 +248,13 @@ curl -k https://localhost/api/v1/health
               │            │            │
               ▼            ▼            ▼
         ┌─────────┐  ┌─────────┐  ┌─────────┐
-        │ SQLite  │  │  OSS    │  │ 豆包 AI │
-        │ (数据)  │  │ (图片)  │  │ (LLM)  │
+        │ MySQL   │  │  OSS    │  │ 豆包 AI │
+        │业务/记忆│  │ (图片)  │  │ (LLM)  │
         └─────────┘  └─────────┘  └─────────┘
+              │
+              ▼
+        ┌─────────┐
+        │ChromaDB │
+        │向量知识库│
+        └─────────┘
 ```

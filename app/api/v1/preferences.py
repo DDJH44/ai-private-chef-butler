@@ -25,15 +25,15 @@ def get_preferences(current_user: dict = Depends(get_current_user)):
     with get_db() as session:
         pref = session.query(Preference).filter(Preference.user_id == uid).first()
     if not pref:
-        return {"preference": None}
-    return {"preference": pref.data}
+        return {"data": None}
+    return {"data": pref.data}
 
 
 @router.put("")
 def save_preferences(data: PreferenceData, current_user: dict = Depends(get_current_user)):
     uid = current_user["user_id"]
     data_dict = data.model_dump()
-    now = int(time.time())
+    now = int(time.time() * 1000)
     with get_db() as session:
         pref = session.query(Preference).filter(Preference.user_id == uid).first()
         if pref:
@@ -41,4 +41,4 @@ def save_preferences(data: PreferenceData, current_user: dict = Depends(get_curr
             pref.updated_at = now
         else:
             session.add(Preference(user_id=uid, data=data_dict, updated_at=now))
-    return {"message": "已保存", "preference": data_dict}
+    return {"message": "已保存", "data": data_dict}

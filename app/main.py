@@ -1,4 +1,5 @@
 import os
+import uuid as _uuid
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -13,7 +14,7 @@ from app.common.logger import setup_logging, logger
 setup_logging()
 
 app = FastAPI(
-    title="Personal Chief API",
+    title="AI Private Chef API",
     description="AI私厨 - 食谱推荐助手",
     version="0.1.0"
 )
@@ -26,6 +27,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID") or str(_uuid.uuid4())
+    request.state.request_id = request_id
+    logger.info(f"[{request_id}] {request.method} {request.url.path}")
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
 
 app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
 app.include_router(oss.router, prefix="/api/v1", tags=["oss"])
@@ -45,20 +56,25 @@ app.include_router(body_metrics.router, prefix="/api/v1/body-metrics", tags=["bo
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     body = await request.body()
-    logger.error(f"[422] {request.method} {request.url.path} — {exc.errors()}")
-    logger.error(f"[422] body: {body.decode()[:500]}")
-    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+    request_id = getattr(request.state, "request_id", None)
+    logger.error(f"[{request_id}] [422] {request.method} {request.url.path} — {exc.errors()}")
+    logger.error(f"[{request_id}] [422] body: {body.decode()[:500]}")
+    return JSONResponse(status_code=422, content={"detail": exc.errors(), "request_id": request_id})
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    request_id = getattr(request.state, "request_id", None)
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail, "request_id": request_id})
 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"未处理异常 {request.method} {request.url.path}: {exc}", exc_info=True)
-    return JSONResponse(status_code=500, content={"detail": "服务器内部错误"})
+    request_id = getattr(request.state, "request_id", None)
+    logger.error(f"[{request_id}] 未处理异常 {request.method} {request.url.path}: {exc}", exc_info=True)
+    return JSONResponse(status_code=500, content={"detail": "服务器内部错误", "request_id": request_id})
 
+
+import asyncio
 
 @app.on_event("startup")
 async def startup():
@@ -67,13 +83,39 @@ async def startup():
     Base.metadata.create_all(bind=engine)
     logger.info("MySQL 数据库表初始化完成")
 
+    try:
+        from app.rag.data_loader import initialize_all_collections
+        asyncio.get_event_loop().run_in_executor(None, initialize_all_collections)
+        logger.info("RAG 知识库后台初始化已启动")
+    except Exception as e:
+        logger.warning(f"RAG 知识库初始化失败: {e}")
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
 @app.get("/api/v1/health")
 async def api_health():
-    return {"status": "ok"}
+    try:
+        from app.rag.vector_store import rag_store
+        rag_ready = rag_store.is_ready
+    except Exception:
+        rag_ready = False
+    return {"status": "ok", "rag_ready": rag_ready}
+
+@app.get("/api/v1/ready")
+async def readiness():
+    try:
+        from app.rag.vector_store import rag_store
+        rag_ready = rag_store.is_ready
+    except Exception:
+        rag_ready = False
+    if not rag_ready:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "rag_ready": False},
+        )
+    return {"status": "ready", "rag_ready": True}
 
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.exists(static_dir):

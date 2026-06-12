@@ -97,7 +97,7 @@
 | 6.1 | Dockerfile + docker-compose.yml | 1h | ✅ |
 | 6.2 | 前端生产构建 + 多阶段构建 | 1h | ✅ |
 | 6.3 | Nginx 反向代理（HTTPS + 静态文件 + API） | 1h | ✅ |
-| 6.4 | SQLite 数据持久化（volume mount） | 0.5h | ✅ |
+| 6.4 | MySQL 数据持久化与 ChromaDB 向量库挂载 | 0.5h | ✅ |
 | 6.5 | 环境变量管理（.env → secrets / env_file） | 0.5h | ✅ |
 | 6.6 | 部署文档 + 一键启动脚本 | 1h | ✅ |
 | 6.7 | 云服务器选型 + 部署测试 | 2h | 待用户执行 |

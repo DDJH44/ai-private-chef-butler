@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { ShoppingList, ShoppingListItem } from "@/types/shoppingList";
 import { PageHeader } from "@/components/PageHeader";
 import { getToken } from "@/lib/authStore";
@@ -20,6 +20,7 @@ export default function ShoppingListPage() {
     const [customTitle, setCustomTitle] = useState("");
     const [customInput, setCustomInput] = useState("");
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+    const pendingToggles = useRef(0);
 
     const load = useCallback(async () => {
         if (!getToken()) return;
@@ -29,15 +30,33 @@ export default function ShoppingListPage() {
 
     useEffect(() => {
         load();
-        const handler = () => load();
+        const handler = () => {
+            if (pendingToggles.current > 0) return; // Skip — optimistic update already handled
+            load();
+        };
         window.addEventListener(SHOPPING_LIST_CHANGE_EVENT, handler);
         return () => window.removeEventListener(SHOPPING_LIST_CHANGE_EVENT, handler);
     }, [load]);
 
     const handleToggle = useCallback(async (listId: string, itemId: string) => {
+        // Optimistic update — immediate UI feedback
+        setLists(prev => prev.map(list =>
+            list.id === listId
+                ? { ...list, items: list.items.map(item =>
+                    item.id === itemId
+                        ? { ...item, checked: !item.checked }
+                        : item
+                )}
+                : list
+        ));
+        pendingToggles.current++;
         await toggleItemChecked(listId, itemId);
-        const data = await loadShoppingLists();
-        setLists(data);
+        pendingToggles.current--;
+        // Final sync to reconcile server state
+        if (pendingToggles.current === 0) {
+            const data = await loadShoppingLists();
+            setLists(data);
+        }
     }, []);
 
     const handleDelete = useCallback((list: ShoppingList, e: React.MouseEvent) => {
@@ -46,6 +65,7 @@ export default function ShoppingListPage() {
     }, []);
 
     const doDelete = useCallback(async (id: string) => {
+        setLists(prev => prev.filter(l => l.id !== id));
         await deleteShoppingList(id);
         showToast("清单已删除", "success");
     }, []);

@@ -3,11 +3,12 @@ import os
 import uuid
 import base64
 import re
+import time
 from datetime import datetime
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from app.auth import get_current_user
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage
 from dotenv import load_dotenv
@@ -18,17 +19,28 @@ load_dotenv()
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
+_summary_cache: dict[str, dict] = {}
+_summary_cache_ttl: dict[str, float] = {}
+_SUMMARY_CACHE_TTL = 300
+
+
+def _invalidate_summary_cache(uid: str):
+    keys_to_remove = [k for k in _summary_cache if k.startswith(f"{uid}:")]
+    for k in keys_to_remove:
+        _summary_cache.pop(k, None)
+        _summary_cache_ttl.pop(k, None)
+
 
 class NutritionRecordCreate(BaseModel):
     date: str
     meal_type: str
     food_name: str
-    calories: Optional[float] = None
-    protein: Optional[float] = None
-    carbs: Optional[float] = None
-    fat: Optional[float] = None
-    fiber: Optional[float] = None
-    sodium: Optional[float] = None
+    calories: Optional[float] = Field(None, ge=0, le=5000)
+    protein: Optional[float] = Field(None, ge=0, le=500)
+    carbs: Optional[float] = Field(None, ge=0, le=1000)
+    fat: Optional[float] = Field(None, ge=0, le=500)
+    fiber: Optional[float] = Field(None, ge=0, le=100)
+    sodium: Optional[float] = Field(None, ge=0, le=50000)
     image_url: Optional[str] = None
     notes: Optional[str] = None
 
@@ -51,12 +63,12 @@ class NutritionRecordResponse(BaseModel):
 
 class DailySummary(BaseModel):
     date: str
-    total_calories: float
-    total_protein: float
-    total_carbs: float
-    total_fat: float
-    total_fiber: float
-    total_sodium: float
+    total_calories: float = Field(ge=0, le=10000)
+    total_protein: float = Field(ge=0, le=1000)
+    total_carbs: float = Field(ge=0, le=2000)
+    total_fat: float = Field(ge=0, le=1000)
+    total_fiber: float = Field(ge=0, le=500)
+    total_sodium: float = Field(ge=0, le=100000)
     meals: List[NutritionRecordResponse]
     analysis: str
     health_eval: Optional[str] = None
@@ -64,22 +76,22 @@ class DailySummary(BaseModel):
 
 class FoodItem(BaseModel):
     food_name: str
-    calories: float
-    protein: float
-    carbs: float
-    fat: float
-    fiber: Optional[float] = 0
-    sodium: Optional[float] = 0
+    calories: float = Field(ge=0, le=5000)
+    protein: float = Field(ge=0, le=500)
+    carbs: float = Field(ge=0, le=1000)
+    fat: float = Field(ge=0, le=500)
+    fiber: Optional[float] = Field(0, ge=0, le=100)
+    sodium: Optional[float] = Field(0, ge=0, le=50000)
     estimated_weight: Optional[str] = None
 
 
 class PhotoAnalysisResult(BaseModel):
     meal_type: str
     foods: List[FoodItem]
-    total_calories: float
-    total_protein: float
-    total_carbs: float
-    total_fat: float
+    total_calories: float = Field(ge=0, le=5000)
+    total_protein: float = Field(ge=0, le=500)
+    total_carbs: float = Field(ge=0, le=1000)
+    total_fat: float = Field(ge=0, le=500)
     summary: str
 
 
@@ -154,7 +166,7 @@ def generate_analysis(calories, protein, carbs, fat, fiber, sodium):
 async def create_record(record: NutritionRecordCreate, current_user: dict = Depends(get_current_user)):
     uid = current_user["user_id"]
     record_id = str(uuid.uuid4())
-    now = int(datetime.now().timestamp())
+    now = int(datetime.now().timestamp() * 1000)
 
     with get_db() as session:
         nr = NutritionRecord(
@@ -167,6 +179,7 @@ async def create_record(record: NutritionRecordCreate, current_user: dict = Depe
         session.flush()
         result = _record_to_response(nr)
 
+    _invalidate_summary_cache(uid)
     return result
 
 
@@ -194,6 +207,7 @@ async def delete_record(record_id: str, current_user: dict = Depends(get_current
         session.query(NutritionRecord).filter(
             NutritionRecord.id == record_id, NutritionRecord.user_id == uid
         ).delete(synchronize_session=False)
+    _invalidate_summary_cache(uid)
     return {"status": "ok"}
 
 
@@ -246,10 +260,10 @@ async def analyze_photo(
 
     try:
         model = init_chat_model(
-            model=os.getenv("DOUBAO_MODEL_NAME", "doubao-seed-1-8-251228"),
+            model=os.getenv("MIMO_MODEL_NAME") or os.getenv("DOUBAO_MODEL_NAME", "doubao-seed-1-8-251228"),
             model_provider="openai",
-            base_url=os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v1"),
-            api_key=os.getenv("DOUBAO_API_KEY")
+            base_url=os.getenv("MIMO_BASE_URL") or os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v1"),
+            api_key=os.getenv("MIMO_API_KEY") or os.getenv("DOUBAO_API_KEY")
         ).bind(extra_body={"thinking": {"type": "disabled"}})
 
         message = HumanMessage(content=[
@@ -300,7 +314,7 @@ async def analyze_photo(
         except Exception as rag_err:
             logger.warning(f"[RAG] 营养数据增强失败，回退到LLM估算: {rag_err}")
 
-        now = int(datetime.now().timestamp())
+        now = int(datetime.now().timestamp() * 1000)
         foods = []
         with get_db() as session:
             for food_data in analysis.get("foods", []):
@@ -388,8 +402,9 @@ async def health_evaluation(date_str: str, current_user: dict = Depends(get_curr
     # Inject RAG sports nutrition knowledge for fitness users
     try:
         from app.rag.vector_store import rag_store
-        pref = session.query(Preference).filter(Preference.user_id == uid).first()
-        diet_type_user = (pref.data.get("diet_type", "normal") if pref and pref.data else "normal")
+        with get_db() as db:
+            pref = db.query(Preference).filter(Preference.user_id == uid).first()
+            diet_type_user = (pref.data.get("diet_type", "normal") if pref and pref.data else "normal")
         if diet_type_user in ("fitness", "low_calorie"):
             hits = rag_store.search(diet_type_user + " 每日营养标准 蛋白质 碳水 推荐摄入", "fitness", k=2)
             if hits:
@@ -408,10 +423,10 @@ async def health_evaluation(date_str: str, current_user: dict = Depends(get_curr
 
     try:
         model = init_chat_model(
-            model=os.getenv("DOUBAO_MODEL_NAME", "doubao-seed-1-8-251228"),
+            model=os.getenv("MIMO_MODEL_NAME") or os.getenv("DOUBAO_MODEL_NAME", "doubao-seed-1-8-251228"),
             model_provider="openai",
-            base_url=os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v1"),
-            api_key=os.getenv("DOUBAO_API_KEY")
+            base_url=os.getenv("MIMO_BASE_URL") or os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v1"),
+            api_key=os.getenv("MIMO_API_KEY") or os.getenv("DOUBAO_API_KEY")
         ).bind(extra_body={"thinking": {"type": "disabled"}})
 
         response = model.invoke([HumanMessage(content=prompt)])
@@ -437,6 +452,13 @@ async def health_evaluation(date_str: str, current_user: dict = Depends(get_curr
 @router.get("/summary/{date_str}", response_model=DailySummary)
 async def get_daily_summary(date_str: str, current_user: dict = Depends(get_current_user)):
     uid = current_user["user_id"]
+    cache_key = f"{uid}:{date_str}"
+
+    now_ts = time.time()
+    if cache_key in _summary_cache and now_ts - _summary_cache_ttl.get(cache_key, 0) < _SUMMARY_CACHE_TTL:
+        cached = _summary_cache[cache_key]
+        return DailySummary(**cached)
+
     with get_db() as session:
         rows = session.query(NutritionRecord).filter(
             NutritionRecord.date == date_str, NutritionRecord.user_id == uid
@@ -453,7 +475,7 @@ async def get_daily_summary(date_str: str, current_user: dict = Depends(get_curr
 
     analysis = generate_analysis(total_calories, total_protein, total_carbs, total_fat, total_fiber, total_sodium)
 
-    return DailySummary(
+    result = DailySummary(
         date=date_str,
         total_calories=round(total_calories, 1),
         total_protein=round(total_protein, 1),
@@ -464,3 +486,8 @@ async def get_daily_summary(date_str: str, current_user: dict = Depends(get_curr
         meals=meals,
         analysis=analysis
     )
+
+    _summary_cache[cache_key] = result.model_dump()
+    _summary_cache_ttl[cache_key] = now_ts
+
+    return result

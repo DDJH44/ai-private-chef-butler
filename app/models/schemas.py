@@ -1,5 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
+import warnings
 
 class ChatRequest(BaseModel):
     """聊天请求"""
@@ -35,6 +36,19 @@ class OSSUploadResponse(BaseModel):
 # 菜谱管理相关模型
 # ========================================
 
+ALLOWED_RECIPE_TAGS: set[str] = {
+    "快手", "高蛋白", "低卡", "川味", "粤菜", "家常", "汤品",
+    "早餐", "午餐", "晚餐", "加餐", "甜品", "饮品",
+}
+
+
+def _validate_tags(tags: List[str]) -> List[str]:
+    unknown = [t for t in tags if t not in ALLOWED_RECIPE_TAGS]
+    if unknown:
+        warnings.warn(f"非标准标签: {', '.join(unknown)}", UserWarning, stacklevel=3)
+    return tags
+
+
 class RecipeCreate(BaseModel):
     """创建菜谱请求（全局存储，不绑定会话）"""
     title: str
@@ -50,6 +64,13 @@ class RecipeCreate(BaseModel):
     source_url: Optional[str] = None
     video_url: Optional[str] = None
     videos: Optional[List[dict]] = []
+
+    @field_validator("tags")
+    @classmethod
+    def check_tags(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v:
+            return _validate_tags(v)
+        return v
 
 
 class RecipeUpdate(BaseModel):
@@ -68,6 +89,13 @@ class RecipeUpdate(BaseModel):
     video_url: Optional[str] = None
     videos: Optional[List[dict]] = None
     is_expanded: Optional[bool] = None
+
+    @field_validator("tags")
+    @classmethod
+    def check_tags(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v:
+            return _validate_tags(v)
+        return v
 
 
 class RecipeResponse(BaseModel):
@@ -96,7 +124,7 @@ class RecipeResponse(BaseModel):
 
 class RecipeListResponse(BaseModel):
     """菜谱列表响应"""
-    recipes: List[RecipeResponse]
+    items: List[RecipeResponse]
     total: int
 
 
@@ -155,7 +183,7 @@ class ShoppingListResponse(BaseModel):
 
 
 class ShoppingListListResponse(BaseModel):
-    shopping_lists: List[ShoppingListResponse]
+    items: List[ShoppingListResponse]
     total: int
 
 
@@ -199,10 +227,10 @@ class TokenResponse(BaseModel):
 
 class BodyMetricCreate(BaseModel):
     date: str
-    weight: Optional[float] = None
-    body_fat: Optional[float] = None
-    muscle_mass: Optional[float] = None
-    waist: Optional[float] = None
+    weight: Optional[float] = Field(None, ge=1, le=500)
+    body_fat: Optional[float] = Field(None, ge=0, le=100)
+    muscle_mass: Optional[float] = Field(None, ge=0, le=200)
+    waist: Optional[float] = Field(None, ge=20, le=300)
     notes: Optional[str] = None
 
 
@@ -219,9 +247,9 @@ class BodyMetricResponse(BaseModel):
 
 
 class NutritionTargets(BaseModel):
-    daily_calories: Optional[int] = None
-    protein_target: Optional[int] = None
-    carbs_target: Optional[int] = None
-    fat_target: Optional[int] = None
-    fiber_target: Optional[int] = None
-    goal_type: Optional[str] = "maintain"  # muscle_gain | fat_loss | maintain | custom
+    daily_calories: Optional[int] = Field(None, ge=0, le=10000)
+    protein_target: Optional[int] = Field(None, ge=0, le=500)
+    carbs_target: Optional[int] = Field(None, ge=0, le=1000)
+    fat_target: Optional[int] = Field(None, ge=0, le=500)
+    fiber_target: Optional[int] = Field(None, ge=0, le=200)
+    goal_type: Optional[str] = "maintain"

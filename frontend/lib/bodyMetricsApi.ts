@@ -2,7 +2,8 @@ import { authRequest } from "./api";
 import { BodyMetric } from "@/types/preference";
 
 export async function fetchBodyMetrics(days: number = 30): Promise<BodyMetric[]> {
-    return authRequest<BodyMetric[]>(`/api/v1/body-metrics?days=${days}`);
+    const data = await authRequest<{ items: BodyMetric[]; total: number }>(`/api/v1/body-metrics?days=${days}`);
+    return data.items || [];
 }
 
 export async function createBodyMetric(data: {

@@ -100,8 +100,6 @@ export interface RecipeOperationResponse {
  * 菜谱列表响应（后端 API）
  */
 export interface RecipeListResponse {
-  /** 菜谱列表 */
-  recipes: Recipe[];
-  /** 总数 */
+  items: Recipe[];
   total: number;
 }

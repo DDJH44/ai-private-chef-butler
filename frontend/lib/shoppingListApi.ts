@@ -34,7 +34,7 @@ export async function fetchShoppingLists(): Promise<ShoppingList[]> {
     const resp = await fetch(BASE, { headers: authHeaders() });
     if (!resp.ok) throw new Error(`Failed to fetch shopping lists: ${resp.status}`);
     const data = await resp.json();
-    return mapLists(data.shopping_lists || []);
+    return mapLists(data.items || []);
 }
 
 export async function createShoppingList(data: {

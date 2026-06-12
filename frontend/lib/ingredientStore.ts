@@ -25,7 +25,7 @@ async function fetchRemote(): Promise<Ingredient[]> {
     const resp = await fetch(ING_API, { headers: authHeaders() });
     if (!resp.ok) return [];
     const data = await resp.json();
-    return (data.ingredients || []).map((i: Record<string, unknown>) => ({
+    return (data.items || []).map((i: Record<string, unknown>) => ({
       ...i,
       created_at: String(i.created_at || ''),
       updated_at: String(i.updated_at || ''),

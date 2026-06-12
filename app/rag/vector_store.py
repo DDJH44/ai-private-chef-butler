@@ -160,7 +160,7 @@ class RAGStore:
         if self._loading:
             import time
             waited = 0
-            while self._loading and waited < 120:
+            while self._loading and waited < 5:
                 time.sleep(0.5); waited += 0.5
                 if self._ready:
                     return

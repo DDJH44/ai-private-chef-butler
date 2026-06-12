@@ -51,14 +51,14 @@ def list_ingredients(current_user: dict = Depends(get_current_user)):
         rows = session.query(Ingredient).filter(
             Ingredient.user_id == uid
         ).order_by(Ingredient.created_at.desc()).all()
-    return {"ingredients": [_ingredient_to_dict(r) for r in rows]}
+    return {"items": [_ingredient_to_dict(r) for r in rows], "total": len(rows)}
 
 
 @router.post("")
 def create_ingredient(data: IngredientCreate, current_user: dict = Depends(get_current_user)):
     uid = current_user["user_id"]
     ing_id = f"ing_{uuid.uuid4().hex[:12]}"
-    now = int(time.time())
+    now = int(time.time() * 1000)
     with get_db() as session:
         ing = Ingredient(
             id=ing_id, user_id=uid, name=data.name, category=data.category,
@@ -77,7 +77,7 @@ def create_ingredient(data: IngredientCreate, current_user: dict = Depends(get_c
 @router.put("/{ingredient_id}")
 def update_ingredient(ingredient_id: str, data: IngredientUpdate, current_user: dict = Depends(get_current_user)):
     uid = current_user["user_id"]
-    now = int(time.time())
+    now = int(time.time() * 1000)
     with get_db() as session:
         ing = session.query(Ingredient).filter(
             Ingredient.id == ingredient_id, Ingredient.user_id == uid

@@ -29,6 +29,8 @@ dependencies = [
     "aiohttp>=3.13",
     "requests>=2.32",
     "chromadb>=1.5",
+    "jieba>=0.42",
+    "rank-bm25>=0.2",
     "onnxruntime>=1.26",
     "openai>=2.38",
     "python-multipart>=0.0.30",
@@ -36,3 +38,4 @@ dependencies = [
 
 [project.optional-dependencies]
 oss = ["oss2"]
+dev = ["pytest>=8.0"]
