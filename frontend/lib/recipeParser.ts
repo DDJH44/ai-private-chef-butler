@@ -8,7 +8,7 @@ import { Recipe, VideoInfo } from '@/types/recipe';
 /** 从内容中提取所有视频信息 */
 function extractVideos(content: string): VideoInfo[] {
   const videos: VideoInfo[] = [];
-  // 匹配: `- [标题](URL) — UP主：XXX · 播放：XXX`
+  // 匹配: `- [标题](URL) — UP主：<作者> · 播放：<播放数>`
   const regex = /-\s*\[([^\]]+)\]\((https?:\/\/(?:www\.)?bilibili\.com\/video\/[^)]+)\)\s*(?:—\s*UP主[：:]?\s*([^·]*?)\s*·\s*播放[：:]?\s*([\d.]+[万亿]?))?/g;
   let m;
   while ((m = regex.exec(content)) !== null) {

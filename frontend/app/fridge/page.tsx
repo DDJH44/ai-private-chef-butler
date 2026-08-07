@@ -127,6 +127,7 @@ export default function FridgePage() {
                 <div className="relative flex items-center justify-between max-w-5xl mx-auto lg:max-w-6xl xl:max-w-7xl">
                     <div className="flex items-center gap-3">
                         <button onClick={() => router.back()}
+                            aria-label="返回"
                             style={{
                                 width: 36, height: 36,
                                 background: "var(--surface)",
@@ -349,6 +350,7 @@ export default function FridgePage() {
                                                 {statusCfg.label}
                                             </span>
                                             <button onClick={() => openEdit(item)}
+                                                aria-label={`编辑 ${item.name}`}
                                                 style={{
                                                     width: 28, height: 28,
                                                     background: "var(--surface)",
@@ -363,6 +365,7 @@ export default function FridgePage() {
                                                 <Pencil size={14} strokeWidth={1.8} />
                                             </button>
                                             <button onClick={() => setConfirmDeleteId(item.id)}
+                                                aria-label={`删除 ${item.name}`}
                                                 style={{
                                                     width: 28, height: 28,
                                                     background: "var(--surface)",
@@ -458,6 +461,7 @@ export default function FridgePage() {
                                 {editId ? <><Pencil size={14} strokeWidth={1.8} /> 编辑食材</> : <><Plus size={14} strokeWidth={1.8} /> 添加食材</>}
                             </h3>
                             <button onClick={() => setShowForm(false)}
+                                aria-label="关闭"
                                 style={{
                                     width: 32, height: 32,
                                     background: "var(--surface)",
@@ -729,6 +733,7 @@ export default function FridgePage() {
                                 AI 识别结果
                             </h3>
                             <button onClick={() => setShowPhotoModal(false)}
+                                aria-label="关闭"
                                 style={{
                                     width: 32, height: 32, borderRadius: 10,
                                     background: "var(--bg)", border: "none", cursor: "pointer",
@@ -787,6 +792,7 @@ export default function FridgePage() {
                                                     e.preventDefault();
                                                     setPhotoItems(prev => prev.filter((_, i) => i !== idx));
                                                 }}
+                                                    aria-label={`移除 ${item.name}`}
                                                     style={{
                                                         width: 28, height: 28, borderRadius: 8,
                                                         background: "var(--surface)", border: "none", cursor: "pointer",

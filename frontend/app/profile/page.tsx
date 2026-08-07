@@ -104,6 +104,7 @@ export default function ProfilePage() {
                     <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                         <button
                             onClick={() => router.back()}
+                            aria-label="返回"
                             style={{
                                 width: "36px",
                                 height: "36px",
@@ -193,6 +194,7 @@ export default function ProfilePage() {
                                     <button
                                         onClick={() => fileInputRef.current?.click()}
                                         disabled={uploading}
+                                        aria-label="更换头像"
                                         style={{
                                             position: "absolute", bottom: -2, right: -2,
                                             width: 22, height: 22, borderRadius: "50%",

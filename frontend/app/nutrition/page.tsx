@@ -281,6 +281,7 @@ export default function NutritionPage() {
         <div className="relative flex items-center justify-between max-w-5xl sm:max-w-6xl md:max-w-7xl lg:max-w-[1200px] mx-auto">
           <div className="flex items-center gap-5">
             <button onClick={() => router.back()}
+              aria-label="返回"
               style={{
                 width: 42, height: 42, background: "var(--surface)", borderRadius: 14,
                 boxShadow: "var(--shadow-raised-sm)", display: "flex", alignItems: "center", justifyContent: "center",
@@ -318,6 +319,7 @@ export default function NutritionPage() {
       <div className="flex-shrink-0 px-6 sm:px-8 lg:px-12 xl:px-20 py-3 max-w-5xl sm:max-w-6xl md:max-w-7xl lg:max-w-[1200px] mx-auto">
         <div className="flex items-center justify-center gap-6">
           <button onClick={() => navigateDate(-1)}
+            aria-label="上一日"
             style={{
               width: 44, height: 44, background: "var(--surface)", borderRadius: 14,
               boxShadow: "var(--shadow-raised-sm)", border: "none", cursor: "pointer",
@@ -327,6 +329,7 @@ export default function NutritionPage() {
           >◀</button>
           <button
             onClick={() => setShowDatePicker(true)}
+            aria-label="选择日期"
             style={{
               padding: "10px 36px", background: "var(--surface)", borderRadius: 14,
               boxShadow: "var(--shadow-raised-sm)", fontSize: 15, fontWeight: 600, color: "var(--text)",
@@ -337,6 +340,7 @@ export default function NutritionPage() {
             {formatDate(selectedDate)}
           </button>
           <button onClick={() => navigateDate(1)}
+            aria-label="下一日"
             style={{
               width: 44, height: 44, background: "var(--surface)", borderRadius: 14,
               boxShadow: "var(--shadow-raised-sm)", border: "none", cursor: "pointer",
@@ -410,6 +414,7 @@ export default function NutritionPage() {
                     {MEAL_ICONS[analysisResult.meal_type]} {analysisResult.meal_type}分析结果
                   </h3>
                   <button onClick={() => dismissAnalysisResult()}
+                    aria-label="关闭分析结果"
                     style={{
                       width: 28, height: 28, background: "var(--surface)", borderRadius: 8,
                       boxShadow: "var(--shadow-raised-xs)", border: "none", cursor: "pointer",
@@ -646,6 +651,7 @@ export default function NutritionPage() {
                                     <span style={{ fontSize: 13, color: "var(--text-muted)" }}><span style={{display:"inline-flex",verticalAlign:"middle",marginRight:2}}><span style={{color:"var(--text-secondary)",marginRight:4,fontWeight:700}}>•</span></span>{meal.calories}kcal</span>
                                   ) : null}
                                   <button onClick={() => setConfirmDeleteId(meal.id)}
+                                    aria-label="删除饮食记录"
                                     style={{
                                       width: 28, height: 28, background: "var(--surface)", borderRadius: 8,
                                       boxShadow: "var(--shadow-raised-xs)", border: "none", cursor: "pointer",
@@ -698,6 +704,7 @@ export default function NutritionPage() {
                 fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif",
               }}><span style={{marginRight:4,display:"inline-flex",verticalAlign:"middle"}}>{PageIcon.add}</span>手动添加</h3>
               <button onClick={() => setShowForm(false)}
+                aria-label="关闭"
                 style={{
                   width: 36, height: 36, background: "var(--surface)", borderRadius: 12,
                   boxShadow: "var(--shadow-raised-xs)", border: "none", cursor: "pointer",

@@ -143,6 +143,7 @@ export default function DashboardPage() {
           <button
             onClick={() => load(true)}
             disabled={refreshing}
+            aria-label="刷新数据"
             style={{
               width: 36, height: 36, borderRadius: "50%", border: "none",
               cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",

@@ -431,6 +431,7 @@ export default function HistoryPage() {
                     {searchQuery && (
                         <button
                             onClick={() => setSearchQuery("")}
+                            aria-label="清空搜索"
                             style={styles.searchClear}
                         >
                                 <X size={14} strokeWidth={1.8} />
@@ -472,6 +473,7 @@ export default function HistoryPage() {
                                         </button>
                                         <button
                                             onClick={() => handleDeleteChat(session.session_id)}
+                                            aria-label="删除对话"
                                             className="hover-rose" style={{...styles.iconBtn, color: "var(--text-muted)", boxShadow: "var(--shadow-raised-sm)"}}
                                         >
                                             <Trash2 size={14} strokeWidth={1.8} />
@@ -595,6 +597,7 @@ export default function HistoryPage() {
                                         </div>
                                         <button
                                             onClick={() => handleDeleteCook(item.id)}
+                                            aria-label="删除烹饪记录"
                                             className="hover-rose" style={{...styles.iconBtn, color: "var(--text-muted)", boxShadow: "var(--shadow-raised-sm)"}}
                                         >
                                             <Trash2 size={14} strokeWidth={1.8} />

@@ -504,6 +504,7 @@ export default function PreferencesPage() {
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                         <button
                             onClick={() => router.back()}
+                            aria-label="返回"
                             style={styles.backBtn}
                         >
                             ←
@@ -566,6 +567,7 @@ export default function PreferencesPage() {
                                             ...prev,
                                             custom_allergies: prev.custom_allergies.filter(a => a !== item),
                                         }))}
+                                        aria-label={`移除过敏原 ${item}`}
                                         style={styles.customTagClose}
                                     >
                                         <X size={14} strokeWidth={1.8} />
@@ -655,6 +657,7 @@ export default function PreferencesPage() {
                         </div>
                         <button
                             onClick={() => setShowAddMember(true)}
+                            aria-label="添加家庭成员"
                             style={styles.addMemberBtn}
                         >
                             ＋
@@ -677,6 +680,7 @@ export default function PreferencesPage() {
                                     </div>
                                     <button
                                         onClick={() => removeMember(member.id)}
+                                        aria-label={`移除成员 ${getRoleLabel(member.role)}`}
                                         className="hover-rose" style={styles.removeBtn}
                                     >
                                         <X size={14} strokeWidth={1.8} />

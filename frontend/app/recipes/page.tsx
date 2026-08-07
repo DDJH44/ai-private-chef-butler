@@ -135,6 +135,7 @@ export default function RecipesPage() {
                     {searchQuery && (
                         <button
                             onClick={() => { setSearchQuery(""); setActiveTag(null); }}
+                            aria-label="清空搜索"
                             style={{
                                 position: "absolute",
                                 right: "10px",
