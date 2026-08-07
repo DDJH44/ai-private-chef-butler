@@ -11,7 +11,7 @@ import { UtensilsCrossed } from "lucide-react";
 import { MEAL_ICONS, NUTRIENT_ICONS, PageIcon } from "@/lib/icons";
 import { useFeishuStatus } from "@/hooks/useFeishuStatus";
 import { useStore } from "@/hooks/useStore";
-import { getBase, authJsonHeaders, authHeaders } from "@/lib/http";
+import { getBase, authJsonHeaders, authHeaders, authFetch } from "@/lib/http";
 import { getToken } from "@/lib/authStore";
 import {
   getNutritionState,
@@ -102,37 +102,45 @@ export default function NutritionPage() {
 
   // 全局拍照识别状态
   const nutritionState = useStore(subscribeToNutrition, getNutritionState);
-  const fetchSummaryRef = useRef<() => void>(() => {});
+  const abortRef = useRef<AbortController | null>(null);
 
   const fetchSummary = useCallback(async () => {
     if (!getToken()) { setLoading(false); return; }
+    // 取消上一个未完成的请求，避免竞态
+    abortRef.current?.abort();
     const controller = new AbortController();
+    abortRef.current = controller;
     setLoading(true);
     try {
-      const resp = await fetch(`${getBase()}/api/v1/nutrition/summary/${selectedDate}`, { headers: authJsonHeaders(), signal: controller.signal });
+      const resp = await authFetch(`/api/v1/nutrition/summary/${selectedDate}`, { signal: controller.signal });
+      if (controller.signal.aborted) return;
       if (resp.ok) { setSummary(await resp.json()); }
       else { showToast("加载饮食记录失败", "error"); }
     } catch (e) {
       if ((e as Error).name !== "AbortError") showToast("网络错误，请稍后重试", "error");
     }
-    setLoading(false);
-    return () => controller.abort();
+    if (abortRef.current === controller) {
+      abortRef.current = null;
+      setLoading(false);
+    }
   }, [selectedDate]);
-
-  fetchSummaryRef.current = fetchSummary;
 
   // 监听分析完成事件，刷新 summary
   useEffect(() => {
-    const handler = () => { fetchSummaryRef.current(); };
+    const handler = () => { fetchSummary(); };
     window.addEventListener("nutrition:analysis-done", handler);
     return () => { window.removeEventListener("nutrition:analysis-done", handler); };
-  }, []);
+  }, [fetchSummary]);
 
   const analyzing = nutritionState.tasks.find((t) => t.status === "analyzing")?.mealType ?? null;
   const analysisResult = nutritionState.tasks.findLast((t) => t.status === "done")?.result ?? null;
   const showAnalysis = nutritionState.showResult;
 
-  useEffect(() => { fetchSummary(); }, [fetchSummary]);
+  // 组件卸载或日期切换时取消进行中的请求
+  useEffect(() => {
+    fetchSummary();
+    return () => { abortRef.current?.abort(); };
+  }, [fetchSummary]);
 
   const handleFoodSelect = (food: string) => {
     const info = COMMON_FOODS[food];

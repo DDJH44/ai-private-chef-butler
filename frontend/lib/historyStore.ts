@@ -43,11 +43,16 @@ async function deleteRemoteCookRecord(id: string): Promise<void> {
   } catch (e) { console.warn('删除远程烹饪记录失败:', e); }
 }
 
+// 模块级缓存：避免同一帧内多次 JSON.parse 同一份数据
+let _storeCache: HistoryStore | null = null;
+
 function loadStore(): HistoryStore {
+    if (_storeCache) return _storeCache;
     try {
         const stored = localStorage.getItem(STORAGE_KEY);
         if (!stored) return {chat_history: [], view_history: [], cook_history: [], lastUpdated: 0};
-        return JSON.parse(stored);
+        _storeCache = JSON.parse(stored);
+        return _storeCache!;
     } catch {
         return {chat_history: [], view_history: [], cook_history: [], lastUpdated: 0};
     }
@@ -56,6 +61,7 @@ function loadStore(): HistoryStore {
 function saveStore(store: HistoryStore): void {
     store.lastUpdated = Date.now();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    _storeCache = store;
 }
 
 export function loadChatHistory(): ChatHistorySession[] {
@@ -111,13 +117,17 @@ export function clearViewHistory(): void {
 }
 
 let _mergePending = false;
+let _lastFetchAt = 0;
+const FETCH_TTL = 30_000; // 30秒内不重复远程拉取
 
 export function loadCookHistory(): CookHistoryItem[] {
     const store = loadStore();
     const local = store.cook_history;
-    // 异步拉取远程记录合并（防并发）
-    if (_mergePending) return local;
+    // TTL 内跳过远程拉取，避免 N+1 请求
+    const now = Date.now();
+    if (_mergePending || now - _lastFetchAt < FETCH_TTL) return local;
     _mergePending = true;
+    _lastFetchAt = now;
     fetchRemoteCookHistory().then(remote => {
       _mergePending = false;
       if (remote.length === 0) return;

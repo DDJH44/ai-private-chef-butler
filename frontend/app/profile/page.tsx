@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { AuthGuard } from "@/components/AuthGuard";
 import { FeishuSettings } from "@/components/FeishuSettings";
+import { showToast } from "@/components/Toast";
 import { useRef, useState } from "react";
 import { Heart, Clock, ShoppingCart, User, Camera } from "lucide-react";
 
@@ -63,6 +64,7 @@ export default function ProfilePage() {
             await updateAvatar(base64);
         } catch (err) {
             console.error("头像上传失败:", err);
+            showToast("头像上传失败，请重试", "error");
         } finally {
             setUploading(false);
             if (fileInputRef.current) fileInputRef.current.value = "";

@@ -6,7 +6,7 @@ import { Recipe } from "@/types/recipe";
 import { useFeishuStatus } from "@/hooks/useFeishuStatus";
 import { proxyImageUrl } from "@/lib/imageUtils";
 import { generateShoppingListFromRecipes } from "@/lib/shoppingListGenerator";
-import { recordView, addCookRecord, loadCookHistory } from "@/lib/historyStore";
+import { recordView, addCookRecord, loadCookHistory, HISTORY_CHANGE_EVENT } from "@/lib/historyStore";
 import { deleteRecipe as deleteRecipeFromStore } from "@/lib/recipeStore";
 import { getToken } from "@/lib/authStore";
 import { authFetch, authHeaders } from "@/lib/http";
@@ -96,6 +96,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [pastCooks, setPastCooks] = useState(() => loadCookHistory().filter(c => c.recipe_id === recipe.id));
 
   // Fetch full recipe content if the list view stripped it
   useEffect(() => {
@@ -108,7 +109,17 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
       .catch((e) => { console.warn('加载菜谱详情失败:', e); });
   }, [recipe]);
 
-  useEffect(() => { if (recipe) recordView(fullRecipe.id, fullRecipe.title); }, [recipe]);
+  // 记录浏览 — 依赖 fullRecipe 的 id/title，确保异步加载完成后写入正确标题
+  useEffect(() => {
+    if (fullRecipe.id && fullRecipe.title) recordView(fullRecipe.id, fullRecipe.title);
+  }, [fullRecipe.id, fullRecipe.title]);
+
+  // 订阅历史变更事件，同步 pastCooks（避免渲染期调用 loadCookHistory 触发远程请求）
+  useEffect(() => {
+    const handler = () => setPastCooks(loadCookHistory().filter(c => c.recipe_id === fullRecipe.id));
+    window.addEventListener(HISTORY_CHANGE_EVENT, handler);
+    return () => window.removeEventListener(HISTORY_CHANGE_EVENT, handler);
+  }, [fullRecipe.id]);
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", handleEsc);
@@ -288,39 +299,35 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
             </div>
 
             {/* Past cook records */}
-            {(() => {
-              const pastCooks = loadCookHistory().filter(c => c.recipe_id === fullRecipe.id);
-              if (pastCooks.length === 0) return null;
-              return (
-                <div style={{
-                  marginBottom: 24, padding: 16, borderRadius: 16,
-                  background: "var(--surface)", boxShadow: "var(--shadow-inset-sm)",
-                }}>
-                  <p style={{ fontSize: 12, fontWeight: 600, color: "var(--green)", marginBottom: 8 }}>
-                    你做过 {pastCooks.length} 次这道菜
-                  </p>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {pastCooks.slice(0, 3).map(cook => (
-                      <div key={cook.id} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 2, marginBottom: 2 }}>
-                            {[1,2,3,4,5].map(s => (
-                              <span key={s} style={{ fontSize: 11, color: s <= cook.rating ? "var(--golden)" : "var(--text-placeholder)" }}>
-                                {s <= cook.rating ? <Star size={12} fill="var(--golden)"/> : <Star size={12}/>}
-                              </span>
-                            ))}
-                          </div>
-                          {cook.notes && (
-                            <p style={{ fontSize: 11, color: "var(--text-secondary)", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{cook.notes}</p>
-                          )}
+            {pastCooks.length > 0 && (
+              <div style={{
+                marginBottom: 24, padding: 16, borderRadius: 16,
+                background: "var(--surface)", boxShadow: "var(--shadow-inset-sm)",
+              }}>
+                <p style={{ fontSize: 12, fontWeight: 600, color: "var(--green)", marginBottom: 8 }}>
+                  你做过 {pastCooks.length} 次这道菜
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {pastCooks.slice(0, 3).map(cook => (
+                    <div key={cook.id} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 2, marginBottom: 2 }}>
+                          {[1,2,3,4,5].map(s => (
+                            <span key={s} style={{ fontSize: 11, color: s <= cook.rating ? "var(--golden)" : "var(--text-placeholder)" }}>
+                              {s <= cook.rating ? <Star size={12} fill="var(--golden)"/> : <Star size={12}/>}
+                            </span>
+                          ))}
                         </div>
-                        <span style={{ fontSize: 10, color: "var(--text-muted)", flexShrink: 0 }}>{cook.cook_date}</span>
+                        {cook.notes && (
+                          <p style={{ fontSize: 11, color: "var(--text-secondary)", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{cook.notes}</p>
+                        )}
                       </div>
-                    ))}
-                  </div>
+                      <span style={{ fontSize: 10, color: "var(--text-muted)", flexShrink: 0 }}>{cook.cook_date}</span>
+                    </div>
+                  ))}
                 </div>
-              );
-            })()}
+              </div>
+            )}
 
             {/* Ingredients */}
             {fullRecipe.ingredients && fullRecipe.ingredients.length > 0 && (

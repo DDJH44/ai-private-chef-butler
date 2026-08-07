@@ -17,6 +17,7 @@ import {
 import { showToast } from "@/components/Toast";
 import { AuthGuard } from "@/components/AuthGuard";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { authFetch, authJsonHeaders } from "@/lib/http";
 
 export default function FridgePage() {
     const router = useRouter();
@@ -179,14 +180,11 @@ export default function FridgePage() {
                             setIdentifying(true);
                             setPhotoItems([]);
                             try {
-                                const token = localStorage.getItem("auth_token");
                                 const formData = new FormData();
                                 formData.append("file", file);
-                                const baseUrl = (typeof window !== "undefined" && (window as any).__API_URL__) || process.env.NEXT_PUBLIC_API_URL || "";
-                                const resp = await fetch(`${baseUrl}/api/v1/ingredients/identify-from-photo`, {
+                                const resp = await authFetch(`/api/v1/ingredients/identify-from-photo`, {
                                     method: "POST",
                                     body: formData,
-                                    headers: token ? { Authorization: `Bearer ${token}` } : {},
                                 });
                                 if (resp.ok) {
                                     const data = await resp.json();
@@ -823,14 +821,9 @@ export default function FridgePage() {
                                     if (selected.length === 0) { showToast("请至少选择一种食材", "error"); return; }
                                     setShowPhotoModal(false);
                                     try {
-                                        const token = localStorage.getItem("auth_token");
-                                        const baseUrl = (typeof window !== "undefined" && (window as any).__API_URL__) || process.env.NEXT_PUBLIC_API_URL || "";
-                                        const resp = await fetch(`${baseUrl}/api/v1/ingredients/batch`, {
+                                        const resp = await authFetch(`/api/v1/ingredients/batch`, {
                                             method: "POST",
-                                            headers: {
-                                                "Content-Type": "application/json",
-                                                ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                                            },
+                                            headers: { "Content-Type": "application/json", ...authJsonHeaders() },
                                             body: JSON.stringify({
                                                 items: selected.map(s => ({
                                                     name: s.name,

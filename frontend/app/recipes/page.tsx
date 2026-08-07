@@ -135,7 +135,7 @@ export default function RecipesPage() {
                     />
                     {searchQuery && (
                         <button
-                            onClick={() => setSearchQuery("")}
+                            onClick={() => { setSearchQuery(""); setActiveTag(null); }}
                             style={{
                                 position: "absolute",
                                 right: "10px",
