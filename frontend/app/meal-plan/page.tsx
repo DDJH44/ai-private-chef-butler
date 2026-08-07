@@ -564,10 +564,10 @@ export default function MealPlanPage() {
             recipe_id: null,
             recipe_name: editName.trim(),
             ingredients: editIngredients.split(/[,，、]/).map(s => s.trim()).filter(Boolean),
-            calories: Number(editCalories) || 0,
-            protein: Number(editProtein) || 0,
-            carbs: Number(editCarbs) || 0,
-            fat: Number(editFat) || 0,
+            calories: Math.max(0, Number(editCalories) || 0),
+            protein: Math.max(0, Number(editProtein) || 0),
+            carbs: Math.max(0, Number(editCarbs) || 0),
+            fat: Math.max(0, Number(editFat) || 0),
             status: "planned",
         };
         setPlan(prev => updateMealLocally(prev, editingDate, editingMealType, meal));

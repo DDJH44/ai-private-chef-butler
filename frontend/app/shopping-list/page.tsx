@@ -113,7 +113,13 @@ export default function ShoppingListPage() {
         const text = list.items
             .map(i => `${i.checked ? "✓" : "○"} ${i.ingredient_name} ${i.required_amount}${i.unit}`)
             .join("\n");
-        navigator.clipboard.writeText(text).then(() => showToast("已复制", "success"));
+        if (navigator.clipboard?.writeText) {
+            navigator.clipboard.writeText(text)
+                .then(() => showToast("已复制", "success"))
+                .catch(() => showToast("复制失败", "error"));
+        } else {
+            showToast("当前环境不支持复制", "error");
+        }
     }, []);
 
     const handleCreateList = useCallback(async () => {

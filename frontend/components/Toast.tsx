@@ -14,9 +14,9 @@ interface ToastItem {
 }
 
 const TOAST_CONFIG = {
-    success: {icon: <Check size={14} strokeWidth={2}/>, color: "var(--green)"},
-    error: {icon: <X size={14} strokeWidth={2}/>, color: "var(--rose)"},
-    info: {icon: "ℹ", color: "var(--accent)"},
+    success: {icon: <Check size={14} strokeWidth={2}/>, color: "var(--green)", duration: 2500},
+    error: {icon: <X size={14} strokeWidth={2}/>, color: "var(--rose)", duration: 5000},
+    info: {icon: "ℹ", color: "var(--accent)", duration: 2500},
 };
 
 let toastListeners: Array<(msg: string, type: ToastType) => void> = [];
@@ -42,7 +42,7 @@ export function ToastContainer() {
                 setTimeout(() => {
                     setToasts((prev) => prev.filter((t) => t.id !== id));
                 }, 300);
-            }, 2500);
+            }, TOAST_CONFIG[type].duration);
         };
         toastListeners.push(handler);
         return () => {

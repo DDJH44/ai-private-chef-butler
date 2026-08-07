@@ -63,9 +63,11 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
+    setLoadError(false);
     try {
       const resp = await authFetch("/api/v1/dashboard/summary", { headers: authHeaders() });
       if (!resp.ok) {
@@ -76,6 +78,7 @@ export default function DashboardPage() {
       setData(json);
     } catch (e) {
       showToast((e as Error).message, "error");
+      setLoadError(true);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -161,8 +164,20 @@ export default function DashboardPage() {
     return (
       <div className="h-full overflow-y-auto" style={{ background: "var(--bg)" }}>
         <PageHeader title="数据概览" />
-        <div className="empty-state" style={{ padding: 60, textAlign: "center" }}>
-          <p style={{ color: "var(--text-muted)", fontSize: 14 }}>暂无数据</p>
+        <div className="empty-state" style={{ padding: 60, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+          <p style={{ color: "var(--text-muted)", fontSize: 14 }}>
+            {loadError ? "加载失败，请重试" : "暂无数据"}
+          </p>
+          {loadError && (
+            <button
+              onClick={() => { setLoading(true); load(); }}
+              style={{
+                padding: "8px 24px", borderRadius: 999, border: "none", cursor: "pointer",
+                background: "var(--accent)", color: "#fff", fontSize: 13, fontWeight: 600,
+                boxShadow: "var(--shadow-accent)",
+              }}
+            >重新加载</button>
+          )}
         </div>
       </div>
     );
