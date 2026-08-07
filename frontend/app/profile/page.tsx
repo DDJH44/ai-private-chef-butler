@@ -49,14 +49,16 @@ export default function ProfilePage() {
                 const img = new Image();
                 img.onload = () => {
                     const canvas = document.createElement("canvas");
-                    const size = Math.min(img.width, img.height, 256);
+                    const AVATAR_SIZE = 256;
+                    const AVATAR_QUALITY = 0.8;
+                    const size = Math.min(img.width, img.height, AVATAR_SIZE);
                     canvas.width = size;
                     canvas.height = size;
                     const ctx = canvas.getContext("2d")!;
                     const sx = (img.width - size) / 2;
                     const sy = (img.height - size) / 2;
                     ctx.drawImage(img, sx, sy, size, size, 0, 0, size, size);
-                    resolve(canvas.toDataURL("image/jpeg", 0.8));
+                    resolve(canvas.toDataURL("image/jpeg", AVATAR_QUALITY));
                 };
                 img.onerror = reject;
                 img.src = URL.createObjectURL(file);

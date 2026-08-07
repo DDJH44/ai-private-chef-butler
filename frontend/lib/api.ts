@@ -10,6 +10,9 @@ import type { Preference } from '@/types/preference';
 import { getBase, handleAuthExpired } from './http';
 import { getToken } from './authStore';
 
+/** 膳食计划生成超时时间（AI 生成可能较慢） */
+const MEAL_PLAN_TIMEOUT_MS = 120_000;
+
 // Preference cache — read once, refresh only on explicit change
 let _prefCache: Preference | null = null;
 let _prefDirty = true;
@@ -309,7 +312,7 @@ export async function generateMealPlan(params: {
     existing_plan?: Record<string, unknown>;
 }): Promise<Record<string, unknown>> {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120000);
+    const timeoutId = setTimeout(() => controller.abort(), MEAL_PLAN_TIMEOUT_MS);
     try {
         const data = await authRequest<Record<string, unknown>>("/api/v1/meal-plan/generate", {
             method: "POST",

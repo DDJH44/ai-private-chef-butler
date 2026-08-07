@@ -99,6 +99,7 @@ export function ChatInput({ onSendMessage, onImageUpload, disabled, defaultValue
       img.onload = () => {
         const MAX_W = 768;
         const MAX_H = 768;
+        const JPEG_QUALITY = 0.6;
         let { width: w, height: h } = img;
         if (w > MAX_W || h > MAX_H) {
           const ratio = Math.min(MAX_W / w, MAX_H / h);
@@ -116,7 +117,7 @@ export function ChatInput({ onSendMessage, onImageUpload, disabled, defaultValue
           reader.onload = () => resolve(reader.result as string);
           reader.onerror = () => reject(new Error("FileReader failed"));
           reader.readAsDataURL(blob);
-        }, "image/jpeg", 0.6);
+        }, "image/jpeg", JPEG_QUALITY);
       };
       img.onerror = () => reject(new Error("Image load failed"));
       img.src = url;

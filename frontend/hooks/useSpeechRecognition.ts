@@ -5,6 +5,11 @@ import { useState, useRef, useCallback } from "react";
 import { apiPath } from '@/lib/env';
 const WhisperAPI = apiPath('/v1/speech/transcribe');
 
+/** 录音停止后轮询转录结果的间隔 */
+const STOP_POLL_INTERVAL_MS = 50;
+/** 录音安全超时：超过此时间强制结束 */
+const RECORDING_SAFETY_TIMEOUT_MS = 60_000;
+
 interface SpeechRecognitionResultItem {
   transcript: string;
   confidence: number;
@@ -212,12 +217,12 @@ export function useSpeechRecognition() {
             // onstop handler completed, resolveRef was cleared
             resolve(transcriptRef.current);
           } else {
-            setTimeout(check, 50);
+            setTimeout(check, STOP_POLL_INTERVAL_MS);
           }
         };
         check();
-        // Safety timeout after 60s
-        setTimeout(() => resolve(transcriptRef.current), 60000);
+        // Safety timeout
+        setTimeout(() => resolve(transcriptRef.current), RECORDING_SAFETY_TIMEOUT_MS);
       });
     }
     isRecordingRef.current = false;

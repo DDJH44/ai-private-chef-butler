@@ -10,6 +10,10 @@ const nextConfig: NextConfig = {
   },
   distDir: ".next",
   allowedDevOrigins: ["http://localhost:3000", "http://127.0.0.1:3000"],
+  compiler: {
+    // 生产环境移除 console.* 调用，保留 console.error 用于排错
+    removeConsole: isProd ? { exclude: ["error"] } : false,
+  },
   async rewrites() {
     if (isProd) return [];
     return [
