@@ -10,6 +10,7 @@ import {
 } from "@/lib/historyStore";
 import {showToast} from "@/components/Toast";
 import { AuthGuard } from "@/components/AuthGuard";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import DatePicker from "@/components/DatePicker";
 import { PageHeader } from "@/components/PageHeader";
 import { MessageCircle, BookOpen, ChefHat, Search, X, Trash2, Star, Calendar } from "lucide-react";
@@ -344,6 +345,7 @@ export default function HistoryPage() {
     const deferredQuery = useDeferredValue(searchQuery);
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [filterMonth, setFilterMonth] = useState<string | null>(null);
+    const [confirmDelete, setConfirmDelete] = useState<{ title: string; message: string; action: () => void } | null>(null);
 
     const refresh = useCallback(() => {
         setChatHistory(loadChatHistory());
@@ -362,18 +364,36 @@ export default function HistoryPage() {
     }, [refresh]);
 
     const handleDeleteChat = useCallback((sessionId: string) => {
-        deleteChatSession(sessionId);
-        showToast("对话已删除", "info");
+        setConfirmDelete({
+            title: "删除对话",
+            message: "确定要删除这个对话吗？此操作不可撤销。",
+            action: () => {
+                deleteChatSession(sessionId);
+                showToast("对话已删除", "info");
+            },
+        });
     }, []);
 
     const handleClearViews = useCallback(() => {
-        clearViewHistory();
-        showToast("浏览记录已清除", "info");
+        setConfirmDelete({
+            title: "清除全部浏览记录",
+            message: "确定要清除所有浏览记录吗？此操作不可撤销。",
+            action: () => {
+                clearViewHistory();
+                showToast("浏览记录已清除", "info");
+            },
+        });
     }, []);
 
     const handleDeleteCook = useCallback((id: string) => {
-        deleteCookRecord(id);
-        showToast("烹饪记录已删除", "info");
+        setConfirmDelete({
+            title: "删除烹饪记录",
+            message: "确定要删除这条烹饪记录吗？此操作不可撤销。",
+            action: () => {
+                deleteCookRecord(id);
+                showToast("烹饪记录已删除", "info");
+            },
+        });
     }, []);
 
     const filteredChat = useMemo(() => deferredQuery.trim()
@@ -619,6 +639,19 @@ export default function HistoryPage() {
                         setShowDatePicker(false);
                     }}
                     onClose={() => setShowDatePicker(false)}
+                />
+            )}
+
+            {confirmDelete && (
+                <ConfirmDialog
+                    isOpen={!!confirmDelete}
+                    title={confirmDelete.title}
+                    message={confirmDelete.message}
+                    onCancel={() => setConfirmDelete(null)}
+                    onConfirm={() => {
+                        confirmDelete.action();
+                        setConfirmDelete(null);
+                    }}
                 />
             )}
 

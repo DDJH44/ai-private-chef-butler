@@ -19,6 +19,18 @@ import { AuthGuard } from "@/components/AuthGuard";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { authFetch, authJsonHeaders } from "@/lib/http";
 
+/** 食材表单状态 — 所有字段必填，消除 Partial 带来的非空断言 */
+interface IngredientFormState {
+    name: string;
+    category: IngredientCategory;
+    quantity: number;
+    unit: IngredientUnit;
+    purchase_date: string;
+    shelf_life_days: number;
+    expiry_date: string;
+    created_at?: string;
+}
+
 export default function FridgePage() {
     const router = useRouter();
     const [ingredients, setIngredients] = useState<Ingredient[]>([]);
@@ -27,7 +39,7 @@ export default function FridgePage() {
     const [category, setCategory] = useState<IngredientCategory | "全部">("全部");
     const [showForm, setShowForm] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
-    const [form, setForm] = useState<Partial<Ingredient>>({
+    const [form, setForm] = useState<IngredientFormState>({
         name: "", category: "蔬菜", quantity: 1, unit: "个",
         purchase_date: new Date().toISOString().split("T")[0],
         shelf_life_days: 7, expiry_date: "",
@@ -69,26 +81,36 @@ export default function FridgePage() {
 
     const openEdit = (item: Ingredient) => {
         setEditId(item.id);
-        setForm({ ...item });
+        setForm({
+            name: item.name,
+            category: item.category,
+            quantity: item.quantity,
+            unit: item.unit,
+            purchase_date: item.purchase_date,
+            shelf_life_days: item.shelf_life_days,
+            expiry_date: item.expiry_date || "",
+            created_at: item.created_at,
+        });
         setShowForm(true);
     };
 
     const handleSave = () => {
-        if (!form.name?.trim()) {
+        if (!form.name.trim()) {
             showToast("请输入食材名称", "error");
             return;
         }
+        const today = new Date().toISOString().split("T")[0];
         const expiry = form.expiry_date || calculateExpiryDate(
-            form.purchase_date || new Date().toISOString().split("T")[0],
+            form.purchase_date || today,
             form.shelf_life_days || 7
         );
         const data: Ingredient = {
             id: editId || generateUUID(),
-            name: form.name!.trim(),
+            name: form.name.trim(),
             category: form.category || "蔬菜",
             quantity: form.quantity || 1,
             unit: form.unit || "个",
-            purchase_date: form.purchase_date || new Date().toISOString().split("T")[0],
+            purchase_date: form.purchase_date || today,
             shelf_life_days: form.shelf_life_days || 7,
             expiry_date: expiry,
             status: calculateStatus(expiry),
