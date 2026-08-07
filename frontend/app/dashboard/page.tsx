@@ -338,6 +338,8 @@ export default function DashboardPage() {
                     <img
                       src={proxyImageUrl(r.image_url)}
                       alt={r.title}
+                      loading="lazy"
+                      decoding="async"
                       style={{ width: 44, height: 44, borderRadius: 10, objectFit: "cover", flexShrink: 0 }}
                     />
                   ) : (

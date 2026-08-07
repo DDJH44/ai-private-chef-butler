@@ -245,7 +245,7 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
           {/* Hero image */}
           {fullRecipe.imageUrl ? (
             <div style={{ position: "relative", aspectRatio: "16/9", maxHeight: 220, overflow: "hidden" }}>
-              <img src={proxyImageUrl(fullRecipe.imageUrl)} alt={fullRecipe.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <img src={proxyImageUrl(fullRecipe.imageUrl)} alt={fullRecipe.title} loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, var(--bg) 10%, transparent)" }} />
             </div>
           ) : (

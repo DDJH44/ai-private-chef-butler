@@ -107,7 +107,7 @@ export const ChatMessage = memo(function ChatMessage({ message, isStreaming }: C
         <div style={{ maxWidth: "70%" }}>
           {message.imageUrl && (
             <div style={{ marginBottom: 8, borderRadius: 16, overflow: "hidden", boxShadow: "var(--shadow-raised-sm)" }}>
-              <img src={message.imageUrl} alt="上传的图片" style={{ width: "100%", maxHeight: 256, objectFit: "cover" }} />
+              <img src={message.imageUrl} alt="上传的图片" loading="lazy" decoding="async" style={{ width: "100%", maxHeight: 256, objectFit: "cover" }} />
             </div>
           )}
           <div style={{
@@ -144,6 +144,8 @@ export const ChatMessage = memo(function ChatMessage({ message, isStreaming }: C
             <img
               src={proxyImageUrl(message.imageUrl)}
               alt="AI 图片"
+              loading="lazy"
+              decoding="async"
               style={{ width: "100%", maxHeight: 256, objectFit: "cover" }}
             />
           </div>

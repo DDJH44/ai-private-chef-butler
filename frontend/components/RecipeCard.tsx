@@ -54,6 +54,8 @@ export const RecipeCard = memo(function RecipeCard({ recipe, onClick, className,
           <img
             src={proxyImageUrl(recipe.imageUrl)}
             alt={recipe.title}
+            loading="lazy"
+            decoding="async"
             style={{ width: "100%", height: "100%", objectFit: "cover", transition: "transform 0.5s ease" }}
             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
           />
