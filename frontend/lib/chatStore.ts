@@ -29,6 +29,7 @@ interface ChatState {
     threadId: string;
     loading: boolean;
     recipesToSave: { recipes: Recipe[] } | null;
+    saving: boolean;
     initialLoading: boolean;
 }
 
@@ -39,6 +40,7 @@ const state: ChatState = {
     threadId: "",
     loading: false,
     recipesToSave: null,
+    saving: false,
     initialLoading: true,
 };
 
@@ -267,18 +269,20 @@ export function dismissRecipes() {
 }
 
 export async function confirmSaveRecipes(selected: Recipe[]) {
-    let ok = false;
+    state.saving = true;
+    notify();
     try {
       const saved = await addRecipesBatch(selected);
-      ok = saved.length > 0;
-      if (ok) {
+      if (saved.length > 0) {
         showToast(`已添加 ${saved.length} 道菜品到菜谱栏`, "success");
+        state.recipesToSave = null;
       } else {
-        showToast("保存失败，请重试", "error");
+        showToast("保存失败，可重试", "error");
       }
     } catch {
-      showToast("保存失败，请重试", "error");
+      showToast("保存失败，可重试", "error");
+    } finally {
+      state.saving = false;
+      notify();
     }
-    state.recipesToSave = null;
-    notify();
 }

@@ -9,7 +9,7 @@ import { showToast } from "@/components/Toast";
 import { AuthGuard } from "@/components/AuthGuard";
 import { getToken } from "@/lib/authStore";
 import {loadRecipes, RECIPE_CHANGE_EVENT, deleteRecipesBatch} from "@/lib/recipeStore";
-import { Search, X, BookOpen } from "lucide-react";
+import { Search, X, BookOpen, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 
 export default function RecipesPage() {
@@ -23,12 +23,20 @@ export default function RecipesPage() {
     const [batchDeleting, setBatchDeleting] = useState(false);
 
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(false);
 
     const loadRecipeList = useCallback(async () => {
         if (!getToken()) { setLoading(false); return; }
-        const allRecipes = await loadRecipes();
-        setRecipes(allRecipes);
-        setLoading(false);
+        setLoading(true);
+        setLoadError(false);
+        try {
+            const allRecipes = await loadRecipes();
+            setRecipes(allRecipes);
+        } catch {
+            setLoadError(true);
+        } finally {
+            setLoading(false);
+        }
     }, []);
 
     useEffect(() => {
@@ -222,7 +230,34 @@ export default function RecipesPage() {
                 marginLeft: "auto",
                 marginRight: "auto",
             }}>
-                {loading ? (
+                {loadError ? (
+                    <div style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        paddingTop: "64px",
+                        gap: 16,
+                    }}>
+                        <div style={{
+                            width: "64px", height: "64px", borderRadius: "20px",
+                            background: "var(--surface)", boxShadow: "var(--shadow-raised)",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            color: "var(--text-muted)",
+                        }}>
+                            <RefreshCw size={28} strokeWidth={1.5} />
+                        </div>
+                        <p style={{ fontSize: 14, color: "var(--text-muted)" }}>加载失败，请重试</p>
+                        <button
+                            onClick={() => loadRecipeList()}
+                            style={{
+                                padding: "8px 24px", borderRadius: 999, border: "none", cursor: "pointer",
+                                background: "var(--accent)", color: "#fff", fontSize: 13, fontWeight: 600,
+                                boxShadow: "var(--shadow-accent)",
+                            }}
+                        >重新加载</button>
+                    </div>
+                ) : loading ? (
                     <div style={{
                         display: "grid",
                         gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",

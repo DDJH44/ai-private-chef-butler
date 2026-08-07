@@ -46,9 +46,45 @@ export default function FridgePage() {
     });
     const load = useCallback(() => setIngredients(loadIngredients()), []);
 
+    const identifyPhoto = useCallback(async (file: File) => {
+        setShowPhotoModal(true);
+        setIdentifying(true);
+        setPhotoError(false);
+        setPhotoItems([]);
+        try {
+            const formData = new FormData();
+            formData.append("file", file);
+            const resp = await authFetch(`/api/v1/ingredients/identify-from-photo`, {
+                method: "POST",
+                body: formData,
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                setPhotoItems((data.items || []).map((it: Record<string, unknown>) => ({
+                    ...it,
+                    name: String(it.name || ""),
+                    category: String(it.category || "其他"),
+                    quantity: Number(it.quantity) || 1,
+                    unit: String(it.unit || "个"),
+                    shelf_life_days: Number(it.shelf_life_days) || 7,
+                    selected: true,
+                })));
+            } else {
+                setPhotoError(true);
+                showToast("识别失败，请重试", "error");
+            }
+        } catch {
+            setPhotoError(true);
+            showToast("网络错误，识别失败", "error");
+        }
+        setIdentifying(false);
+    }, []);
+
     // 拍照识别状态
     const [showPhotoModal, setShowPhotoModal] = useState(false);
     const [identifying, setIdentifying] = useState(false);
+    const [photoError, setPhotoError] = useState(false);
+    const [lastPhotoFile, setLastPhotoFile] = useState<File | null>(null);
     const [photoItems, setPhotoItems] = useState<Array<{ name: string; category: string; quantity: number; unit: string; shelf_life_days: number; selected: boolean }>>([]);
 
     useEffect(() => {
@@ -200,36 +236,8 @@ export default function FridgePage() {
                             const file = e.target.files?.[0];
                             if (!file) return;
                             e.target.value = "";
-                            setShowPhotoModal(true);
-                            setIdentifying(true);
-                            setPhotoItems([]);
-                            try {
-                                const formData = new FormData();
-                                formData.append("file", file);
-                                const resp = await authFetch(`/api/v1/ingredients/identify-from-photo`, {
-                                    method: "POST",
-                                    body: formData,
-                                });
-                                if (resp.ok) {
-                                    const data = await resp.json();
-                                    setPhotoItems((data.items || []).map((it: Record<string, unknown>) => ({
-                                        ...it,
-                                        name: String(it.name || ""),
-                                        category: String(it.category || "其他"),
-                                        quantity: Number(it.quantity) || 1,
-                                        unit: String(it.unit || "个"),
-                                        shelf_life_days: Number(it.shelf_life_days) || 7,
-                                        selected: true,
-                                    })));
-                                } else {
-                                    showToast("识别失败，请重试", "error");
-                                    setShowPhotoModal(false);
-                                }
-                            } catch {
-                                showToast("网络错误，识别失败", "error");
-                                setShowPhotoModal(false);
-                            }
-                            setIdentifying(false);
+                            setLastPhotoFile(file);
+                            await identifyPhoto(file);
                         }}
                     />
                     <button onClick={openAdd}
@@ -774,8 +782,21 @@ export default function FridgePage() {
                                 </div>
                             ) : photoItems.length === 0 ? (
                                 <div style={{ textAlign: "center", padding: "48px 0" }}>
-                                    <p style={{ fontSize: 15, color: "var(--text-muted)" }}>未识别到食材</p>
-                                    <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>请确保照片中有清晰的生食材</p>
+                                    <p style={{ fontSize: 15, color: "var(--text-muted)" }}>
+                                        {photoError ? "识别失败" : "未识别到食材"}
+                                    </p>
+                                    <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                                        {photoError ? "网络或服务异常，可重试" : "请确保照片中有清晰的生食材"}
+                                    </p>
+                                    <button
+                                        onClick={() => lastPhotoFile && identifyPhoto(lastPhotoFile)}
+                                        style={{
+                                            marginTop: 16, padding: "8px 24px", borderRadius: 999,
+                                            border: "none", cursor: "pointer",
+                                            background: "var(--accent)", color: "#fff",
+                                            fontSize: 13, fontWeight: 600, boxShadow: "var(--shadow-accent)",
+                                        }}
+                                    >重新识别</button>
                                 </div>
                             ) : (
                                 <>

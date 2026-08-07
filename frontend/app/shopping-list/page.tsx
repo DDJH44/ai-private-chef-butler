@@ -39,23 +39,45 @@ export default function ShoppingListPage() {
     }, [load]);
 
     const handleToggle = useCallback(async (listId: string, itemId: string) => {
-        // Optimistic update — immediate UI feedback
+        // Record previous state for rollback on failure
+        let prevChecked = false;
         setLists(prev => prev.map(list =>
             list.id === listId
-                ? { ...list, items: list.items.map(item =>
-                    item.id === itemId
-                        ? { ...item, checked: !item.checked }
-                        : item
-                )}
+                ? { ...list, items: list.items.map(item => {
+                    if (item.id === itemId) {
+                        prevChecked = item.checked;
+                        return { ...item, checked: !item.checked };
+                    }
+                    return item;
+                })}
                 : list
         ));
         pendingToggles.current++;
-        await toggleItemChecked(listId, itemId);
-        pendingToggles.current--;
-        // Final sync to reconcile server state
-        if (pendingToggles.current === 0) {
-            const data = await loadShoppingLists();
-            setLists(data);
+        try {
+            await toggleItemChecked(listId, itemId);
+            pendingToggles.current--;
+            // Final sync to reconcile server state
+            if (pendingToggles.current === 0) {
+                try {
+                    const data = await loadShoppingLists();
+                    setLists(data);
+                } catch {
+                    // Sync failed — keep optimistic state, user will be notified on next load
+                }
+            }
+        } catch {
+            pendingToggles.current--;
+            // Rollback to previous state
+            setLists(prev => prev.map(list =>
+                list.id === listId
+                    ? { ...list, items: list.items.map(item =>
+                        item.id === itemId
+                            ? { ...item, checked: prevChecked }
+                            : item
+                    )}
+                    : list
+            ));
+            showToast("同步失败，已还原", "error");
         }
     }, []);
 

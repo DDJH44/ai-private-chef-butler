@@ -662,8 +662,10 @@ export default function MealPlanPage() {
         });
     }, [plan, genMode, genRequirements]);
 
+    const [generatingShopping, setGeneratingShopping] = useState(false);
+
     const handleGenerateWeekShoppingList = useCallback(async () => {
-        if (!plan) return;
+        if (!plan || generatingShopping) return;
         const recipesWithIngredients: { id: string; title: string; content: string; ingredients: string[]; createdAt: number; updatedAt: number }[] = [];
         for (const day of plan.days) {
             for (const mt of MEAL_TYPES) {
@@ -684,10 +686,17 @@ export default function MealPlanPage() {
             showToast("本周还没有安排带食材的菜品，请先生成膳食计划", "info");
             return;
         }
-        const lists = await generateShoppingListFromRecipes(recipesWithIngredients);
-        showToast(`已为本周 ${lists.length} 道菜分别生成购物清单`, "success");
-        router.push("/shopping-list");
-    }, [plan, router]);
+        setGeneratingShopping(true);
+        try {
+            const lists = await generateShoppingListFromRecipes(recipesWithIngredients);
+            showToast(`已为本周 ${lists.length} 道菜分别生成购物清单`, "success");
+            router.push("/shopping-list");
+        } catch {
+            showToast("生成失败，请重试", "error");
+        } finally {
+            setGeneratingShopping(false);
+        }
+    }, [plan, router, generatingShopping]);
 
     if (!plan) return null;
 
@@ -884,9 +893,10 @@ export default function MealPlanPage() {
                         {/* shopping list button */}
                         <button
                             onClick={handleGenerateWeekShoppingList}
-                            style={s.shoppingBtn}
+                            disabled={generatingShopping}
+                            style={{...s.shoppingBtn, opacity: generatingShopping ? 0.6 : 1}}
                         >
-                            <><ShoppingCart size={14} strokeWidth={1.8}/> 生成本周购物清单</>
+                            <><ShoppingCart size={14} strokeWidth={1.8}/> {generatingShopping ? "生成中..." : "生成本周购物清单"}</>
                         </button>
                     </div>
                 )}

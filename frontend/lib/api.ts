@@ -246,13 +246,8 @@ export async function addRecipeToPanel(req: AddRecipeRequest): Promise<RecipeOpe
 }
 
 export async function getRecipes(): Promise<Recipe[]> {
-    try {
-        const data = await authRequest<RecipeListResponse>("/api/v1/recipes");
-        return data.items;
-    } catch (error) {
-        console.error("获取菜谱失败:", error);
-        return [];
-    }
+    const data = await authRequest<RecipeListResponse>("/api/v1/recipes");
+    return data.items;
 }
 
 export async function deleteRecipeFromPanel(recipeId: string): Promise<RecipeOperationResponse> {

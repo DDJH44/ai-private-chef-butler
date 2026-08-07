@@ -84,6 +84,7 @@ export default function NutritionPage() {
   const [summary, setSummary] = useState<DailySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     meal_type: "早餐",
     food_name: "",
@@ -157,10 +158,8 @@ export default function NutritionPage() {
   };
 
   const handleSubmit = async () => {
-    if (!form.food_name.trim()) {
-      showToast("请输入食物名称", "error");
-      return;
-    }
+    if (!form.food_name.trim() || submitting) return;
+    setSubmitting(true);
     try {
       const resp = await fetch(`${getBase()}/api/v1/nutrition/records`, {
         method: "POST",
@@ -181,8 +180,11 @@ export default function NutritionPage() {
         setShowForm(false);
         setForm({ meal_type: "早餐", food_name: "", calories: "", protein: "", carbs: "", fat: "", notes: "" });
         fetchSummary();
+      } else {
+        showToast("添加失败", "error");
       }
-    } catch (e) { showToast("添加失败", "error"); }
+    } catch { showToast("添加失败", "error"); }
+    finally { setSubmitting(false); }
   };
 
   const doDelete = async (id: string) => {
@@ -791,12 +793,14 @@ export default function NutritionPage() {
                 }}
               >取消</button>
               <button onClick={handleSubmit}
+                disabled={submitting || !form.food_name.trim()}
                 style={{
                   flex: 1, padding: "14px 0", background: "var(--accent)", color: "#fff",
                   borderRadius: 14, fontSize: 16, fontWeight: 700, border: "none", cursor: "pointer",
                   boxShadow: "var(--shadow-accent)", transition: "var(--transition)",
+                  opacity: (submitting || !form.food_name.trim()) ? 0.6 : 1,
                 }}
-              >保存</button>
+              >{submitting ? "保存中..." : "保存"}</button>
             </div>
           </div>
         </div>
