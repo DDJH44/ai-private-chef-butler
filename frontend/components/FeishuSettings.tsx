@@ -20,7 +20,7 @@ export function FeishuSettings() {
     try {
       const cfg = await getFeishuConfig();
       setConfig(cfg);
-    } catch { /* 静默 */ }
+    } catch (e) { console.warn('加载飞书配置失败:', e); }
     setLoading(false);
   }, []);
 

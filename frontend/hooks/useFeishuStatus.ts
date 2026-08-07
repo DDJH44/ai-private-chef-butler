@@ -14,7 +14,7 @@ export function useFeishuStatus() {
     if (!token) { setLoading(false); return; }
     getFeishuConfig()
       .then(cfg => { setConfigured(cfg.configured); setEnabled(cfg.enabled); })
-      .catch(() => {})
+      .catch((e) => { console.warn('获取飞书配置失败:', e); })
       .finally(() => setLoading(false));
   }, [token]);
 
@@ -23,7 +23,7 @@ export function useFeishuStatus() {
     setLoading(true);
     getFeishuConfig()
       .then(cfg => { setConfigured(cfg.configured); setEnabled(cfg.enabled); })
-      .catch(() => {})
+      .catch((e) => { console.warn('刷新飞书配置失败:', e); })
       .finally(() => setLoading(false));
   };
 

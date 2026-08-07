@@ -249,8 +249,9 @@ export async function sendMessage(content: string, imageUrl?: string): Promise<v
         );
     } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") return;
+        const errMsg = e instanceof Error ? e.message : "未知错误";
         state.messages = state.messages.map((m) =>
-            m.id === assistantId ? { ...m, content: "抱歉，发生了错误" } : m
+            m.id === assistantId ? { ...m, content: `抱歉，${errMsg}` } : m
         );
         notify();
     } finally {

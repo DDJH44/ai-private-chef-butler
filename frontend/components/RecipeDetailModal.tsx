@@ -9,6 +9,7 @@ import { generateShoppingListFromRecipes } from "@/lib/shoppingListGenerator";
 import { recordView, addCookRecord, loadCookHistory } from "@/lib/historyStore";
 import { deleteRecipe as deleteRecipeFromStore } from "@/lib/recipeStore";
 import { getToken } from "@/lib/authStore";
+import { authFetch, authHeaders } from "@/lib/http";
 import { showToast } from "@/components/Toast";
 import { generateUUID } from "@/lib/utils";
 import { Star, Flame, Clock, X, Check, Clipboard, Trash2, ChefHat, CookingPot, ShoppingCart, Video } from "lucide-react";
@@ -99,16 +100,12 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
   // Fetch full recipe content if the list view stripped it
   useEffect(() => {
     if (recipe.content) return;
-    const token = getToken();
-    const baseUrl = (typeof window !== "undefined" && (window as any).__API_URL__) || process.env.NEXT_PUBLIC_API_URL || '';
-    fetch(`${baseUrl}/api/v1/recipes/${encodeURIComponent(recipe.id)}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
+    authFetch(`/api/v1/recipes/${encodeURIComponent(recipe.id)}`, { headers: authHeaders() })
       .then(r => r.json())
       .then(data => {
         if (data.title) setFullRecipe(data);
       })
-      .catch(() => {});
+      .catch((e) => { console.warn('加载菜谱详情失败:', e); });
   }, [recipe]);
 
   useEffect(() => { if (recipe) recordView(fullRecipe.id, fullRecipe.title); }, [recipe]);
@@ -154,10 +151,9 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
 
   const handleShareToFeishu = async () => {
     try {
-      const baseUrl = (typeof window !== "undefined" && (window as any).__API_URL__) || process.env.NEXT_PUBLIC_API_URL || "";
-      const resp = await fetch(`${baseUrl}/api/v1/feishu/recipe-share`, {
+      const resp = await authFetch(`/api/v1/feishu/recipe-share`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify(fullRecipe),
       });
       const data = await resp.json();
@@ -166,8 +162,8 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
       } else {
         showToast(data.detail || "分享失败", "error");
       }
-    } catch {
-      showToast("分享失败", "error");
+    } catch (e) {
+      showToast(`分享失败: ${(e as Error).message}`, "error");
     }
   };
 
