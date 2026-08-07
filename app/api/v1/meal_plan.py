@@ -6,9 +6,13 @@ from app.agents.personal_chief import model, _build_preference_context
 from langchain_core.messages import HumanMessage
 from app.common.json_utils import repair_truncated_json
 from app.common.logger import logger
+from app.common.database import get_session
+from app.models.db import MealPlanDB
+from sqlalchemy import select, delete
 import json
 import re
 import asyncio
+import time
 from datetime import datetime, timedelta
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -225,3 +229,88 @@ async def generate_meal_plan(request: MealPlanRequest):
     logger.info(f"[meal_plan] 生成完成: {len(days)} 天, {sum(1 for d in days for k in target_meals if d['meals'].get(k) and d['meals'][k] != '保留')} 个新餐次, {len(errors)} 个错误")
 
     return {"plan": {"days": days}}
+
+
+# ==================== 膳食计划 CRUD ====================
+
+
+class MealPlanSave(BaseModel):
+    """前端保存膳食计划的请求体"""
+    id: str
+    week_start: str
+    week_end: str
+    plan_data: dict  # 完整的 MealPlan JSON
+    status: str = "active"
+
+
+@router.get("/meal-plan/plans")
+async def list_meal_plans(user=Depends(get_current_user)):
+    """获取用户所有膳食计划"""
+    with get_session() as session:
+        rows = session.execute(
+            select(MealPlanDB)
+            .where(MealPlanDB.user_id == user.id)
+            .order_by(MealPlanDB.week_start.desc())
+        ).scalars().all()
+        return {
+            "items": [
+                {
+                    "id": r.id,
+                    "week_start": r.week_start,
+                    "week_end": r.week_end,
+                    "plan_data": r.plan_data,
+                    "status": r.status,
+                    "created_at": r.created_at,
+                    "updated_at": r.updated_at,
+                }
+                for r in rows
+            ]
+        }
+
+
+@router.put("/meal-plan/plans/{plan_id}")
+async def save_meal_plan(plan_id: str, body: MealPlanSave, user=Depends(get_current_user)):
+    """保存或更新膳食计划（upsert）"""
+    now = int(time.time() * 1000)
+    with get_session() as session:
+        existing = session.execute(
+            select(MealPlanDB).where(
+                MealPlanDB.id == plan_id,
+                MealPlanDB.user_id == user.id,
+            )
+        ).scalar_one_or_none()
+
+        if existing:
+            existing.plan_data = body.plan_data
+            existing.week_start = body.week_start
+            existing.week_end = body.week_end
+            existing.status = body.status
+            existing.updated_at = now
+        else:
+            row = MealPlanDB(
+                id=plan_id,
+                user_id=user.id,
+                week_start=body.week_start,
+                week_end=body.week_end,
+                plan_data=body.plan_data,
+                status=body.status,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(row)
+        session.commit()
+    return {"message": "ok", "updated_at": now}
+
+
+@router.delete("/meal-plan/plans/{plan_id}")
+async def delete_meal_plan(plan_id: str, user=Depends(get_current_user)):
+    """删除膳食计划"""
+    with get_session() as session:
+        session.execute(
+            delete(MealPlanDB).where(
+                MealPlanDB.id == plan_id,
+                MealPlanDB.user_id == user.id,
+            )
+        )
+        session.commit()
+    return {"message": "deleted"}

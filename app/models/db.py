@@ -181,3 +181,21 @@ class BodyMetric(Base):
     waist = Column(Float, nullable=True)
     notes = Column(Text, nullable=True)
     created_at = Column(BigInteger, nullable=False)
+
+
+class MealPlanDB(Base):
+    """膳食计划持久化 — 替代纯 localStorage"""
+    __tablename__ = "meal_plans"
+
+    id = Column(String(50), primary_key=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    week_start = Column(String(20), nullable=False)
+    week_end = Column(String(20), nullable=False)
+    plan_data = Column(JSON, nullable=False)
+    status = Column(String(20), nullable=False, default="active")
+    created_at = Column(BigInteger, nullable=False)
+    updated_at = Column(BigInteger, nullable=False)
+
+    __table_args__ = (
+        Index("idx_meal_plans_user_week", "user_id", "week_start"),
+    )

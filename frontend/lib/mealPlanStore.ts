@@ -1,6 +1,9 @@
 import {MealPlan, MealPlanStore, MealItem, createEmptyMealPlan, getWeekRange} from '@/types/mealPlan';
+import { apiPath, authFetch, authJsonHeaders } from './http';
+import { getToken } from './authStore';
 
 const STORAGE_KEY = 'ai_chef_meal_plans';
+const PLANS_API = apiPath('/v1/meal-plan/plans');
 
 export const MEAL_PLAN_CHANGE_EVENT = 'mealPlanChange';
 
@@ -10,12 +13,71 @@ function notifyChange() {
     }
 }
 
+// ==================== 后端同步 ====================
+
+let _synced = false;
+
+async function syncFromRemote(): Promise<MealPlan[]> {
+    if (!getToken()) return [];
+    try {
+        const resp = await authFetch(PLANS_API, { headers: authJsonHeaders() });
+        if (!resp.ok) return [];
+        const data = await resp.json();
+        const remotePlans: MealPlan[] = (data.items || []).map((r: { plan_data: unknown }) => r.plan_data as MealPlan);
+        if (remotePlans.length > 0) {
+            const store: MealPlanStore = { meal_plans: remotePlans, lastUpdated: Date.now() };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+        }
+        _synced = true;
+        return remotePlans;
+    } catch { return []; }
+}
+
+async function pushPlanToRemote(plan: MealPlan): Promise<void> {
+    if (!getToken()) return;
+    try {
+        await authFetch(`${PLANS_API}/${encodeURIComponent(plan.id)}`, {
+            method: 'PUT',
+            headers: authJsonHeaders(),
+            body: JSON.stringify({
+                id: plan.id,
+                week_start: plan.week_start,
+                week_end: plan.week_end,
+                plan_data: plan,
+                status: plan.status,
+            }),
+        });
+    } catch (e) {
+        console.warn('膳食计划同步到远程失败:', e);
+    }
+}
+
+async function deletePlanFromRemote(planId: string): Promise<void> {
+    if (!getToken()) return;
+    try {
+        await authFetch(`${PLANS_API}/${encodeURIComponent(planId)}`, {
+            method: 'DELETE',
+            headers: authJsonHeaders(),
+        });
+    } catch (e) {
+        console.warn('删除远程膳食计划失败:', e);
+    }
+}
+
+// ==================== 本地存储（带远程同步） ====================
+
 export function loadMealPlans(): MealPlan[] {
     try {
         const stored = localStorage.getItem(STORAGE_KEY);
-        if (!stored) return [];
-        const store: MealPlanStore = JSON.parse(stored);
-        return store.meal_plans || [];
+        const localPlans: MealPlan[] = stored ? (JSON.parse(stored) as MealPlanStore).meal_plans || [] : [];
+
+        // 首次加载时异步从远程同步
+        if (!_synced && getToken()) {
+            syncFromRemote().then(remotePlans => {
+                if (remotePlans.length > 0) notifyChange();
+            });
+        }
+        return localPlans;
     } catch {
         return [];
     }
@@ -39,6 +101,7 @@ export function getOrCreateWeekPlan(date: Date): MealPlan {
     const newPlan = createEmptyMealPlan(start, end);
     plans.unshift(newPlan);
     saveMealPlans(plans);
+    pushPlanToRemote(newPlan);
     notifyChange();
     return newPlan;
 }
@@ -75,7 +138,7 @@ export function updateMealInPlan(
     );
 
     saveMealPlans(plans);
-    // 不触发全局事件 —— 调用方自行更新 UI state，避免全量刷新导致滚动丢失
+    pushPlanToRemote(plan);
 }
 
 export function removeMealFromPlan(planId: string, date: string, mealType: "breakfast" | "lunch" | "dinner"): void {
@@ -99,5 +162,14 @@ export function clearMealPlan(planId: string): void {
     }
     plan.weekly_total = { calories: 0, protein: 0, carbs: 0, fat: 0 };
     saveMealPlans(plans);
+    pushPlanToRemote(plan);
+    notifyChange();
+}
+
+export function deleteMealPlan(planId: string): void {
+    const plans = loadMealPlans();
+    const filtered = plans.filter((p) => p.id !== planId);
+    saveMealPlans(filtered);
+    deletePlanFromRemote(planId);
     notifyChange();
 }
