@@ -10,7 +10,12 @@ import type { Preference } from '@/types/preference';
 import { apiPath } from './env';
 import { getToken } from './authStore';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+function getBase(): string {
+  if (typeof window !== "undefined" && (window as any).__API_URL__) {
+    return (window as any).__API_URL__;
+  }
+  return process.env.NEXT_PUBLIC_API_URL || "";
+}
 
 function handleAuthExpired() {
   if (typeof window === "undefined") return;
@@ -46,7 +51,7 @@ const COOKING_CONTEXT_KEYWORDS = [
 
 /** 通用 JSON API 请求封装 */
 export async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
+  const url = path.startsWith("http") ? path : `${getBase()}${path}`;
   const method = (options?.method || "GET").toUpperCase();
   const hasBody = options?.body != null;
   const headers: Record<string, string> = { ...(options?.headers as Record<string, string> || {}) };
@@ -87,7 +92,7 @@ export async function uploadImageToOss(file: File): Promise<string> {
         formData.append('file', file);
 
         const token = getToken();
-        const response = await fetch(`${API_BASE}/api/v1/oss/upload`, {
+        const response = await fetch(`${getBase()}/api/v1/oss/upload`, {
             method: 'POST',
             body: formData,
             headers: {
@@ -163,7 +168,7 @@ export async function streamChat(
         const finalMessage = isFoodRelated ? message + cookContext : message;
 
         const token = getToken();
-        const response = await fetch(`${API_BASE}/api/v1/chat/stream`, {
+        const response = await fetch(`${getBase()}/api/v1/chat/stream`, {
             method: "POST",
             body: JSON.stringify({
                 message: finalMessage,

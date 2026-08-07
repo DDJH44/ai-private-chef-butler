@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Pencil, Trash2, X, Plus, Clock, Sparkles, Search, AlertTriangle, Snowflake } from "lucide-react";
+import { ChevronDown, Pencil, Trash2, X, Plus, Clock, Sparkles, Search, AlertTriangle, Snowflake, Camera, Check, Loader2 } from "lucide-react";
 import { CATEGORY_ICONS, PageIcon } from "@/lib/icons";
 import { classifyIngredient } from "@/lib/ingredientClassifier";
 import { cn, generateUUID } from "@/lib/utils";
@@ -31,6 +31,11 @@ export default function FridgePage() {
         shelf_life_days: 7, expiry_date: "",
     });
     const load = useCallback(() => setIngredients(loadIngredients()), []);
+
+    // 拍照识别状态
+    const [showPhotoModal, setShowPhotoModal] = useState(false);
+    const [identifying, setIdentifying] = useState(false);
+    const [photoItems, setPhotoItems] = useState<Array<{ name: string; category: string; quantity: number; unit: string; shelf_life_days: number; selected: boolean }>>([]);
 
     useEffect(() => {
         load();
@@ -145,6 +150,66 @@ export default function FridgePage() {
                             </p>
                         </div>
                     </div>
+                    <button
+                        onClick={() => document.getElementById('photo-upload-input')?.click()}
+                        style={{
+                            display: "flex", alignItems: "center", gap: 6,
+                            padding: "8px 16px",
+                            background: "var(--surface)",
+                            color: "var(--accent)",
+                            borderRadius: 12,
+                            fontSize: 12, fontWeight: 600,
+                            border: "none", cursor: "pointer",
+                            boxShadow: "var(--shadow-raised-sm)",
+                            transition: "var(--transition)",
+                        }}
+                    >
+                        <Camera size={14} strokeWidth={1.8} /> 拍照识别
+                    </button>
+                    <input
+                        id="photo-upload-input"
+                        type="file"
+                        accept="image/*"
+                        style={{ display: "none" }}
+                        onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            e.target.value = "";
+                            setShowPhotoModal(true);
+                            setIdentifying(true);
+                            setPhotoItems([]);
+                            try {
+                                const token = localStorage.getItem("auth_token");
+                                const formData = new FormData();
+                                formData.append("file", file);
+                                const baseUrl = (typeof window !== "undefined" && (window as any).__API_URL__) || process.env.NEXT_PUBLIC_API_URL || "";
+                                const resp = await fetch(`${baseUrl}/api/v1/ingredients/identify-from-photo`, {
+                                    method: "POST",
+                                    body: formData,
+                                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                                });
+                                if (resp.ok) {
+                                    const data = await resp.json();
+                                    setPhotoItems((data.items || []).map((it: Record<string, unknown>) => ({
+                                        ...it,
+                                        name: String(it.name || ""),
+                                        category: String(it.category || "其他"),
+                                        quantity: Number(it.quantity) || 1,
+                                        unit: String(it.unit || "个"),
+                                        shelf_life_days: Number(it.shelf_life_days) || 7,
+                                        selected: true,
+                                    })));
+                                } else {
+                                    showToast("识别失败，请重试", "error");
+                                    setShowPhotoModal(false);
+                                }
+                            } catch {
+                                showToast("网络错误，识别失败", "error");
+                                setShowPhotoModal(false);
+                            }
+                            setIdentifying(false);
+                        }}
+                    />
                     <button onClick={openAdd}
                         style={{
                             display: "flex", alignItems: "center", gap: 6,
@@ -636,6 +701,171 @@ export default function FridgePage() {
                         setConfirmDeleteId(null);
                     }}
                 />
+            )}
+            {/* 拍照识别食材确认弹窗 */}
+            {showPhotoModal && (
+                <div style={{
+                    position: "fixed", inset: 0, zIndex: 60,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    padding: 16, background: "rgba(0,0,0,0.25)", backdropFilter: "blur(4px)",
+                    animation: "fadeIn 0.2s ease",
+                }} onClick={() => setShowPhotoModal(false)}>
+                    <div style={{
+                        width: "100%", maxWidth: 480, maxHeight: "85vh",
+                        background: "var(--surface)", borderRadius: 24,
+                        boxShadow: "var(--shadow-raised-lg)", overflow: "hidden",
+                        display: "flex", flexDirection: "column",
+                        animation: "scaleIn 0.25s ease both",
+                    }} onClick={e => e.stopPropagation()}>
+                        <div style={{
+                            padding: "20px 24px", display: "flex", alignItems: "center",
+                            justifyContent: "space-between",
+                            borderBottom: "1px solid var(--border-light)",
+                        }}>
+                            <h3 style={{
+                                fontSize: 18, fontWeight: 700, color: "var(--text)",
+                                fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif",
+                            }}>
+                                <Camera size={18} strokeWidth={1.8} style={{ marginRight: 8, verticalAlign: "middle" }} />
+                                AI 识别结果
+                            </h3>
+                            <button onClick={() => setShowPhotoModal(false)}
+                                style={{
+                                    width: 32, height: 32, borderRadius: 10,
+                                    background: "var(--bg)", border: "none", cursor: "pointer",
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                    color: "var(--text-muted)", fontSize: 16,
+                                }}
+                            ><X size={16} strokeWidth={1.8}/></button>
+                        </div>
+                        <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px" }}>
+                            {identifying ? (
+                                <div style={{ textAlign: "center", padding: "48px 0" }}>
+                                    <Loader2 size={32} strokeWidth={1.5}
+                                        style={{ animation: "spin 1s linear infinite", color: "var(--accent)", marginBottom: 16 }} />
+                                    <p style={{ fontSize: 15, color: "var(--text-secondary)" }}>AI 正在识别食材...</p>
+                                    <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>请稍候</p>
+                                </div>
+                            ) : photoItems.length === 0 ? (
+                                <div style={{ textAlign: "center", padding: "48px 0" }}>
+                                    <p style={{ fontSize: 15, color: "var(--text-muted)" }}>未识别到食材</p>
+                                    <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>请确保照片中有清晰的生食材</p>
+                                </div>
+                            ) : (
+                                <>
+                                    <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 12 }}>
+                                        识别到 {photoItems.length} 种食材，勾选需要添加到冰箱的食材：
+                                    </p>
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                        {photoItems.map((item, idx) => (
+                                            <label key={idx} style={{
+                                                display: "flex", alignItems: "center", gap: 12,
+                                                padding: "12px 14px", background: "var(--bg)",
+                                                borderRadius: 14, cursor: "pointer",
+                                                boxShadow: item.selected ? "var(--shadow-inset-focus)" : "var(--shadow-inset-sm)",
+                                                transition: "var(--transition)",
+                                                opacity: item.selected ? 1 : 0.5,
+                                            }}>
+                                                <input type="checkbox" checked={item.selected}
+                                                    onChange={() => {
+                                                        setPhotoItems(prev => prev.map((p, i) =>
+                                                            i === idx ? { ...p, selected: !p.selected } : p
+                                                        ));
+                                                    }}
+                                                    style={{ width: 18, height: 18, accentColor: "var(--accent)", cursor: "pointer" }}
+                                                />
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text)" }}>
+                                                        {item.name}
+                                                    </div>
+                                                    <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                                                        <span>{item.category}</span>
+                                                        <span>{item.quantity} {item.unit}</span>
+                                                        <span>保质期 {item.shelf_life_days}天</span>
+                                                    </div>
+                                                </div>
+                                                <button onClick={(e) => {
+                                                    e.preventDefault();
+                                                    setPhotoItems(prev => prev.filter((_, i) => i !== idx));
+                                                }}
+                                                    style={{
+                                                        width: 28, height: 28, borderRadius: 8,
+                                                        background: "var(--surface)", border: "none", cursor: "pointer",
+                                                        display: "flex", alignItems: "center", justifyContent: "center",
+                                                        color: "var(--text-muted)", fontSize: 12,
+                                                        boxShadow: "var(--shadow-raised-xs)",
+                                                    }}
+                                                ><X size={12} strokeWidth={1.8}/></button>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                        {!identifying && photoItems.length > 0 && (
+                            <div style={{
+                                padding: "16px 24px", display: "flex", gap: 12,
+                                borderTop: "1px solid var(--border-light)",
+                            }}>
+                                <button onClick={() => {
+                                    setPhotoItems([]);
+                                    setShowPhotoModal(false);
+                                }}
+                                    style={{
+                                        flex: 1, padding: "12px 0", borderRadius: 14,
+                                        background: "var(--surface)", color: "var(--text-secondary)",
+                                        fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer",
+                                        boxShadow: "var(--shadow-raised-sm)", transition: "var(--transition)",
+                                    }}
+                                >取消</button>
+                                <button onClick={async () => {
+                                    const selected = photoItems.filter(p => p.selected);
+                                    if (selected.length === 0) { showToast("请至少选择一种食材", "error"); return; }
+                                    setShowPhotoModal(false);
+                                    try {
+                                        const token = localStorage.getItem("auth_token");
+                                        const baseUrl = (typeof window !== "undefined" && (window as any).__API_URL__) || process.env.NEXT_PUBLIC_API_URL || "";
+                                        const resp = await fetch(`${baseUrl}/api/v1/ingredients/batch`, {
+                                            method: "POST",
+                                            headers: {
+                                                "Content-Type": "application/json",
+                                                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                                            },
+                                            body: JSON.stringify({
+                                                items: selected.map(s => ({
+                                                    name: s.name,
+                                                    category: s.category,
+                                                    quantity: s.quantity,
+                                                    unit: s.unit,
+                                                    shelf_life_days: s.shelf_life_days,
+                                                })),
+                                            }),
+                                        });
+                                        if (resp.ok) {
+                                            const data = await resp.json();
+                                            showToast(`已添加 ${data.total} 种食材到冰箱`, "success");
+                                            load();
+                                        } else {
+                                            showToast("添加失败", "error");
+                                        }
+                                    } catch {
+                                        showToast("网络错误", "error");
+                                    }
+                                }}
+                                    style={{
+                                        flex: 2, padding: "12px 0", borderRadius: 14,
+                                        background: "var(--accent)", color: "#fff",
+                                        fontSize: 14, fontWeight: 700, border: "none", cursor: "pointer",
+                                        boxShadow: "var(--shadow-raised-sm)", transition: "var(--transition)",
+                                        display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                                    }}
+                                >
+                                    <Check size={16} strokeWidth={2} /> 确认添加
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
             )}
         </AuthGuard>
     );

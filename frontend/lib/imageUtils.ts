@@ -2,7 +2,12 @@
  * 图片 URL 工具函数
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+function getBase(): string {
+  if (typeof window !== "undefined" && (window as any).__API_URL__) {
+    return (window as any).__API_URL__;
+  }
+  return process.env.NEXT_PUBLIC_API_URL || "";
+}
 
 /**
  * 将外部图片 URL 转换为后端代理 URL，避免浏览器 CORS 问题
@@ -11,9 +16,10 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
  */
 export function proxyImageUrl(url: string | undefined | null): string {
   if (!url || typeof url !== 'string') return '';
+  const base = getBase();
   
   // 已经是代理 URL 或相对路径，直接返回
-  if (url.startsWith('/api/')) return API_BASE ? `${API_BASE}${url}` : url;
+  if (url.startsWith('/api/')) return base ? `${base}${url}` : url;
   if (url.startsWith('/')) return url;
   if (url.startsWith('data:')) return url;
   
@@ -24,7 +30,7 @@ export function proxyImageUrl(url: string | undefined | null): string {
   try {
     const encoded = encodeURIComponent(url);
     const proxyPath = `/api/v1/oss/proxy-image?url=${encoded}`;
-    return API_BASE ? `${API_BASE}${proxyPath}` : proxyPath;
+    return base ? `${base}${proxyPath}` : proxyPath;
   } catch {
     return url;
   }

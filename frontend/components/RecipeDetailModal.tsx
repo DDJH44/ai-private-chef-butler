@@ -100,7 +100,8 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
   useEffect(() => {
     if (recipe.content) return;
     const token = getToken();
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/v1/recipes/${encodeURIComponent(recipe.id)}`, {
+    const baseUrl = (typeof window !== "undefined" && (window as any).__API_URL__) || process.env.NEXT_PUBLIC_API_URL || '';
+    fetch(`${baseUrl}/api/v1/recipes/${encodeURIComponent(recipe.id)}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
       .then(r => r.json())
@@ -153,7 +154,8 @@ export function RecipeDetailModal({ recipe, onClose }: RecipeDetailModalProps) {
 
   const handleShareToFeishu = async () => {
     try {
-      const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ""}/api/v1/feishu/recipe-share`, {
+      const baseUrl = (typeof window !== "undefined" && (window as any).__API_URL__) || process.env.NEXT_PUBLIC_API_URL || "";
+      const resp = await fetch(`${baseUrl}/api/v1/feishu/recipe-share`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(fullRecipe),

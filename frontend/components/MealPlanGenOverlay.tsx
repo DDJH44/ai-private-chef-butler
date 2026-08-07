@@ -43,7 +43,7 @@ export function MealPlanGenOverlay() {
     <div
       style={{
         position: "fixed",
-        bottom: 240,
+        bottom: 155,
         right: 20,
         zIndex: 101,
         display: "flex",

@@ -21,7 +21,12 @@ import {
   type FoodItem,
 } from "@/lib/nutritionStore";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+function getApiBase(): string {
+  if (typeof window !== "undefined" && (window as any).__API_URL__) {
+    return (window as any).__API_URL__;
+  }
+  return process.env.NEXT_PUBLIC_API_URL || "";
+}
 
 function authHeaders(): Record<string, string> {
   const token = getToken();
@@ -116,7 +121,7 @@ export default function NutritionPage() {
     const controller = new AbortController();
     setLoading(true);
     try {
-      const resp = await fetch(`${API_BASE}/api/v1/nutrition/summary/${selectedDate}`, { headers: authHeaders(), signal: controller.signal });
+      const resp = await fetch(`${getApiBase()}/api/v1/nutrition/summary/${selectedDate}`, { headers: authHeaders(), signal: controller.signal });
       if (resp.ok) { setSummary(await resp.json()); }
       else { showToast("加载饮食记录失败", "error"); }
     } catch (e) {
@@ -167,7 +172,7 @@ export default function NutritionPage() {
       return;
     }
     try {
-      const resp = await fetch(`${API_BASE}/api/v1/nutrition/records`, {
+      const resp = await fetch(`${getApiBase()}/api/v1/nutrition/records`, {
         method: "POST",
         headers: authHeaders(),
         body: JSON.stringify({
@@ -192,8 +197,23 @@ export default function NutritionPage() {
 
   const doDelete = async (id: string) => {
     try {
-      const resp = await fetch(`${API_BASE}/api/v1/nutrition/records/${id}`, { method: "DELETE", headers: authHeaders() });
-      if (resp.ok) { showToast("已删除", "success"); fetchSummary(); }
+      const resp = await fetch(`${getApiBase()}/api/v1/nutrition/records/${id}`, { method: "DELETE", headers: authHeaders() });
+      if (resp.ok) {
+        showToast("已删除", "success");
+        // 本地更新 state，不重新 fetch，保留滚动位置
+        if (summary) {
+          const filtered = summary.meals.filter(m => m.id !== id);
+          const recalc = (arr: NutritionRecord[]) => ({
+            total_calories: arr.reduce((s, i) => s + (i.calories || 0), 0),
+            total_protein: arr.reduce((s, i) => s + (i.protein || 0), 0),
+            total_carbs: arr.reduce((s, i) => s + (i.carbs || 0), 0),
+            total_fat: arr.reduce((s, i) => s + (i.fat || 0), 0),
+            total_fiber: arr.reduce((s, i) => s + (i.fiber || 0), 0),
+            total_sodium: arr.reduce((s, i) => s + (i.sodium || 0), 0),
+          });
+          setSummary({ ...summary, meals: filtered, ...recalc(filtered) });
+        }
+      }
       else { showToast("删除失败", "error"); }
     } catch (e) { showToast("网络错误，删除失败", "error"); }
   };
@@ -206,7 +226,7 @@ export default function NutritionPage() {
         (payload as Record<string, unknown>).health_score = healthEval.score;
         (payload as Record<string, unknown>).health_eval = healthEval.health_eval;
       }
-      const resp = await fetch(`${API_BASE}/api/v1/feishu/daily-report`, {
+      const resp = await fetch(`${getApiBase()}/api/v1/feishu/daily-report`, {
         method: "POST",
         headers: authHeaders(),
         body: JSON.stringify(payload),
@@ -224,7 +244,7 @@ export default function NutritionPage() {
   const handleHealthEval = async () => {
     setEvaluating(true);
     try {
-      const resp = await fetch(`${API_BASE}/api/v1/nutrition/health-eval/${selectedDate}`, { headers: authHeaders() });
+      const resp = await fetch(`${getApiBase()}/api/v1/nutrition/health-eval/${selectedDate}`, { headers: authHeaders() });
       if (resp.ok) {
         const result: HealthEval = await resp.json();
         setHealthEval(result);
