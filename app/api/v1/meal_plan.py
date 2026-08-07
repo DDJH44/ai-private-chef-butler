@@ -6,7 +6,7 @@ from app.agents.personal_chief import model, _build_preference_context
 from langchain_core.messages import HumanMessage
 from app.common.json_utils import repair_truncated_json
 from app.common.logger import logger
-from app.common.database import get_session
+from app.common.database import get_db
 from app.models.db import MealPlanDB
 from sqlalchemy import select, delete
 import json
@@ -244,12 +244,13 @@ class MealPlanSave(BaseModel):
 
 
 @router.get("/meal-plan/plans")
-async def list_meal_plans(user=Depends(get_current_user)):
+async def list_meal_plans(current_user: dict = Depends(get_current_user)):
     """获取用户所有膳食计划"""
-    with get_session() as session:
+    uid = current_user["user_id"]
+    with get_db() as session:
         rows = session.execute(
             select(MealPlanDB)
-            .where(MealPlanDB.user_id == user.id)
+            .where(MealPlanDB.user_id == uid)
             .order_by(MealPlanDB.week_start.desc())
         ).scalars().all()
         return {
@@ -269,14 +270,15 @@ async def list_meal_plans(user=Depends(get_current_user)):
 
 
 @router.put("/meal-plan/plans/{plan_id}")
-async def save_meal_plan(plan_id: str, body: MealPlanSave, user=Depends(get_current_user)):
+async def save_meal_plan(plan_id: str, body: MealPlanSave, current_user: dict = Depends(get_current_user)):
     """保存或更新膳食计划（upsert）"""
+    uid = current_user["user_id"]
     now = int(time.time() * 1000)
-    with get_session() as session:
+    with get_db() as session:
         existing = session.execute(
             select(MealPlanDB).where(
                 MealPlanDB.id == plan_id,
-                MealPlanDB.user_id == user.id,
+                MealPlanDB.user_id == uid,
             )
         ).scalar_one_or_none()
 
@@ -289,7 +291,7 @@ async def save_meal_plan(plan_id: str, body: MealPlanSave, user=Depends(get_curr
         else:
             row = MealPlanDB(
                 id=plan_id,
-                user_id=user.id,
+                user_id=uid,
                 week_start=body.week_start,
                 week_end=body.week_end,
                 plan_data=body.plan_data,
@@ -298,19 +300,18 @@ async def save_meal_plan(plan_id: str, body: MealPlanSave, user=Depends(get_curr
                 updated_at=now,
             )
             session.add(row)
-        session.commit()
     return {"message": "ok", "updated_at": now}
 
 
 @router.delete("/meal-plan/plans/{plan_id}")
-async def delete_meal_plan(plan_id: str, user=Depends(get_current_user)):
+async def delete_meal_plan(plan_id: str, current_user: dict = Depends(get_current_user)):
     """删除膳食计划"""
-    with get_session() as session:
+    uid = current_user["user_id"]
+    with get_db() as session:
         session.execute(
             delete(MealPlanDB).where(
                 MealPlanDB.id == plan_id,
-                MealPlanDB.user_id == user.id,
+                MealPlanDB.user_id == uid,
             )
         )
-        session.commit()
     return {"message": "deleted"}
