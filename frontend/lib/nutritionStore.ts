@@ -1,12 +1,5 @@
 import { showToast } from "@/components/Toast";
-import { getToken } from "./authStore";
-
-function getBase(): string {
-  if (typeof window !== "undefined" && (window as any).__API_URL__) {
-    return (window as any).__API_URL__;
-  }
-  return process.env.NEXT_PUBLIC_API_URL || "";
-}
+import { authFetch, getBase } from "./http";
 
 export interface FoodItem {
   food_name: string;
@@ -115,11 +108,9 @@ export async function startPhotoAnalysis(
     formData.append("meal_type", mealType);
     formData.append("date", date);
 
-    const token = getToken();
-    const resp = await fetch(`${getBase()}/api/v1/nutrition/analyze-photo`, {
+    const resp = await authFetch(`${getBase()}/api/v1/nutrition/analyze-photo`, {
       method: "POST",
       body: formData,
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
 
     if (resp.ok) {

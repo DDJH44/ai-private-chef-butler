@@ -2,12 +2,7 @@
  * 图片 URL 工具函数
  */
 
-function getBase(): string {
-  if (typeof window !== "undefined" && (window as any).__API_URL__) {
-    return (window as any).__API_URL__;
-  }
-  return process.env.NEXT_PUBLIC_API_URL || "";
-}
+import { getBase } from './http';
 
 /**
  * 将外部图片 URL 转换为后端代理 URL，避免浏览器 CORS 问题

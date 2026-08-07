@@ -1,6 +1,6 @@
 import {Ingredient, IngredientStore, IngredientCategory, calculateStatus, calculateExpiryDate} from '@/types/ingredient';
 import { getToken } from './authStore';
-import { apiPath } from './env';
+import { apiPath, authJsonHeaders as authHeaders, authFetch } from './http';
 
 const STORAGE_KEY = 'ai_chef_ingredients';
 const ING_API = apiPath('/v1/ingredients');
@@ -13,16 +13,10 @@ function notifyIngredientChange() {
     }
 }
 
-function authHeaders(): Record<string, string> {
-  const token = getToken();
-  return token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
-}
-
 async function fetchRemote(): Promise<Ingredient[]> {
-  const token = getToken();
-  if (!token) return [];
+  if (!getToken()) return [];
   try {
-    const resp = await fetch(ING_API, { headers: authHeaders() });
+    const resp = await authFetch(ING_API, { headers: authHeaders() });
     if (!resp.ok) return [];
     const data = await resp.json();
     return (data.items || []).map((i: Record<string, unknown>) => ({
@@ -34,34 +28,29 @@ async function fetchRemote(): Promise<Ingredient[]> {
 }
 
 async function pushRemote(ingredients: Ingredient[]): Promise<Ingredient[]> {
-  const token = getToken();
-  if (!token) return ingredients;
-  // 简单策略：全量替换。生产环境应改用增量同步。
-  // 由于当前前端为主，后端作为备份，先 fetch 再 merge。
+  if (!getToken()) return ingredients;
   try {
     const remote = await fetchRemote();
     const remoteMap = new Map(remote.map(r => [r.id, r]));
     const localMap = new Map(ingredients.map(r => [r.id, r]));
-    // 合并：本地优先，上传本地有而远程没有的
     for (const [id, ing] of localMap) {
       if (!remoteMap.has(id)) {
-        await fetch(`${ING_API}`, {
+        await authFetch(`${ING_API}`, {
           method: 'POST',
           headers: authHeaders(),
           body: JSON.stringify(ing),
         });
       } else {
-        await fetch(`${ING_API}/${encodeURIComponent(id)}`, {
+        await authFetch(`${ING_API}/${encodeURIComponent(id)}`, {
           method: 'PUT',
           headers: authHeaders(),
           body: JSON.stringify(ing),
         });
       }
     }
-    // 删除远程有但本地没有的
     for (const id of remoteMap.keys()) {
       if (!localMap.has(id)) {
-        await fetch(`${ING_API}/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders() });
+        await authFetch(`${ING_API}/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders() });
       }
     }
   } catch (e) { console.warn("食材同步到远程失败:", e); }

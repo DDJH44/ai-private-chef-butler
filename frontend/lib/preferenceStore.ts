@@ -1,6 +1,6 @@
 import {Preference, PreferenceStore, DEFAULT_PREFERENCE} from '@/types/preference';
 import { getToken } from './authStore';
-import { apiPath } from './env';
+import { apiPath, authJsonHeaders, authFetch } from './http';
 
 const STORAGE_KEY = 'ai_chef_preference';
 const PREF_API = apiPath('/v1/preferences');
@@ -21,16 +21,10 @@ function sanitize(pref: Preference): Preference {
   };
 }
 
-function authHeaders(): Record<string, string> {
-  const token = getToken();
-  return token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
-}
-
 async function fetchRemotePreference(): Promise<Preference | null> {
-  const token = getToken();
-  if (!token) return null;
+  if (!getToken()) return null;
   try {
-    const resp = await fetch(PREF_API, { headers: authHeaders() });
+    const resp = await authFetch(PREF_API, { headers: authJsonHeaders() });
     if (!resp.ok) return null;
     const data = await resp.json();
     return data.data || null;
@@ -38,15 +32,14 @@ async function fetchRemotePreference(): Promise<Preference | null> {
 }
 
 async function pushRemotePreference(pref: Preference): Promise<void> {
-  const token = getToken();
-  if (!token) return;
+  if (!getToken()) return;
   try {
-    await fetch(PREF_API, {
+    await authFetch(PREF_API, {
       method: 'PUT',
-      headers: authHeaders(),
+      headers: authJsonHeaders(),
       body: JSON.stringify(pref),
     });
-  } catch { /* 静默失败，本地已保存 */ }
+  } catch (e) { console.warn('推送偏好设置失败:', e); }
 }
 
 export function loadPreference(): Preference {

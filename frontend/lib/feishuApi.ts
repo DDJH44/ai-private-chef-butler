@@ -1,11 +1,6 @@
-import { getToken } from './authStore';
+import { authJsonHeaders as authHeaders, authFetch } from './http';
 
 const BASE = '/api/v1/feishu';
-
-function authHeaders(): Record<string, string> {
-  const token = getToken();
-  return token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
-}
 
 export interface FeishuConfig {
   configured: boolean;
@@ -22,13 +17,13 @@ export interface FeishuConfig {
 }
 
 export async function getFeishuConfig(): Promise<FeishuConfig> {
-  const resp = await fetch(`${BASE}/config`, { headers: authHeaders() });
+  const resp = await authFetch(`${BASE}/config`, { headers: authHeaders() });
   if (!resp.ok) throw new Error('获取飞书配置失败');
   return resp.json();
 }
 
 export async function saveFeishuConfig(webhook_url: string): Promise<{ message: string; onboarding_step: string }> {
-  const resp = await fetch(`${BASE}/config`, {
+  const resp = await authFetch(`${BASE}/config`, {
     method: 'PUT',
     headers: authHeaders(),
     body: JSON.stringify({ webhook_url }),
@@ -41,7 +36,7 @@ export async function saveFeishuConfig(webhook_url: string): Promise<{ message: 
 }
 
 export async function testFeishuConnection(webhook_url?: string): Promise<{ message: string; enabled: boolean }> {
-  const resp = await fetch(`${BASE}/test`, {
+  const resp = await authFetch(`${BASE}/test`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(webhook_url ? { webhook_url } : {}),
@@ -54,7 +49,7 @@ export async function testFeishuConnection(webhook_url?: string): Promise<{ mess
 }
 
 export async function toggleFeishu(): Promise<{ enabled: boolean }> {
-  const resp = await fetch(`${BASE}/toggle`, {
+  const resp = await authFetch(`${BASE}/toggle`, {
     method: 'PUT',
     headers: authHeaders(),
   });
@@ -63,7 +58,7 @@ export async function toggleFeishu(): Promise<{ enabled: boolean }> {
 }
 
 export async function disconnectFeishu(): Promise<void> {
-  const resp = await fetch(`${BASE}/config`, {
+  const resp = await authFetch(`${BASE}/config`, {
     method: 'DELETE',
     headers: authHeaders(),
   });

@@ -7,22 +7,8 @@ import { loadIngredients } from './ingredientStore';
 import { loadCookHistory } from './historyStore';
 import type { Preference } from '@/types/preference';
 
-import { apiPath } from './env';
+import { getBase, handleAuthExpired } from './http';
 import { getToken } from './authStore';
-
-function getBase(): string {
-  if (typeof window !== "undefined" && (window as any).__API_URL__) {
-    return (window as any).__API_URL__;
-  }
-  return process.env.NEXT_PUBLIC_API_URL || "";
-}
-
-function handleAuthExpired() {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem("auth_token");
-  document.cookie = "auth_status=; path=/; max-age=0";
-  window.location.href = "/login?reason=expired";
-}
 
 // Preference cache — read once, refresh only on explicit change
 let _prefCache: Preference | null = null;

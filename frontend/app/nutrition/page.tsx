@@ -10,6 +10,7 @@ import { Loading } from "@/components/Loading";
 import { UtensilsCrossed } from "lucide-react";
 import { MEAL_ICONS, NUTRIENT_ICONS, PageIcon } from "@/lib/icons";
 import { useFeishuStatus } from "@/hooks/useFeishuStatus";
+import { getBase, authJsonHeaders, authHeaders } from "@/lib/http";
 import { getToken } from "@/lib/authStore";
 import {
   getNutritionState,
@@ -20,20 +21,6 @@ import {
   type PhotoAnalysisResult,
   type FoodItem,
 } from "@/lib/nutritionStore";
-
-function getApiBase(): string {
-  if (typeof window !== "undefined" && (window as any).__API_URL__) {
-    return (window as any).__API_URL__;
-  }
-  return process.env.NEXT_PUBLIC_API_URL || "";
-}
-
-function authHeaders(): Record<string, string> {
-  const token = getToken();
-  return token
-    ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
-    : { "Content-Type": "application/json" };
-}
 
 interface NutritionRecord {
   id: string;
@@ -121,7 +108,7 @@ export default function NutritionPage() {
     const controller = new AbortController();
     setLoading(true);
     try {
-      const resp = await fetch(`${getApiBase()}/api/v1/nutrition/summary/${selectedDate}`, { headers: authHeaders(), signal: controller.signal });
+      const resp = await fetch(`${getBase()}/api/v1/nutrition/summary/${selectedDate}`, { headers: authJsonHeaders(), signal: controller.signal });
       if (resp.ok) { setSummary(await resp.json()); }
       else { showToast("加载饮食记录失败", "error"); }
     } catch (e) {
@@ -172,9 +159,9 @@ export default function NutritionPage() {
       return;
     }
     try {
-      const resp = await fetch(`${getApiBase()}/api/v1/nutrition/records`, {
+      const resp = await fetch(`${getBase()}/api/v1/nutrition/records`, {
         method: "POST",
-        headers: authHeaders(),
+        headers: authJsonHeaders(),
         body: JSON.stringify({
           date: selectedDate,
           meal_type: form.meal_type,
@@ -197,7 +184,7 @@ export default function NutritionPage() {
 
   const doDelete = async (id: string) => {
     try {
-      const resp = await fetch(`${getApiBase()}/api/v1/nutrition/records/${id}`, { method: "DELETE", headers: authHeaders() });
+      const resp = await fetch(`${getBase()}/api/v1/nutrition/records/${id}`, { method: "DELETE", headers: authJsonHeaders() });
       if (resp.ok) {
         showToast("已删除", "success");
         // 本地更新 state，不重新 fetch，保留滚动位置
@@ -226,9 +213,9 @@ export default function NutritionPage() {
         (payload as Record<string, unknown>).health_score = healthEval.score;
         (payload as Record<string, unknown>).health_eval = healthEval.health_eval;
       }
-      const resp = await fetch(`${getApiBase()}/api/v1/feishu/daily-report`, {
+      const resp = await fetch(`${getBase()}/api/v1/feishu/daily-report`, {
         method: "POST",
-        headers: authHeaders(),
+        headers: authJsonHeaders(),
         body: JSON.stringify(payload),
       });
       const data = await resp.json();
@@ -244,7 +231,7 @@ export default function NutritionPage() {
   const handleHealthEval = async () => {
     setEvaluating(true);
     try {
-      const resp = await fetch(`${getApiBase()}/api/v1/nutrition/health-eval/${selectedDate}`, { headers: authHeaders() });
+      const resp = await fetch(`${getBase()}/api/v1/nutrition/health-eval/${selectedDate}`, { headers: authJsonHeaders() });
       if (resp.ok) {
         const result: HealthEval = await resp.json();
         setHealthEval(result);

@@ -1,6 +1,6 @@
 import {ChatHistorySession, ViewHistoryItem, CookHistoryItem, HistoryStore} from '@/types/history';
 import { getToken } from './authStore';
-import { apiPath } from './env';
+import { apiPath, authJsonHeaders as authHeaders, authFetch } from './http';
 
 const STORAGE_KEY = 'ai_chef_history';
 const COOK_API = apiPath('/v1/cook-history');
@@ -13,16 +13,10 @@ function notifyChange() {
     }
 }
 
-function authHeaders(): Record<string, string> {
-  const token = getToken();
-  return token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
-}
-
 async function fetchRemoteCookHistory(): Promise<CookHistoryItem[]> {
-  const token = getToken();
-  if (!token) return [];
+  if (!getToken()) return [];
   try {
-    const resp = await fetch(COOK_API, { headers: authHeaders() });
+    const resp = await authFetch(COOK_API, { headers: authHeaders() });
     if (!resp.ok) return [];
     const data = await resp.json();
     return (data.items || []).map((r: Record<string, unknown>) => ({
@@ -32,23 +26,21 @@ async function fetchRemoteCookHistory(): Promise<CookHistoryItem[]> {
 }
 
 async function pushCookRecord(record: CookHistoryItem): Promise<void> {
-  const token = getToken();
-  if (!token) return;
+  if (!getToken()) return;
   try {
-    await fetch(COOK_API, {
+    await authFetch(COOK_API, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify(record),
     });
-  } catch { /* 静默 */ }
+  } catch (e) { console.warn('推送烹饪记录失败:', e); }
 }
 
 async function deleteRemoteCookRecord(id: string): Promise<void> {
-  const token = getToken();
-  if (!token) return;
+  if (!getToken()) return;
   try {
-    await fetch(`${COOK_API}/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders() });
-  } catch { /* 静默 */ }
+    await authFetch(`${COOK_API}/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders() });
+  } catch (e) { console.warn('删除远程烹饪记录失败:', e); }
 }
 
 function loadStore(): HistoryStore {
