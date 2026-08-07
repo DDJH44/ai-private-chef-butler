@@ -1,6 +1,6 @@
 "use client";
 
-import {useState, useEffect, useCallback} from "react";
+import {useState, useEffect, useCallback, useMemo, useDeferredValue} from "react";
 import {useRouter} from "next/navigation";
 import {ChatHistorySession, ViewHistoryItem, CookHistoryItem} from "@/types/history";
 import {
@@ -341,7 +341,7 @@ export default function HistoryPage() {
     const [viewHistory, setViewHistory] = useState<ViewHistoryItem[]>([]);
     const [cookHistory, setCookHistory] = useState<CookHistoryItem[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
-    const [searchFocused, setSearchFocused] = useState(false);
+    const deferredQuery = useDeferredValue(searchQuery);
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [filterMonth, setFilterMonth] = useState<string | null>(null);
 
@@ -376,24 +376,24 @@ export default function HistoryPage() {
         showToast("烹饪记录已删除", "info");
     }, []);
 
-    const filteredChat = searchQuery.trim()
-        ? chatHistory.filter((s) => s.preview.includes(searchQuery) || s.messages.some((m) => m.content.includes(searchQuery)))
-        : chatHistory;
+    const filteredChat = useMemo(() => deferredQuery.trim()
+        ? chatHistory.filter((s) => s.preview.includes(deferredQuery) || s.messages.some((m) => m.content.includes(deferredQuery)))
+        : chatHistory, [chatHistory, deferredQuery]);
 
-    const filteredView = searchQuery.trim()
-        ? viewHistory.filter((v) => v.recipe_name.includes(searchQuery))
-        : viewHistory;
+    const filteredView = useMemo(() => deferredQuery.trim()
+        ? viewHistory.filter((v) => v.recipe_name.includes(deferredQuery))
+        : viewHistory, [viewHistory, deferredQuery]);
 
-    const filteredCook = (() => {
+    const filteredCook = useMemo(() => {
         let list = cookHistory;
-        if (searchQuery.trim()) {
-            list = list.filter((c) => c.recipe_name.includes(searchQuery) || c.notes.includes(searchQuery));
+        if (deferredQuery.trim()) {
+            list = list.filter((c) => c.recipe_name.includes(deferredQuery) || c.notes.includes(deferredQuery));
         }
         if (filterMonth) {
             list = list.filter((c) => (c.cook_date || "").startsWith(filterMonth));
         }
         return list;
-    })();
+    }, [cookHistory, deferredQuery, filterMonth]);
 
     return (
         <AuthGuard>
@@ -425,14 +425,8 @@ export default function HistoryPage() {
                         placeholder="搜索记录..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        onFocus={() => setSearchFocused(true)}
-                        onBlur={() => setSearchFocused(false)}
-                        style={{
-                            ...styles.searchInput,
-                            boxShadow: searchFocused
-                                ? "var(--shadow-inset-focus)"
-                                : "var(--shadow-inset-sm)",
-                        }}
+                        className="search-input"
+                        style={styles.searchInput}
                     />
                     {searchQuery && (
                         <button

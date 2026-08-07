@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useDeferredValue } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, Pencil, Trash2, X, Plus, Clock, Sparkles, Search, AlertTriangle, Snowflake, Camera, Check, Loader2 } from "lucide-react";
 import { CATEGORY_ICONS, PageIcon } from "@/lib/icons";
@@ -23,6 +23,7 @@ export default function FridgePage() {
     const router = useRouter();
     const [ingredients, setIngredients] = useState<Ingredient[]>([]);
     const [search, setSearch] = useState("");
+    const deferredSearch = useDeferredValue(search);
     const [category, setCategory] = useState<IngredientCategory | "全部">("全部");
     const [showForm, setShowForm] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
@@ -45,16 +46,16 @@ export default function FridgePage() {
         return () => window.removeEventListener(INGREDIENT_CHANGE_EVENT, handler);
     }, [load]);
 
-    const filtered = ingredients.filter(i => {
-        const matchSearch = !search || i.name.includes(search);
+    const filtered = useMemo(() => ingredients.filter(i => {
+        const matchSearch = !deferredSearch || i.name.includes(deferredSearch);
         const matchCat = category === "全部" || i.category === category;
         return matchSearch && matchCat;
-    });
+    }), [ingredients, deferredSearch, category]);
 
-    const expiringCount = ingredients.filter(i => {
+    const expiringCount = useMemo(() => ingredients.filter(i => {
         const days = i.expiry_date ? Math.ceil((new Date(i.expiry_date).getTime() - Date.now()) / 86400000) : Infinity;
         return days >= 0 && days <= 3;
-    }).length;
+    }).length, [ingredients]);
 
     const openAdd = () => {
         setEditId(null);

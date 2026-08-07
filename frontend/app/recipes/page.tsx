@@ -1,6 +1,6 @@
 "use client";
 
-import {useState, useEffect, useCallback} from "react";
+import {useState, useEffect, useCallback, useMemo, useDeferredValue} from "react";
 import {Recipe} from "@/types/recipe";
 import {RecipeCard} from "@/components/RecipeCard";
 import {RecipeDetailModal} from "@/components/RecipeDetailModal";
@@ -15,8 +15,8 @@ import { PageHeader } from "@/components/PageHeader";
 export default function RecipesPage() {
     const [recipes, setRecipes] = useState<Recipe[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
+    const deferredQuery = useDeferredValue(searchQuery);
     const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
-    const [searchFocused, setSearchFocused] = useState(false);
     const [selectMode, setSelectMode] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [activeTag, setActiveTag] = useState<string | null>(null);
@@ -41,17 +41,17 @@ export default function RecipesPage() {
         return () => window.removeEventListener(RECIPE_CHANGE_EVENT, handleRecipeChange);
     }, [loadRecipeList]);
 
-    const allTags = [...new Set(recipes.flatMap(r => r.tags || []))].sort();
+    const allTags = useMemo(() => [...new Set(recipes.flatMap(r => r.tags || []))].sort(), [recipes]);
 
-    const filteredRecipes = (() => {
+    const filteredRecipes = useMemo(() => {
       let result = recipes;
       if (activeTag) result = result.filter(r => (r.tags || []).includes(activeTag));
-      if (searchQuery.trim()) {
-        const q = searchQuery.trim().toLowerCase();
+      if (deferredQuery.trim()) {
+        const q = deferredQuery.trim().toLowerCase();
         result = result.filter(r => r.title.toLowerCase().includes(q) || r.content.toLowerCase().includes(q));
       }
       return result;
-    })();
+    }, [recipes, activeTag, deferredQuery]);
 
     const toggleSelect = (id: string) => {
       setSelectedIds(prev => {
@@ -118,8 +118,7 @@ export default function RecipesPage() {
                         placeholder="搜索菜谱..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        onFocus={() => setSearchFocused(true)}
-                        onBlur={() => setSearchFocused(false)}
+                        className="search-input"
                         style={{
                             width: "100%",
                             padding: "10px 36px 10px 36px",
@@ -129,7 +128,7 @@ export default function RecipesPage() {
                             fontSize: "14px",
                             color: "var(--text)",
                             background: "var(--bg)",
-                            boxShadow: searchFocused ? "var(--shadow-inset-focus)" : "var(--shadow-inset-sm)",
+                            boxShadow: "var(--shadow-inset-sm)",
                             transition: "var(--transition)",
                         }}
                     />

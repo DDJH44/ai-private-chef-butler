@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Recipe } from "@/types/recipe";
 import { Clock, Check, ChefHat, Video } from "lucide-react";
 import { RecipeSaveBlock, stripSaveBlocks, difficultyColor } from "./RecipeSaveBlock";
@@ -14,7 +15,7 @@ interface RecipeCardProps {
   onToggleSelect?: () => void;
 }
 
-export function RecipeCard({ recipe, onClick, className, selectMode, selected, onToggleSelect }: RecipeCardProps) {
+export const RecipeCard = memo(function RecipeCard({ recipe, onClick, className, selectMode, selected, onToggleSelect }: RecipeCardProps) {
 
   const scoreBar = (s: number) => {
     if (s >= 70) return "var(--green)";
@@ -128,4 +129,4 @@ export function RecipeCard({ recipe, onClick, className, selectMode, selected, o
       </div>
     </div>
   );
-}
+});
