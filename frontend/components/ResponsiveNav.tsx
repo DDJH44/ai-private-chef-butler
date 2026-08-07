@@ -7,7 +7,7 @@ import { loadRecipes, RECIPE_CHANGE_EVENT } from "@/lib/recipeStore";
 import { useAuth } from "@/hooks/useAuth";
 import {
   MessageCircle, BookOpen, BarChart3, Calendar, ShoppingCart,
-  Snowflake, Clock, Settings, User, Sun, Moon, ChefHat,
+  Snowflake, Clock, Settings, User, Sun, Moon, ChefHat, LayoutDashboard,
 } from "lucide-react";
 
 function ThemeToggle() {
@@ -37,6 +37,7 @@ function ThemeToggle() {
 
 const navIcons: Record<string, ReactNode> = {
   chat:         <MessageCircle size={18} />,
+  dashboard:    <LayoutDashboard size={18} />,
   recipes:      <BookOpen size={18} />,
   nutrition:    <BarChart3 size={18} />,
   "meal-plan":  <Calendar size={18} />,
@@ -49,6 +50,7 @@ const navIcons: Record<string, ReactNode> = {
 
 const sidebarItems = [
   { id: "chat", label: "对话", href: "/" },
+  { id: "dashboard", label: "概览", href: "/dashboard" },
   { id: "recipes", label: "菜谱", href: "/recipes" },
   { id: "nutrition", label: "饮食", href: "/nutrition" },
   { id: "meal-plan", label: "膳食", href: "/meal-plan" },
@@ -65,7 +67,7 @@ const bottomItems = [
   { id: "meal-plan", label: "膳食", href: "/meal-plan" },
   { id: "shopping-list", label: "清单", href: "/shopping-list" },
   { id: "fridge", label: "冰箱", href: "/fridge" },
-  { id: "history", label: "历史", href: "/history" },
+  { id: "dashboard", label: "概览", href: "/dashboard" },
   { id: "profile", label: "我的", href: "/profile" },
 ];
 
