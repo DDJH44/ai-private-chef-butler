@@ -60,7 +60,7 @@ async def create_recipe(recipe: RecipeCreate, current_user: dict = Depends(get_c
         raise
     except Exception as e:
         logger.error(f"创建菜谱失败：{e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")
 
 
 @router.get("", response_model=RecipeListResponse)
@@ -84,7 +84,7 @@ async def get_recipes(
         return {"items": [_recipe_to_dict(r) for r in rows], "total": total}
     except Exception as e:
         logger.error(f"获取菜谱列表失败：{e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")
 
 
 @router.post("/batch-create", response_model=RecipeListResponse)
@@ -116,7 +116,7 @@ async def batch_create_recipes(recipes_data: List[RecipeCreate] = Body(...), cur
         return {"items": results, "total": len(results)}
     except Exception as e:
         logger.error(f"批量创建菜谱失败：{e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")
 
 
 @router.post("/batch-delete", response_model=RecipeOperationResponse)
@@ -131,7 +131,7 @@ async def batch_delete_recipes(ids: List[str] = Body(...), current_user: dict = 
         return {'success': True, 'message': f'已删除 {count} 道菜谱'}
     except Exception as e:
         logger.error(f"批量删除菜谱失败：{e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")
 
 
 @router.get("/search", response_model=RecipeListResponse)
@@ -158,7 +158,7 @@ async def search_recipes(
         return {'items': recipes, 'total': total}
     except Exception as e:
         logger.error(f"搜索菜谱失败：{e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")
 
 
 @router.get("/{recipe_id}", response_model=RecipeResponse)
@@ -176,7 +176,7 @@ async def get_recipe(recipe_id: str, current_user: dict = Depends(get_current_us
         raise
     except Exception as e:
         logger.error(f"获取菜谱失败：{e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")
 
 
 @router.put("/{recipe_id}", response_model=RecipeResponse)
@@ -208,7 +208,7 @@ async def update_recipe(recipe_id: str, updates: RecipeUpdate, current_user: dic
         raise
     except Exception as e:
         logger.error(f"更新菜谱失败：{e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")
 
 
 @router.delete("/{recipe_id}", response_model=RecipeOperationResponse)
@@ -227,4 +227,4 @@ async def delete_recipe(recipe_id: str, current_user: dict = Depends(get_current
         raise
     except Exception as e:
         logger.error(f"删除菜谱失败：{e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")

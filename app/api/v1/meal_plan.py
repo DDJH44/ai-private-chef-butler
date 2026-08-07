@@ -194,8 +194,17 @@ async def generate_meal_plan(request: MealPlanRequest):
                     return (date, result.get("meals"), None)
                 return (date, None, f"{date} 返回数据无法解析")
             except Exception as e:
-                logger.error(f"[meal_plan] {date} 生成失败: {e}")
-                return (date, None, str(e))
+                logger.error(f"[meal_plan] {date} 生成失败（第1次）: {e}")
+                # 重试 1 次
+                try:
+                    result = await _call_llm_day(prompt)
+                    if result:
+                        logger.info(f"[meal_plan] {date} 第2次重试成功")
+                        return (date, result.get("meals"), None)
+                    return (date, None, f"{date} 返回数据无法解析")
+                except Exception as e2:
+                    logger.error(f"[meal_plan] {date} 生成失败（重试后）: {e2}")
+                    return (date, None, f"{date} 生成失败")
 
     # 并行生成所有日期
     tasks = [generate_day(date) for date in dates]
@@ -212,8 +221,8 @@ async def generate_meal_plan(request: MealPlanRequest):
             "meals": meals or {k: None for k in MEAL_KEYS},
         })
 
-    if len(errors) >= 7:
-        raise HTTPException(status_code=500, detail="所有日期生成均失败，请重试")
+    if len(errors) >= 3:
+        raise HTTPException(status_code=500, detail=f"超过半数日期生成失败（{len(errors)}/7），请重试")
 
     # 规范化：未生成和已保留的餐次
     for day in days:
@@ -228,7 +237,7 @@ async def generate_meal_plan(request: MealPlanRequest):
 
     logger.info(f"[meal_plan] 生成完成: {len(days)} 天, {sum(1 for d in days for k in target_meals if d['meals'].get(k) and d['meals'][k] != '保留')} 个新餐次, {len(errors)} 个错误")
 
-    return {"plan": {"days": days}}
+    return {"plan": {"days": days}, "partial": len(errors) > 0, "failed_dates": [e.split(" ")[0] for e in errors if e]}
 
 
 # ==================== 膳食计划 CRUD ====================

@@ -62,7 +62,7 @@ async def create_shopping_list(data: ShoppingListCreate, current_user: dict = De
         raise
     except Exception as e:
         logger.error(f"创建购物清单失败：{e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")
 
 
 @router.get("", response_model=ShoppingListListResponse)
@@ -79,7 +79,7 @@ async def get_shopping_lists(current_user: dict = Depends(get_current_user)):
         return {"items": [_list_to_dict(r) for r in rows], "total": total}
     except Exception as e:
         logger.error(f"获取购物清单列表失败：{e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")
 
 
 @router.get("/{list_id}", response_model=ShoppingListResponse)
@@ -97,7 +97,7 @@ async def get_shopping_list(list_id: str, current_user: dict = Depends(get_curre
         raise
     except Exception as e:
         logger.error(f"获取购物清单失败：{e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")
 
 
 @router.put("/{list_id}", response_model=ShoppingListResponse)
@@ -138,7 +138,7 @@ async def update_shopping_list(list_id: str, updates: ShoppingListUpdate, curren
         raise
     except Exception as e:
         logger.error(f"更新购物清单失败：{e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")
 
 
 @router.delete("/{list_id}", response_model=ShoppingListOperationResponse)
@@ -157,7 +157,7 @@ async def delete_shopping_list(list_id: str, current_user: dict = Depends(get_cu
         raise
     except Exception as e:
         logger.error(f"删除购物清单失败：{e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")
 
 
 @router.patch("/{list_id}/items/{item_id}/toggle", response_model=ShoppingListResponse)
@@ -208,4 +208,4 @@ async def toggle_shopping_item(
         raise
     except Exception as e:
         logger.error(f"切换项目勾选失败：{e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")

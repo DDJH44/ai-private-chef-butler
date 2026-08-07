@@ -214,4 +214,4 @@ async def get_dashboard_summary(current_user: dict = Depends(get_current_user)):
     except Exception as e:
         logger.error(f"Dashboard summary 查询失败: {e}")
         from fastapi import HTTPException
-        raise HTTPException(status_code=500, detail=f"统计数据加载失败: {e}")
+        raise HTTPException(status_code=500, detail="统计数据加载失败，请稍后重试")

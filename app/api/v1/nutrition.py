@@ -149,7 +149,8 @@ async def _upload_photo_to_oss(image_data: bytes, filename: str) -> str:
         bucket.put_object(oss_key, image_data)
         endpoint = os.getenv("OSS_ENDPOINT", "oss-cn-beijing.aliyuncs.com")
         return f"https://{os.getenv('OSS_BUCKET')}.{endpoint}/{oss_key}"
-    except Exception:
+    except Exception as e:
+        logger.warning(f"[nutrition] OSS 上传失败，图片将以 base64 形式处理: {e}")
         return ""
 
 
@@ -452,12 +453,14 @@ async def health_evaluation(date_str: str, current_user: dict = Depends(get_curr
             "score": result.get("score", 60),
             "health_eval": result.get("eval", "评估完成")
         }
-    except Exception:
+    except Exception as e:
+        logger.warning(f"[nutrition] health_evaluation AI 评估失败，降级为基础分析: {e}")
         basic_eval = generate_analysis(total_calories, total_protein, total_carbs, total_fat, 0, 0)
         return {
             "date": date_str,
             "score": 60,
-            "health_eval": f"AI评估暂时不可用，基础分析如下：\n{basic_eval}"
+            "health_eval": f"AI评估暂时不可用，基础分析如下：\n{basic_eval}",
+            "degraded": True,
         }
 
 
