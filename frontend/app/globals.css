@@ -383,6 +383,25 @@ body {
   30% { opacity: 1; transform: translateY(-4px); }
 }
 
+/* ── Skeleton shimmer ── */
+.skeleton-shimmer {
+  background: var(--surface);
+  background-image: linear-gradient(
+    100deg,
+    transparent 20%,
+    var(--bg) 40%,
+    var(--bg) 60%,
+    transparent 80%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 /* ── Streaming cursor ── */
 .streaming-cursor {
   display: inline-block;

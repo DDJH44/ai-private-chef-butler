@@ -26,6 +26,10 @@ function RegisterForm() {
       setError("用户名至少需要2个字符");
       return;
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError("请输入有效的邮箱地址");
+      return;
+    }
     if (password.length < 6) {
       setError("密码至少需要6个字符");
       return;
@@ -45,7 +49,7 @@ function RegisterForm() {
     <div className="flex flex-col h-full overflow-y-auto" style={{ background: "var(--bg)" }}>
       <header className="flex-shrink-0 px-6 sm:px-8 lg:px-12 xl:px-20 py-4">
         <div className="flex items-center gap-5 max-w-5xl mx-auto">
-          <button onClick={() => router.back()}
+          <button onClick={() => router.back()} aria-label="返回"
             style={{
               width: 42, height: 42, background: "var(--surface)", borderRadius: 14,
               boxShadow: "var(--shadow-raised-sm)", display: "flex", alignItems: "center", justifyContent: "center",

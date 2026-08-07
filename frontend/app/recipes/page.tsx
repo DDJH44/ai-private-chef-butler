@@ -4,7 +4,7 @@ import {useState, useEffect, useCallback, useMemo, useDeferredValue} from "react
 import {Recipe} from "@/types/recipe";
 import {RecipeCard} from "@/components/RecipeCard";
 import {RecipeDetailModal} from "@/components/RecipeDetailModal";
-import { Loading } from "@/components/Loading";
+import { Skeleton } from "@/components/Skeleton";
 import { showToast } from "@/components/Toast";
 import { AuthGuard } from "@/components/AuthGuard";
 import { getToken } from "@/lib/authStore";
@@ -223,8 +223,27 @@ export default function RecipesPage() {
                 marginRight: "auto",
             }}>
                 {loading ? (
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 64 }}>
-                        <Loading text="加载菜谱中..." />
+                    <div style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                        gap: "10px",
+                        paddingBottom: "16px",
+                    }}>
+                        {Array.from({ length: 6 }).map((_, i) => (
+                            <div key={i} style={{
+                                background: "var(--surface)",
+                                borderRadius: "var(--radius)",
+                                boxShadow: "var(--shadow-raised)",
+                                overflow: "hidden",
+                            }}>
+                                <Skeleton width="100%" height={160} radius={0} />
+                                <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                                    <Skeleton width="70%" height={16} />
+                                    <Skeleton width="100%" height={12} />
+                                    <Skeleton width="85%" height={12} />
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 ) : filteredRecipes.length === 0 ? (
                     <div style={{

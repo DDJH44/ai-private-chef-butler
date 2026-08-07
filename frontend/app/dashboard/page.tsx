@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { authFetch, authHeaders } from "@/lib/http";
 import { proxyImageUrl } from "@/lib/imageUtils";
 import { PageHeader } from "@/components/PageHeader";
+import { Skeleton } from "@/components/Skeleton";
 import { showToast } from "@/components/Toast";
 import {
   BookOpen, ChefHat, Flame, ShoppingCart, Snowflake, Calendar,
@@ -113,9 +114,44 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="h-full overflow-y-auto" style={{ background: "var(--bg)" }}>
-        <PageHeader title="数据概览" />
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh" }}>
-          <div className="typing-dot" />
+        <PageHeader title="数据概览" subtitle="你的私厨数据一览" />
+        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "20px 16px 40px", display: "flex", flexDirection: "column", gap: 20 }}>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+            gap: 12,
+          }}>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} style={{
+                background: "var(--surface)", borderRadius: "var(--radius)",
+                padding: 16, boxShadow: "var(--shadow-raised)",
+                display: "flex", flexDirection: "column", gap: 8,
+              }}>
+                <Skeleton width={28} height={28} radius={8} />
+                <Skeleton width="60%" height={12} />
+                <Skeleton width="40%" height={20} />
+              </div>
+            ))}
+          </div>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+            gap: 16,
+          }}>
+            {Array.from({ length: 2 }).map((_, i) => (
+              <div key={i} style={{
+                background: "var(--surface)", borderRadius: "var(--radius-lg)",
+                padding: 20, boxShadow: "var(--shadow-raised)",
+              }}>
+                <Skeleton width="40%" height={16} />
+                <div style={{ marginTop: 16, display: "flex", alignItems: "flex-end", gap: 8, height: 120 }}>
+                  {Array.from({ length: 7 }).map((_, j) => (
+                    <Skeleton key={j} width="100%" height={40 + j * 10} radius={4} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
