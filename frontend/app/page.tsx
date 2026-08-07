@@ -9,6 +9,7 @@ import {
   sendMessage, stopGeneration, dismissRecipes, confirmSaveRecipes,
   saveCurrentSession,
 } from "@/lib/chatStore";
+import { useStore } from "@/hooks/useStore";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
 import { MultiRecipeSave } from "@/components/MultiRecipeSave";
@@ -19,7 +20,7 @@ function Home() {
   const autoMessage = searchParams.get("msg");
   const resumeThread = searchParams.get("thread");
 
-  const [, forceUpdate] = useState(0);
+  const s = useStore(subscribeToChat, getChatState);
   const hasAutoSent = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -29,10 +30,8 @@ function Home() {
   const wasLoadingRef = useRef(false);
 
   useEffect(() => {
-    const unsub = subscribeToChat(() => forceUpdate((n) => n + 1));
     return () => {
       saveCurrentSession();
-      unsub();
     };
   }, []);
 
@@ -42,8 +41,6 @@ function Home() {
     prevThread.current = target;
     initChat(target || undefined);
   }, [resumeThread]);
-
-  const s = getChatState();
 
   const scrollToBottom = useCallback(() => {
     const el = scrollContainerRef.current;

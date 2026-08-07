@@ -1,23 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   getMealPlanGenState,
   subscribeToMealPlanGen,
   clearMealPlanGenTask,
-  type MealPlanGenTask,
 } from "@/lib/mealPlanGenStore";
+import { useStore } from "@/hooks/useStore";
 
 export function MealPlanGenOverlay() {
   const router = useRouter();
-  const [tasks, setTasks] = useState<MealPlanGenTask[]>([]);
-
-  useEffect(() => {
-    return subscribeToMealPlanGen(() => {
-      setTasks([...getMealPlanGenState().tasks]);
-    });
-  }, []);
+  const mealPlanState = useStore(subscribeToMealPlanGen, getMealPlanGenState);
+  const tasks = mealPlanState.tasks;
 
   // 完成的卡片 3 秒后自动消失
   useEffect(() => {

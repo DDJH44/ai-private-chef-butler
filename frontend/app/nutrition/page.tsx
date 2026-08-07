@@ -10,6 +10,7 @@ import { Loading } from "@/components/Loading";
 import { UtensilsCrossed } from "lucide-react";
 import { MEAL_ICONS, NUTRIENT_ICONS, PageIcon } from "@/lib/icons";
 import { useFeishuStatus } from "@/hooks/useFeishuStatus";
+import { useStore } from "@/hooks/useStore";
 import { getBase, authJsonHeaders, authHeaders } from "@/lib/http";
 import { getToken } from "@/lib/authStore";
 import {
@@ -100,7 +101,7 @@ export default function NutritionPage() {
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   // 全局拍照识别状态
-  const [nutritionState, setNutritionState] = useState(getNutritionState());
+  const nutritionState = useStore(subscribeToNutrition, getNutritionState);
   const fetchSummaryRef = useRef<() => void>(() => {});
 
   const fetchSummary = useCallback(async () => {
@@ -119,12 +120,6 @@ export default function NutritionPage() {
   }, [selectedDate]);
 
   fetchSummaryRef.current = fetchSummary;
-
-  useEffect(() => {
-    return subscribeToNutrition(() => {
-      setNutritionState(getNutritionState());
-    });
-  }, []);
 
   // 监听分析完成事件，刷新 summary
   useEffect(() => {

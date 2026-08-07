@@ -10,7 +10,8 @@ import {showToast} from "@/components/Toast";
 import { AuthGuard } from "@/components/AuthGuard";
 import DatePicker from "@/components/DatePicker";
 import ConfirmDialog from "@/components/ConfirmDialog";
-import { startMealPlanGeneration, hasActiveMealPlanGen, subscribeToMealPlanGen } from "@/lib/mealPlanGenStore";
+import { startMealPlanGeneration, getMealPlanGenState, subscribeToMealPlanGen } from "@/lib/mealPlanGenStore";
+import { useStore } from "@/hooks/useStore";
 import { Sparkles, Calendar, X, BookOpen, ShoppingCart, Clock } from "lucide-react";
 
 /* ---------- inline style tokens ---------- */
@@ -496,10 +497,8 @@ export default function MealPlanPage() {
     const [showClearConfirm, setShowClearConfirm] = useState(false);
 
     // 全局生成状态（页面切换不中断）
-    const [generating, setGenerating] = useState(() => hasActiveMealPlanGen());
-    useEffect(() => {
-        return subscribeToMealPlanGen(() => setGenerating(hasActiveMealPlanGen()));
-    }, []);
+    const mealPlanGenState = useStore(subscribeToMealPlanGen, getMealPlanGenState);
+    const generating = mealPlanGenState.tasks.some((t) => t.status === "generating");
 
     // Edit meal modal state
     const [showEdit, setShowEdit] = useState(false);

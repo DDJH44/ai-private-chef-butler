@@ -1,26 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   getNutritionState,
   subscribeToNutrition,
   clearTask,
-  type PhotoAnalysisTask,
 } from "@/lib/nutritionStore";
+import { useStore } from "@/hooks/useStore";
 
 export function PhotoAnalysisOverlay() {
   const router = useRouter();
-  const [tasks, setTasks] = useState<PhotoAnalysisTask[]>([]);
-  const [showResult, setShowResult] = useState(false);
-
-  useEffect(() => {
-    return subscribeToNutrition(() => {
-      const s = getNutritionState();
-      setTasks([...s.tasks]);
-      setShowResult(s.showResult);
-    });
-  }, []);
+  const nutritionState = useStore(subscribeToNutrition, getNutritionState);
+  const tasks = nutritionState.tasks;
+  const showResult = nutritionState.showResult;
 
   // 完成的卡片 3 秒后自动消失
   useEffect(() => {
