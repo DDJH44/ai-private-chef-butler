@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
-    Preference, FamilyMember,
-    ALLERGY_OPTIONS, DIET_TYPES, TASTE_DIMENSIONS, ROLE_OPTIONS,
+    Preference, FamilyMember, NutritionTargets,
+    ALLERGY_OPTIONS, DIET_TYPES, GOAL_TYPES, TASTE_DIMENSIONS, ROLE_OPTIONS,
   DEFAULT_PREFERENCE,
 } from "@/types/preference";
 import { loadPreference, savePreference } from "@/lib/preferenceStore";
@@ -360,6 +360,15 @@ const dietCard = (selected: boolean): React.CSSProperties => ({
     boxShadow: selected ? "var(--shadow-inset)" : "var(--shadow-raised-sm)",
 });
 
+const goalCard = (selected: boolean): React.CSSProperties => ({
+    ...dietCard(selected),
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 5,
+    minWidth: 0,
+    height: "100%",
+});
+
 const dietLabel = (selected: boolean): React.CSSProperties => ({
     fontSize: 12,
     fontWeight: 600,
@@ -376,6 +385,19 @@ const rolePill = (selected: boolean): React.CSSProperties => ({
     transition: "var(--transition)",
     background: selected ? "var(--accent)" : "var(--surface)",
     color: selected ? "#fff" : "var(--text-muted)",
+    boxShadow: selected ? "var(--shadow-inset-sm)" : "var(--shadow-raised-xs)",
+});
+
+const weekdayPill = (selected: boolean): React.CSSProperties => ({
+    aspectRatio: "1",
+    minWidth: 0,
+    borderRadius: 12,
+    fontSize: 12,
+    fontWeight: 700,
+    border: "none",
+    cursor: "pointer",
+    color: selected ? "#fff" : "var(--text-secondary)",
+    background: selected ? "var(--accent)" : "var(--surface)",
     boxShadow: selected ? "var(--shadow-inset-sm)" : "var(--shadow-raised-xs)",
 });
 
@@ -411,6 +433,29 @@ export default function PreferencesPage() {
 
     const updateTaste = useCallback((dim: keyof Preference['taste'], val: number) => {
         setPreference(prev => ({ ...prev, taste: { ...prev.taste, [dim]: val } }));
+    }, []);
+
+    const updateNutritionTargets = useCallback((updates: Partial<NutritionTargets>) => {
+        setPreference(prev => ({
+            ...prev,
+            nutrition_targets: {
+                goal_type: prev.nutrition_targets?.goal_type || "maintain",
+                ...prev.nutrition_targets,
+                ...updates,
+            },
+        }));
+    }, []);
+
+    const toggleTrainingDay = useCallback((day: number) => {
+        setPreference(prev => {
+            const days = prev.training_days || [];
+            return {
+                ...prev,
+                training_days: days.includes(day)
+                    ? days.filter(value => value !== day)
+                    : [...days, day].sort((a, b) => a - b),
+            };
+        });
     }, []);
 
     const handleAddMember = useCallback(() => {
@@ -510,8 +555,8 @@ export default function PreferencesPage() {
                             ←
                         </button>
                         <div>
-                            <h1 style={styles.title}>口味偏好设置</h1>
-                            <p style={styles.subtitle}>让 AI 更懂你的口味</p>
+                            <h1 style={styles.title}>饮食与目标设置</h1>
+                            <p style={styles.subtitle}>让 AI 按照你的饮食目标安排餐食</p>
                         </div>
                     </div>
                 </div>
@@ -603,6 +648,90 @@ export default function PreferencesPage() {
                             </button>
                         ))}
                     </div>
+                </div>
+
+                {/* Nutrition goals */}
+                <div style={styles.card}>
+                    <div style={styles.sectionHeader}>
+                        <div style={{ ...styles.sectionIcon, background: "var(--golden-bg)", color: "var(--golden)" }}>
+                            <Dumbbell size={18} strokeWidth={1.8} />
+                        </div>
+                        <div>
+                            <h2 style={styles.sectionTitle}>运动与营养目标</h2>
+                            <p style={styles.sectionDesc}>用于膳食计划和营养复盘</p>
+                        </div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 8 }}>
+                        {GOAL_TYPES.map(goal => {
+                            const selected = preference.nutrition_targets?.goal_type === goal.value;
+                            return (
+                                <button
+                                    key={goal.value}
+                                    type="button"
+                                    aria-pressed={selected}
+                                    onClick={() => updateNutritionTargets({ goal_type: goal.value as NonNullable<NutritionTargets["goal_type"]> })}
+                                    style={goalCard(selected)}
+                                >
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: selected ? "var(--accent)" : "var(--text)" }}>
+                                        {goal.icon} {goal.label}
+                                    </span>
+                                    <span style={{ fontSize: 10, lineHeight: 1.5, color: "var(--text-muted)" }}>{goal.desc}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <div style={{ marginTop: 16 }}>
+                        <p style={{ ...styles.sliderLabel, margin: "0 0 8px" }}>每周训练日</p>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 8 }}>
+                            {["日", "一", "二", "三", "四", "五", "六"].map((label, day) => {
+                                const selected = (preference.training_days || []).includes(day);
+                                return (
+                                    <button
+                                        key={day}
+                                        type="button"
+                                        aria-label={`周${label}训练日`}
+                                        aria-pressed={selected}
+                                        onClick={() => toggleTrainingDay(day)}
+                                        style={weekdayPill(selected)}
+                                    >
+                                        {label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(125px, 1fr))", gap: 10, marginTop: 14 }}>
+                        {([
+                            { key: "daily_calories", label: "每日热量", unit: "kcal", max: 10000 },
+                            { key: "protein_target", label: "蛋白质", unit: "g", max: 500 },
+                            { key: "carbs_target", label: "碳水", unit: "g", max: 1000 },
+                            { key: "fat_target", label: "脂肪", unit: "g", max: 500 },
+                            { key: "fiber_target", label: "膳食纤维", unit: "g", max: 200 },
+                        ] as const).map(field => (
+                            <label key={field.key} style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+                                <span style={styles.sliderLabel}>{field.label}（{field.unit}）</span>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    max={field.max}
+                                    step={1}
+                                    inputMode="numeric"
+                                    value={preference.nutrition_targets?.[field.key] ?? ""}
+                                    onChange={e => {
+                                        const raw = e.target.value;
+                                        const value = raw === "" ? undefined : Number(raw);
+                                        if (value === undefined || Number.isFinite(value)) {
+                                            updateNutritionTargets({ [field.key]: value } as Partial<NutritionTargets>);
+                                        }
+                                    }}
+                                    style={{ ...styles.input, width: "100%", minWidth: 0, boxSizing: "border-box" }}
+                                />
+                            </label>
+                        ))}
+                    </div>
+                    <p style={{ ...styles.sectionDesc, lineHeight: 1.6, marginTop: 12 }}>
+                        留空的数值不会套用统一目标；AI 生成的营养数据为估算值。
+                    </p>
                 </div>
 
                 {/* Taste */}

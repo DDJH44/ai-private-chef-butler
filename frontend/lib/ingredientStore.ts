@@ -34,23 +34,26 @@ async function pushRemote(ingredients: Ingredient[]): Promise<Ingredient[]> {
     const remoteMap = new Map(remote.map(r => [r.id, r]));
     const localMap = new Map(ingredients.map(r => [r.id, r]));
     for (const [id, ing] of localMap) {
+      let resp: Response;
       if (!remoteMap.has(id)) {
-        await authFetch(`${ING_API}`, {
+        resp = await authFetch(`${ING_API}`, {
           method: 'POST',
           headers: authHeaders(),
           body: JSON.stringify(ing),
         });
       } else {
-        await authFetch(`${ING_API}/${encodeURIComponent(id)}`, {
+        resp = await authFetch(`${ING_API}/${encodeURIComponent(id)}`, {
           method: 'PUT',
           headers: authHeaders(),
           body: JSON.stringify(ing),
         });
       }
+      if (!resp.ok) throw new Error(`食材同步失败: ${resp.status}`);
     }
     for (const id of remoteMap.keys()) {
       if (!localMap.has(id)) {
-        await authFetch(`${ING_API}/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders() });
+        const resp = await authFetch(`${ING_API}/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders() });
+        if (!resp.ok) throw new Error(`远端食材删除失败: ${resp.status}`);
       }
     }
   } catch (e) { console.warn("食材同步到远程失败:", e); }

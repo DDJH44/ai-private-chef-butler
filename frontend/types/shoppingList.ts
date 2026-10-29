@@ -12,6 +12,7 @@ export interface ShoppingListItem {
 export interface ShoppingList {
     id: string;
     created_at: string;
+    updated_at?: number;
     source_recipes: string[];
     source_recipe_names: string[];
     items: ShoppingListItem[];

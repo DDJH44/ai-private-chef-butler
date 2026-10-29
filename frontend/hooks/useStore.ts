@@ -22,6 +22,6 @@ export function useStore<T>(
     if (prevRef.current === next) return prevRef.current as T;
     prevRef.current = next;
     return next;
-  });
+  }, getSnapshot);
   return snapshot;
 }

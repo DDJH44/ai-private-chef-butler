@@ -40,6 +40,7 @@ export interface Preference {
     taste: TastePreference;
     family_members: FamilyMember[];
     nutrition_targets?: NutritionTargets;
+    training_days?: number[];
 }
 
 export interface PreferenceStore {
@@ -58,6 +59,7 @@ export const DEFAULT_PREFERENCE: Preference = {
         oil: 3,
     },
     family_members: [],
+    training_days: [],
 };
 
 export const ALLERGY_OPTIONS = [
@@ -70,7 +72,7 @@ export const DIET_TYPES = [
     {value: "vegan", icon: "🥬", name: "纯素食", desc: "不含任何动物性食材"},
     {value: "vegetarian", icon: "🥚", name: "蛋奶素", desc: "可含蛋和奶制品"},
     {value: "keto", icon: "🥩", name: "生酮饮食", desc: "高脂肪低碳水"},
-    {value: "fitness", icon: "💪", name: "健身增肌", desc: "高蛋白高热量"},
+    {value: "fitness", icon: "💪", name: "高蛋白饮食", desc: "可结合增肌、减脂或维持目标"},
     {value: "low_calorie", icon: "🥗", name: "低卡减脂", desc: "低热量低脂肪"},
 ];
 

@@ -68,19 +68,19 @@ function extractImageUrls(content: string): string[] {
  */
 function parseAllMarkedRecipes(content: string): Array<{index: number; content: string; recipe: Partial<Recipe>}> {
   const recipes: Array<{index: number; content: string; recipe: Partial<Recipe>}> = [];
-  const imageUrls = extractImageUrls(content);
-  const allVideos = extractVideos(content);
   const regex = /\[SAVE_RECIPE_START\]([\s\S]*?)\[SAVE_RECIPE_END\]/g;
   let match;
   let index = 0;
+  let previousBlockEnd = 0;
 
   while ((match = regex.exec(content)) !== null) {
     const recipe = extractFieldsFromBlock(match[1]);
-    if (imageUrls.length > index) {
-      recipe.imageUrl = imageUrls[index];
-    }
-    recipe.videos = allVideos;
+    const recipeSection = content.slice(previousBlockEnd, regex.lastIndex);
+    const imageUrl = extractImageUrls(recipeSection)[0];
+    if (imageUrl) recipe.imageUrl = imageUrl;
+    recipe.videos = extractVideos(recipeSection);
     recipes.push({ index: index++, content: match[0], recipe });
+    previousBlockEnd = regex.lastIndex;
   }
   return recipes;
 }

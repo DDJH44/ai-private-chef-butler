@@ -24,6 +24,10 @@ export async function loadShoppingLists(): Promise<ShoppingList[]> {
     }
 }
 
+export async function refreshShoppingLists(): Promise<ShoppingList[]> {
+    return fetchShoppingLists();
+}
+
 export async function addShoppingList(list: ShoppingList): Promise<ShoppingList> {
     const created = await apiCreate({
         source_recipes: list.source_recipes,
@@ -56,11 +60,12 @@ export async function deleteShoppingList(id: string): Promise<void> {
     }
 }
 
-export async function toggleItemChecked(listId: string, itemId: string): Promise<void> {
+export async function toggleItemChecked(listId: string, itemId: string, expectedUpdatedAt?: number): Promise<void> {
     try {
-        await apiToggle(listId, itemId);
+        await apiToggle(listId, itemId, expectedUpdatedAt);
         notifyChange();
     } catch (error) {
         console.error('切换项目勾选失败:', error);
+        throw error;
     }
 }

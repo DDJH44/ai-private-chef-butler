@@ -7,9 +7,11 @@ from langchain_core.messages import HumanMessage
 from app.common.json_utils import repair_truncated_json
 from app.common.logger import logger
 from app.common.database import get_db
+from app.common.preference_context import get_training_days
 from app.models.db import MealPlanDB
 from sqlalchemy import select, delete
 import json
+import math
 import re
 import asyncio
 import time
@@ -104,10 +106,76 @@ def _get_target_meals(mode: str) -> list[str]:
     return MEAL_KEYS
 
 
+def _safe_nutrition_value(value, maximum: float) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if value < 0 or value > maximum or not math.isfinite(value):
+        return None
+    return float(value)
+
+
+def _build_nutrition_target_rules(preference: dict, mode: str) -> str:
+    targets = preference.get("nutrition_targets") if isinstance(preference, dict) else None
+    targets = targets if isinstance(targets, dict) else {}
+    goal_labels = {
+        "muscle_gain": "增肌",
+        "fat_loss": "减脂",
+        "maintain": "维持体重",
+        "custom": "自定义目标",
+    }
+    fields = (
+        ("daily_calories", "热量", "kcal", 10000),
+        ("protein_target", "蛋白质", "g", 500),
+        ("carbs_target", "碳水", "g", 1000),
+        ("fat_target", "脂肪", "g", 500),
+    )
+    values = []
+    for key, label, unit, maximum in fields:
+        value = _safe_nutrition_value(targets.get(key), maximum)
+        if value is not None and value > 0:
+            values.append(f"{label}{value:g}{unit}")
+
+    goal_key = targets.get("goal_type")
+    goal = goal_labels.get(goal_key) if isinstance(goal_key, str) else None
+    fiber_target = _safe_nutrition_value(targets.get("fiber_target"), 200)
+    fiber_note = (
+        f"膳食纤维参考目标{fiber_target:g}g，优先选择蔬菜、豆类或全谷物。"
+        if fiber_target is not None and fiber_target > 0
+        else ""
+    )
+    if mode != "full":
+        return "- 本次只规划部分餐次。个人目标只作为饮食方向参考，不要把全天营养目标全部分配给本次生成的餐次。"
+
+    goal_text = f"目标方向：{goal}。" if goal else ""
+    if values:
+        return (
+            f"- {goal_text}每日营养目标：{'、'.join(values)}。全天合计应尽量接近这些目标；"
+            f"已保留的餐次计入全天合计，生成餐次用于补足剩余目标。{fiber_note}营养数值是估算值，不要求虚假精确。"
+        )
+    if fiber_note:
+        return f"- {goal_text}{fiber_note}用户没有填写热量或宏量营养素目标，不要套用统一热量区间，营养数值按估算处理。"
+    return (
+        f"- {goal_text}用户没有填写个人每日营养数值，不要套用统一热量区间；安排均衡、不过度限制的餐食，"
+        "并将营养数值标为估算。"
+    )
+
+
+def _build_training_day_rule(preference: dict, date: str) -> str:
+    training_days = set(get_training_days(preference))
+    if not training_days:
+        return ""
+    weekday = (datetime.strptime(date, "%Y-%m-%d").weekday() + 1) % 7
+    if weekday in training_days:
+        return "- 今天是训练日：优先安排蛋白质充足并含适量碳水的餐食；仍遵守用户填写的全天营养目标，不自行增减热量目标。"
+    return "- 今天是休息日：安排均衡餐食并遵守用户填写的全天营养目标，不进行额外的热量削减。"
+
+
 @router.post("/meal-plan/generate")
 async def generate_meal_plan(request: MealPlanRequest):
     """AI 生成一周膳食计划 — 7 天并行生成，大幅缩短等待时间"""
-    preference_ctx = _build_preference_context(request.preference or {})
+    preference = request.preference or {}
+    preference_ctx = _build_preference_context(preference)
+    nutrition_target_rules = _build_nutrition_target_rules(preference, request.mode)
 
     inventory_ctx = ""
     if request.inventory:
@@ -147,7 +215,14 @@ async def generate_meal_plan(request: MealPlanRequest):
             for key in MEAL_KEYS:
                 if key in day_preserved:
                     m = day_preserved[key]
-                    preserved_lines.append(f"  {key}: {m['recipe_name']} ({m.get('calories', 0)}kcal) — 已保留，不要修改")
+                    calories = _safe_nutrition_value(m.get("calories"), 10000) or 0
+                    protein = _safe_nutrition_value(m.get("protein"), 500) or 0
+                    carbs = _safe_nutrition_value(m.get("carbs"), 1000) or 0
+                    fat = _safe_nutrition_value(m.get("fat"), 500) or 0
+                    preserved_lines.append(
+                        f"  {key}: {m['recipe_name']}（热量{calories:g}kcal，蛋白质{protein:g}g，"
+                        f"碳水{carbs:g}g，脂肪{fat:g}g）— 已保留，不要修改"
+                    )
             preserved_ctx = ""
             if preserved_lines:
                 preserved_ctx = "\n【当天已保留的餐次 — 以下内容不要修改，保持原样】\n" + "\n".join(preserved_lines)
@@ -184,7 +259,8 @@ async def generate_meal_plan(request: MealPlanRequest):
 }}
 
 规则：
-- 当天总热量 1600-2400 kcal
+{nutrition_target_rules}
+{_build_training_day_rule(preference, date)}
 - 菜品名用中文，营养数值为整数
 - 只返回 JSON，不要任何解释"""
 

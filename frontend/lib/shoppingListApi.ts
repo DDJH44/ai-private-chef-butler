@@ -6,6 +6,7 @@ const BASE = apiPath('/v1/shopping');
 interface ShoppingListFromAPI {
     id: string;
     created_at: number;  // unix ms from backend
+    updated_at: number;
     source_recipes: string[];
     source_recipe_names: string[];
     items: ShoppingListItem[];
@@ -43,6 +44,7 @@ export async function createShoppingList(data: {
             source_recipes: data.source_recipes || [],
             source_recipe_names: data.source_recipe_names || [],
             items: data.items.map(i => ({
+                id: i.id,
                 ingredient_name: i.ingredient_name,
                 required_amount: i.required_amount,
                 unit: i.unit,
@@ -65,6 +67,7 @@ export async function updateShoppingList(
     if (data.source_recipe_names !== undefined) body.source_recipe_names = data.source_recipe_names;
     if (data.items !== undefined) {
         body.items = data.items.map(i => ({
+            id: i.id,
             ingredient_name: i.ingredient_name,
             required_amount: i.required_amount,
             unit: i.unit,
@@ -90,8 +93,9 @@ export async function deleteShoppingList(id: string): Promise<void> {
     if (!resp.ok) throw new Error(`Failed to delete shopping list: ${resp.status}`);
 }
 
-export async function toggleShoppingItem(listId: string, itemId: string): Promise<ShoppingList> {
-    const resp = await authFetch(`${BASE}/${encodeURIComponent(listId)}/items/${encodeURIComponent(itemId)}/toggle`, { method: 'PATCH', headers: authHeaders() });
+export async function toggleShoppingItem(listId: string, itemId: string, expectedUpdatedAt?: number): Promise<ShoppingList> {
+    const query = expectedUpdatedAt === undefined ? '' : `?expected_updated_at=${encodeURIComponent(expectedUpdatedAt)}`;
+    const resp = await authFetch(`${BASE}/${encodeURIComponent(listId)}/items/${encodeURIComponent(itemId)}/toggle${query}`, { method: 'PATCH', headers: authHeaders() });
     if (!resp.ok) throw new Error(`Failed to toggle item: ${resp.status}`);
     return mapList(await resp.json());
 }

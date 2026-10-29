@@ -14,6 +14,7 @@ from app.models.db import (
     Preference,
 )
 from datetime import datetime, timedelta
+import math
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -22,6 +23,29 @@ _DAYS = 7  # 趋势天数
 
 def _date_str(d: datetime) -> str:
     return d.strftime("%Y-%m-%d")
+
+
+def _get_nutrition_targets(preference_data) -> dict | None:
+    if not isinstance(preference_data, dict):
+        return None
+    targets = preference_data.get("nutrition_targets")
+    if not isinstance(targets, dict):
+        return None
+    limits = {
+        "daily_calories": 10000,
+        "protein_target": 500,
+        "carbs_target": 1000,
+        "fat_target": 500,
+        "fiber_target": 200,
+    }
+    valid = {}
+    for key, maximum in limits.items():
+        value = targets.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue
+        if math.isfinite(value) and 0 < value <= maximum:
+            valid[key] = value
+    return valid or None
 
 
 @router.get("/summary")
@@ -49,6 +73,7 @@ async def get_dashboard_summary(current_user: dict = Depends(get_current_user)):
                 func.coalesce(func.sum(NutritionRecord.protein), 0).label("protein"),
                 func.coalesce(func.sum(NutritionRecord.carbs), 0).label("carbs"),
                 func.coalesce(func.sum(NutritionRecord.fat), 0).label("fat"),
+                func.coalesce(func.sum(NutritionRecord.fiber), 0).label("fiber"),
             ).filter(
                 NutritionRecord.user_id == uid,
                 NutritionRecord.date == today_str,
@@ -91,9 +116,9 @@ async def get_dashboard_summary(current_user: dict = Depends(get_current_user)):
                 CookRecord.rating > 0,
             ).scalar() or 0
 
-            has_preference = session.query(func.count(Preference.user_id)).filter(
+            preference = session.query(Preference).filter(
                 Preference.user_id == uid
-            ).scalar() or 0
+            ).first()
 
             # ── 近7天卡路里趋势 ──
             cal_rows = session.query(
@@ -161,14 +186,16 @@ async def get_dashboard_summary(current_user: dict = Depends(get_current_user)):
                 "today_protein": round(float(today_nutrition.protein), 1),
                 "today_carbs": round(float(today_nutrition.carbs), 1),
                 "today_fat": round(float(today_nutrition.fat), 1),
+                "today_fiber": round(float(today_nutrition.fiber), 1),
                 "pending_shopping": pending_shopping,
                 "ingredient_count": ingredient_count,
                 "expiring_ingredients": expiring_ingredients,
                 "expired_ingredients": expired_ingredients,
                 "meal_plan_count": meal_plan_count,
                 "avg_rating": round(float(avg_rating), 1),
-                "has_preference": has_preference > 0,
+                "has_preference": preference is not None,
             },
+            "nutrition_targets": _get_nutrition_targets(preference.data if preference else None),
             "calories_trend": calories_trend,
             "cook_trend": cook_trend,
             "nutrition_breakdown": {

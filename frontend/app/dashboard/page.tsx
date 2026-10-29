@@ -20,6 +20,7 @@ interface DashboardData {
     today_protein: number;
     today_carbs: number;
     today_fat: number;
+    today_fiber: number;
     pending_shopping: number;
     ingredient_count: number;
     expiring_ingredients: number;
@@ -28,6 +29,13 @@ interface DashboardData {
     avg_rating: number;
     has_preference: boolean;
   };
+  nutrition_targets: {
+    daily_calories?: number;
+    protein_target?: number;
+    carbs_target?: number;
+    fat_target?: number;
+    fiber_target?: number;
+  } | null;
   calories_trend: { date: string; calories: number }[];
   cook_trend: { date: string; count: number }[];
   nutrition_breakdown: { protein: number; carbs: number; fat: number };
@@ -256,6 +264,18 @@ export default function DashboardPage() {
             onClick={() => router.push("/meal-plan")}
           />
         </div>
+
+        <NutritionGoals
+          targets={data.nutrition_targets}
+          actual={{
+            calories: s.today_calories,
+            protein: s.today_protein,
+            carbs: s.today_carbs,
+            fat: s.today_fat,
+            fiber: s.today_fiber,
+          }}
+          onSetup={() => router.push("/preferences")}
+        />
 
         {/* ── 图表区 ── */}
         <div style={{
@@ -542,6 +562,65 @@ export default function DashboardPage() {
         .spin { animation: spin 0.8s linear infinite; }
       `}</style>
     </div>
+  );
+}
+
+function NutritionGoals({
+  targets, actual, onSetup,
+}: {
+  targets: DashboardData["nutrition_targets"];
+  actual: Record<string, number>;
+  onSetup: () => void;
+}) {
+  const fields = [
+    { key: "daily_calories", actual: "calories", label: "热量", unit: "kcal", color: "var(--golden)" },
+    { key: "protein_target", actual: "protein", label: "蛋白质", unit: "g", color: "var(--green)" },
+    { key: "carbs_target", actual: "carbs", label: "碳水", unit: "g", color: "var(--blue)" },
+    { key: "fat_target", actual: "fat", label: "脂肪", unit: "g", color: "var(--rose)" },
+    { key: "fiber_target", actual: "fiber", label: "膳食纤维", unit: "g", color: "var(--teal)" },
+  ] as const;
+  const rows = fields.flatMap(field => {
+    const target = targets?.[field.key];
+    return target && target > 0 ? [{ ...field, target, consumed: actual[field.actual] }] : [];
+  });
+
+  return (
+    <section style={{ background: "var(--surface)", borderRadius: "var(--radius-lg)", padding: 20, boxShadow: "var(--shadow-raised)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: rows.length ? 16 : 0 }}>
+        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--text)", fontFamily: "var(--font-noto-serif-sc), 'Noto Serif SC', serif" }}>
+          今日目标进度
+        </h2>
+        {rows.length === 0 && (
+          <button onClick={onSetup} style={{ border: 0, background: "none", color: "var(--accent)", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+            设置目标 <ArrowRight size={14} style={{ verticalAlign: "middle" }} />
+          </button>
+        )}
+      </div>
+      {rows.length > 0 ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "14px 20px" }}>
+          {rows.map(row => {
+            const progress = Math.min(row.consumed / row.target, 1);
+            const remaining = Math.max(row.target - row.consumed, 0);
+            const exceeded = row.consumed > row.target;
+            return (
+              <div key={row.key} role="group" aria-label={`${row.label}目标进度`}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 6, fontSize: 12 }}>
+                  <span style={{ color: "var(--text-secondary)" }}>{row.label}</span>
+                  <span style={{ color: exceeded ? "var(--rose)" : "var(--text)", fontWeight: 600, whiteSpace: "nowrap" }}>
+                    {row.consumed.toFixed(0)} / {row.target}{row.unit} · {exceeded ? `超出 ${(row.consumed - row.target).toFixed(0)}` : `剩余 ${remaining.toFixed(0)}`}
+                  </span>
+                </div>
+                <div role="progressbar" aria-valuenow={Math.min(row.consumed, row.target)} aria-valuemin={0} aria-valuemax={row.target} aria-label={`${row.label}摄入`} style={{ height: 7, borderRadius: 4, background: "var(--bg)", overflow: "hidden" }}>
+                  <div style={{ width: `${progress * 100}%`, height: "100%", borderRadius: 4, background: exceeded ? "var(--rose)" : row.color, transition: "width 0.3s ease" }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div style={{ color: "var(--text-muted)", fontSize: 13 }}>尚未设置营养目标</div>
+      )}
+    </section>
   );
 }
 

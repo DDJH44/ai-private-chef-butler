@@ -5,7 +5,7 @@ import { ShoppingList, ShoppingListItem } from "@/types/shoppingList";
 import { PageHeader } from "@/components/PageHeader";
 import { getToken } from "@/lib/authStore";
 import {
-    loadShoppingLists, toggleItemChecked, deleteShoppingList,
+    loadShoppingLists, refreshShoppingLists, toggleItemChecked, deleteShoppingList,
     addShoppingList, SHOPPING_LIST_CHANGE_EVENT,
 } from "@/lib/shoppingListStore";
 import { generateUUID } from "@/lib/utils";
@@ -39,6 +39,7 @@ export default function ShoppingListPage() {
     }, [load]);
 
     const handleToggle = useCallback(async (listId: string, itemId: string) => {
+        const expectedUpdatedAt = lists.find(list => list.id === listId)?.updated_at;
         // Record previous state for rollback on failure
         let prevChecked = false;
         setLists(prev => prev.map(list =>
@@ -54,7 +55,7 @@ export default function ShoppingListPage() {
         ));
         pendingToggles.current++;
         try {
-            await toggleItemChecked(listId, itemId);
+            await toggleItemChecked(listId, itemId, expectedUpdatedAt);
             pendingToggles.current--;
             // Final sync to reconcile server state
             if (pendingToggles.current === 0) {
@@ -78,8 +79,15 @@ export default function ShoppingListPage() {
                     : list
             ));
             showToast("同步失败，已还原", "error");
+            if (pendingToggles.current === 0) {
+                try {
+                    setLists(await refreshShoppingLists());
+                } catch {
+                    // Keep the optimistic rollback if the server cannot be reached.
+                }
+            }
         }
-    }, []);
+    }, [lists]);
 
     const handleDelete = useCallback((list: ShoppingList, e: React.MouseEvent) => {
         e.stopPropagation();
@@ -899,7 +907,7 @@ export default function ShoppingListPage() {
                                 padding: "2px 6px",
                                 borderRadius: 6,
                                 fontSize: 10,
-                            }}>食材名 数量 单位</code>（如"番茄 3 个"）
+                            }}>食材名 数量 单位</code>（如“番茄 3 个”）
                         </p>
                         <textarea
                             value={customInput}
