@@ -90,10 +90,13 @@ import asyncio
 
 @app.on_event("startup")
 async def startup():
-    from app.common.database import engine
-    from app.models.db import Base
-    Base.metadata.create_all(bind=engine)
-    logger.info("MySQL 数据库表初始化完成")
+    from sqlalchemy import text
+    from app.common.database import engine, verify_schema_revision
+
+    with engine.connect() as connection:
+        connection.execute(text("SELECT 1"))
+        verify_schema_revision(connection)
+    logger.info("MySQL 连接与迁移版本检查通过")
 
     try:
         from app.rag.data_loader import initialize_all_collections

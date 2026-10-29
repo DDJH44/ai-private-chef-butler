@@ -1,6 +1,10 @@
 """中央数据库引擎和会话管理"""
 import os
 from contextlib import contextmanager
+from pathlib import Path
+from alembic.config import Config
+from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from dotenv import load_dotenv
@@ -21,6 +25,18 @@ engine = create_engine(
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, expire_on_commit=False)
+
+
+def verify_schema_revision(connection) -> None:
+    alembic_config = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
+    expected_revision = ScriptDirectory.from_config(alembic_config).get_current_head()
+    current_revision = MigrationContext.configure(connection).get_current_revision()
+    if current_revision != expected_revision:
+        raise RuntimeError(
+            "数据库迁移版本不匹配："
+            f"当前={current_revision or '未初始化'}，"
+            f"代码要求={expected_revision}。请先备份并执行数据库迁移。"
+        )
 
 
 @contextmanager
