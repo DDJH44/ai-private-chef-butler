@@ -54,11 +54,16 @@ if (typeof window !== "undefined") {
 }
 
 function notify() {
+    // 产出新快照引用：useStore 基于 useSyncExternalStore 做引用比较，
+    // 可变 state 直接暴露会导致引用永不变、组件不重渲染
+    snapshot = { ...state };
     listeners.forEach((fn) => fn());
 }
 
+let snapshot: ChatState = { ...state };
+
 export function getChatState(): Readonly<ChatState> {
-    return state;
+    return snapshot;
 }
 
 export function subscribeToChat(fn: Listener): () => void {

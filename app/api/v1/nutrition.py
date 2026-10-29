@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import uuid
 import base64
@@ -13,6 +14,8 @@ from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage
 from dotenv import load_dotenv
 from app.common.database import get_db
+from app.common.nutrition_data import extract_weight_grams, scale_matching_nutrition_reference
+from app.common.preference_context import build_fitness_knowledge_query
 from app.models.db import NutritionRecord, Preference
 from app.common.logger import logger
 
@@ -240,7 +243,9 @@ async def analyze_photo(
     current_user: dict = Depends(get_current_user),
 ):
     uid = current_user["user_id"]
-    image_data = await file.read()
+    image_data = await file.read(20 * 1024 * 1024 + 1)
+    if len(image_data) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="图片不能超过 20MB")
     if not image_data:
         raise HTTPException(status_code=400, detail="图片数据为空")
 
@@ -275,9 +280,9 @@ async def analyze_photo(
 
 注意事项：
 1. 尽可能识别图中所有可见食物
-2. 根据常见份量估算重量和营养
+2. 根据常见份量估算重量和营养；照片无法提供精确重量，数值必须视为估算
 3. 如果无法识别某种食物，标注为"未知食物"
-4. summary用中文，50字以内"""
+4. summary用中文，50字以内，并简要提醒份量、配方和烹调方式会影响估算"""
 
     try:
         model = _get_nutrition_model()
@@ -293,40 +298,41 @@ async def analyze_photo(
         json_str = _extract_json(result_text)
         analysis = json.loads(json_str)
 
-        # RAG enrichment: replace LLM-estimated nutrition with authoritative data
+        # Use RAG only as a matching per-100g reference, never as an unconditional override.
         try:
             from app.rag.vector_store import rag_store
             for food_data in analysis.get("foods", []):
+                if not isinstance(food_data, dict):
+                    continue
                 food_name = food_data.get("food_name", "")
                 if not food_name or food_name == "未知食物":
                     continue
                 hits = rag_store.search(f"{food_name} 营养成分 每100克", "nutrition", k=1)
-                if hits:
-                    doc = hits[0]["content"]
-                    # Parse nutrition from "每100g：热量Xkcal，蛋白质Xg，碳水Xg，脂肪Xg，纤维Xg，钠Xmg"
-                    # Extract estimated weight for proportional calculation
-                    weight_str = food_data.get("estimated_weight", "")
-                    weight = 100  # Default to 100g
-                    weight_match = re.search(r'(\d+)\s*(?:g|克)', weight_str)
-                    if weight_match:
-                        weight = float(weight_match.group(1))
-                    ratio = weight / 100.0
-
-                    cal_match = re.search(r'热量(\d+)kcal', doc)
-                    pro_match = re.search(r'蛋白质(\d+\.?\d*)g', doc)
-                    carb_match = re.search(r'碳水(\d+\.?\d*)g', doc)
-                    fat_match = re.search(r'脂肪(\d+\.?\d*)g', doc)
-                    fib_match = re.search(r'纤维(\d+\.?\d*)g', doc)
-                    sod_match = re.search(r'钠(\d+\.?\d*)mg', doc)
-
-                    if cal_match:
-                        food_data["calories"] = round(float(cal_match.group(1)) * ratio, 1)
-                        food_data["protein"] = round(float(pro_match.group(1)) * ratio, 1) if pro_match else food_data.get("protein", 0)
-                        food_data["carbs"] = round(float(carb_match.group(1)) * ratio, 1) if carb_match else food_data.get("carbs", 0)
-                        food_data["fat"] = round(float(fat_match.group(1)) * ratio, 1) if fat_match else food_data.get("fat", 0)
-                        food_data["fiber"] = round(float(fib_match.group(1)) * ratio, 1) if fib_match else food_data.get("fiber", 0)
-                        food_data["sodium"] = round(float(sod_match.group(1)) * ratio, 1) if sod_match else food_data.get("sodium", 0)
-                        logger.info(f"[RAG] 富营养数据: {food_name} (weight={weight}g, ratio={ratio:.2f})")
+                if not hits:
+                    continue
+                score = hits[0].get("score")
+                if (
+                    isinstance(score, bool)
+                    or not isinstance(score, (int, float))
+                    or not math.isfinite(score)
+                    or score < 0.15
+                ):
+                    continue
+                weight = extract_weight_grams(food_data.get("estimated_weight"))
+                reference_values = scale_matching_nutrition_reference(
+                    food_name,
+                    hits[0].get("content"),
+                    weight,
+                )
+                if not reference_values:
+                    continue
+                food_data.update(reference_values)
+                logger.info(
+                    "[RAG] 使用匹配食物参考值进行近似换算: %s (source=%s, weight=%sg)",
+                    food_name,
+                    hits[0].get("source", "unknown"),
+                    weight,
+                )
         except Exception as rag_err:
             logger.warning(f"[RAG] 营养数据增强失败，回退到LLM估算: {rag_err}")
 
@@ -362,10 +368,10 @@ async def analyze_photo(
         return PhotoAnalysisResult(
             meal_type=meal_type,
             foods=foods,
-            total_calories=analysis.get("total_calories", sum(f.calories for f in foods)),
-            total_protein=analysis.get("total_protein", sum(f.protein for f in foods)),
-            total_carbs=analysis.get("total_carbs", sum(f.carbs for f in foods)),
-            total_fat=analysis.get("total_fat", sum(f.fat for f in foods)),
+            total_calories=round(sum(f.calories for f in foods), 1),
+            total_protein=round(sum(f.protein for f in foods), 1),
+            total_carbs=round(sum(f.carbs for f in foods), 1),
+            total_fat=round(sum(f.fat for f in foods), 1),
             summary=analysis.get("summary", "分析完成")
         )
     except json.JSONDecodeError as e:
@@ -422,12 +428,50 @@ async def health_evaluation(date_str: str, current_user: dict = Depends(get_curr
         from app.rag.vector_store import rag_store
         with get_db() as db:
             pref = db.query(Preference).filter(Preference.user_id == uid).first()
-            diet_type_user = (pref.data.get("diet_type", "normal") if pref and pref.data else "normal")
-        if diet_type_user in ("fitness", "low_calorie"):
-            hits = rag_store.search(diet_type_user + " 每日营养标准 蛋白质 碳水 推荐摄入", "fitness", k=2)
+            preference_data = pref.data if pref and isinstance(pref.data, dict) else {}
+            nutrition_targets = preference_data.get("nutrition_targets", {})
+        fitness_query = build_fitness_knowledge_query(preference_data)
+        if fitness_query:
+            hits = rag_store.search(fitness_query, "fitness", k=2)
             if hits:
-                rag_text = "\n".join(h["content"] for h in hits)
-                prompt += f"\n\n专业知识参考（用户为{diet_type_user}类型，请参考以下运动营养学标准进行评分）：\n{rag_text}"
+                rag_text = "\n".join(
+                    f"[资料来源：{hit.get('source', '未标注')}] {hit['content']}"
+                    for hit in hits
+                )
+                prompt += (
+                    "\n\n运动营养检索参考（仅作一般信息，来源未核实或与用户情况不匹配时不要当作个人处方）：\n"
+                    f"{rag_text}"
+                )
+        if isinstance(nutrition_targets, dict):
+            goal_labels = {
+                "muscle_gain": "增肌",
+                "fat_loss": "减脂",
+                "maintain": "维持体重",
+                "custom": "自定义目标",
+            }
+            target_lines = []
+            goal_type = nutrition_targets.get("goal_type")
+            if isinstance(goal_type, str) and goal_type in goal_labels:
+                target_lines.append(f"目标方向：{goal_labels[goal_type]}")
+            for key, label, unit, maximum in (
+                ("daily_calories", "每日热量", "kcal", 10000),
+                ("protein_target", "蛋白质", "g", 500),
+                ("carbs_target", "碳水", "g", 1000),
+                ("fat_target", "脂肪", "g", 500),
+                ("fiber_target", "膳食纤维", "g", 200),
+            ):
+                value = nutrition_targets.get(key)
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    continue
+                if value <= 0 or value > maximum or not math.isfinite(value):
+                    continue
+                target_lines.append(f"{label}{value:g}{unit}")
+            if target_lines:
+                prompt += (
+                    "\n\n用户设定的个人营养目标（评估参考）："
+                    + "，".join(target_lines)
+                    + "。请结合这些目标评估今日摄入，不要套用统一热量标准；数据属于估算，不作医疗诊断。"
+                )
     except Exception as e:
         logger.warning(f"[RAG] 健康评估知识注入失败: {e}")
 

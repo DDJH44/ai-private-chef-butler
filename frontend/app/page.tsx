@@ -10,6 +10,7 @@ import {
   saveCurrentSession,
 } from "@/lib/chatStore";
 import { useStore } from "@/hooks/useStore";
+import { AuthGuard } from "@/components/AuthGuard";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
 import { MultiRecipeSave } from "@/components/MultiRecipeSave";
@@ -264,7 +265,9 @@ export default function Page() {
         </div>
       </div>
     }>
-      <Home />
+      <AuthGuard>
+        <Home />
+      </AuthGuard>
     </Suspense>
   );
 }

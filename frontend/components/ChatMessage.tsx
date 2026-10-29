@@ -123,6 +123,9 @@ export const ChatMessage = memo(function ChatMessage({ message, isStreaming }: C
   }
 
   if (!rawContent) {
+    // 只有正在流式输出的最后一条消息才显示打字动画；
+    // 历史里的空白 assistant 消息不渲染（否则会变成永久"加载中"气泡）
+    if (!isStreaming) return null;
     return (
       <div style={{ display: "flex", gap: 12, marginBottom: 16, animation: "fadeIn 0.3s ease both" }}>
         <div className="msg-avatar" style={{ marginTop: 2 }}><ChefHat size={28} strokeWidth={1.5}/></div>

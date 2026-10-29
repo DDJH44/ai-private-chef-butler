@@ -679,7 +679,7 @@ export default function NutritionPage() {
               <div className="empty-state" style={{ padding: "4rem 2rem" }}>
                 <div style={{ fontSize: 48, marginBottom: 16 }}><UtensilsCrossed size={32} strokeWidth={1.5}/></div>
                 <p style={{ fontSize: 16, color: "var(--text-muted)" }}>今日暂无记录</p>
-                <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 8 }}>点击上方拍照或"手动添加"开始记录</p>
+                <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 8 }}>点击上方拍照或“手动添加”开始记录</p>
               </div>
             )}
           </div>

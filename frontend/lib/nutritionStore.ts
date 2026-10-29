@@ -47,11 +47,15 @@ const state: NutritionStoreState = {
 const listeners = new Set<Listener>();
 
 function notify() {
+  // 产出新快照引用：useStore 基于引用比较，可变 state 直接暴露会导致组件不重渲染
+  snapshot = { ...state };
   listeners.forEach((fn) => fn());
 }
 
+let snapshot: NutritionStoreState = { ...state };
+
 export function getNutritionState(): Readonly<NutritionStoreState> {
-  return state;
+  return snapshot;
 }
 
 export function subscribeToNutrition(fn: Listener): () => void {
