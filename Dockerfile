@@ -22,8 +22,10 @@ RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.li
 RUN pip install --no-cache-dir uv -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple/
 
 COPY pyproject.toml ./
-RUN uv pip install --system .
+RUN uv pip install --system ".[oss]"
 
+COPY alembic.ini ./
+COPY migrations/ ./migrations/
 COPY app/ ./app/
 COPY main.py ./
 

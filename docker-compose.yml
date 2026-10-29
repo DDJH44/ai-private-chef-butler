@@ -1,12 +1,10 @@
-version: '3.8'
-
 services:
   db:
     image: mysql:8.0
     container_name: ai-chef-db
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:3306:3306"
+    # ports 不暴露到宿主机，避免与本地 mysqld 的 3306 冲突
+    # app 容器通过 docker 内部网络 db:3306 访问
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -33,9 +31,10 @@ services:
     container_name: ai-chef
     restart: unless-stopped
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     volumes:
       - ./logs:/app/logs
+      - chroma_data:/app/app/data/chroma_db
     env_file:
       - .env
     environment:
@@ -70,4 +69,7 @@ services:
 
 volumes:
   mysql_data:
+  chroma_data:
+    external: true
+    name: aiprivatechefbutler_chroma_data
   logs:

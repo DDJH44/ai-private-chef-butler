@@ -3,6 +3,10 @@
 .env.*
 !.env.example
 
+# Frontend local env (dev-only, must not be baked into image; use .env.production)
+frontend/.env.local
+frontend/.env.*.local
+
 # Python
 __pycache__/
 *.pyc

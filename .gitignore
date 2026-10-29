@@ -57,7 +57,8 @@ test_screenshots/
 outputs/
 release/
 scripts/
-tests/
+tests/*
+!tests/test_fitness_personalization.py
 *.md.bak
 user_info.txt
 verify_output.md

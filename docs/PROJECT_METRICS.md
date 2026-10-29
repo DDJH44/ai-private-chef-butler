@@ -2,6 +2,8 @@
 
 Generated at: 2026-06-11 21:19:53
 
+This is a historical snapshot, not a current inventory. Regenerate code metrics before using the counts as current project status. ChromaDB counts are intentionally not refreshed from local user data during routine code changes.
+
 These metrics are collected from local source files and local ChromaDB metadata. They do not include secrets or user-private records.
 
 ## Summary
