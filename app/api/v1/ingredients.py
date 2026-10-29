@@ -6,7 +6,7 @@ import base64
 import json
 import re
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from app.auth import get_current_user
 from app.common.database import get_db
@@ -19,6 +19,7 @@ router = APIRouter()
 
 
 class IngredientCreate(BaseModel):
+    id: Optional[str] = Field(None, min_length=1, max_length=50, pattern=r"^ing_[A-Za-z0-9_-]+$")
     name: str
     category: str = "其他"
     quantity: float = 1
@@ -51,6 +52,19 @@ def _ingredient_to_dict(r: Ingredient) -> dict:
     }
 
 
+def _allocate_ingredient_id(client_id: Optional[str], session, reserved_ids: Optional[set[str]] = None) -> str:
+    if not client_id:
+        return f"ing_{uuid.uuid4().hex[:12]}"
+
+    if reserved_ids is not None and client_id in reserved_ids:
+        raise HTTPException(status_code=409, detail="食材标识已存在，请刷新库存后重试")
+    if session.query(Ingredient.id).filter(Ingredient.id == client_id).first():
+        raise HTTPException(status_code=409, detail="食材标识已存在，请刷新库存后重试")
+    if reserved_ids is not None:
+        reserved_ids.add(client_id)
+    return client_id
+
+
 @router.get("")
 def list_ingredients(current_user: dict = Depends(get_current_user)):
     uid = current_user["user_id"]
@@ -64,9 +78,9 @@ def list_ingredients(current_user: dict = Depends(get_current_user)):
 @router.post("")
 def create_ingredient(data: IngredientCreate, current_user: dict = Depends(get_current_user)):
     uid = current_user["user_id"]
-    ing_id = f"ing_{uuid.uuid4().hex[:12]}"
     now = int(time.time() * 1000)
     with get_db() as session:
+        ing_id = _allocate_ingredient_id(data.id, session)
         ing = Ingredient(
             id=ing_id, user_id=uid, name=data.name, category=data.category,
             quantity=data.quantity, unit=data.unit,
@@ -122,9 +136,10 @@ def batch_create_ingredients(data: BatchCreateRequest, current_user: dict = Depe
     uid = current_user["user_id"]
     now = int(time.time() * 1000)
     results = []
+    reserved_ids: set[str] = set()
     with get_db() as session:
         for item in data.items:
-            ing_id = f"ing_{uuid.uuid4().hex[:12]}"
+            ing_id = _allocate_ingredient_id(item.id, session, reserved_ids)
             ing = Ingredient(
                 id=ing_id, user_id=uid, name=item.name, category=item.category,
                 quantity=item.quantity, unit=item.unit,
@@ -145,7 +160,7 @@ async def identify_ingredients_from_photo(
     current_user: dict = Depends(get_current_user),
 ):
     """拍照识别生食材，返回结构化食材列表供用户确认后添加到冰箱"""
-    contents = await file.read()
+    contents = await file.read(10 * 1024 * 1024 + 1)
     if len(contents) > 10 * 1024 * 1024:
         raise HTTPException(413, "图片不能超过 10MB")
 
