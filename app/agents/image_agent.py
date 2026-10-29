@@ -171,11 +171,15 @@ class ImageAgentState(TypedDict):
     messages: list[BaseMessage]
     cache_hit: bool
     final_result: str
+    force_regenerate: bool
 
 
 def _cache_check_node(state: ImageAgentState) -> dict:
-    """缓存检查节点：命中缓存直接返回"""
+    """缓存检查节点：命中缓存直接返回；force_regenerate 时跳过缓存强制重新生成"""
     query = state["query"]
+    if state.get("force_regenerate"):
+        logger.info(f"[image_agent] force regenerate, skip cache: {query}")
+        return {"cache_hit": False}
     logger.info(f"[image_agent] check cache: {query}")
     cached = _lookup_cache(query)
     if cached:
@@ -238,13 +242,15 @@ def get_image_agent():
 # ── 对外工具 ──
 
 @tool
-def fetch_dish_image(query: str) -> str:
-    """AI生成指定菜品的成品照片。输入中文菜名如'宫保鸡丁'，返回 AI 生成的高质量菜品图片 URL 列表 JSON。自动缓存已生成的图片避免重复生成。"""
+def fetch_dish_image(query: str, force_regenerate: bool = False) -> str:
+    """AI生成指定菜品的成品照片。输入中文菜名如'宫保鸡丁'，返回 AI 生成的高质量菜品图片 URL 列表 JSON。
+    默认自动复用缓存中已生成的同名菜品图片，避免重复生成；
+    仅当用户明确要求"重新生成/换一张/要不一样的图片"时才将 force_regenerate 设为 true（新图会自动替换旧缓存）。"""
     agent = get_image_agent()
     try:
-        result = agent.invoke({"query": query, "messages": [], "cache_hit": False, "final_result": ""})
+        result = agent.invoke({"query": query, "messages": [], "cache_hit": False, "final_result": "", "force_regenerate": force_regenerate})
         final = result.get("final_result", "[]")
-        logger.info(f"[image_agent] done: {query}")
+        logger.info(f"[image_agent] done: {query} (force={force_regenerate})")
         return final
     except Exception as e:
         logger.error(f"[image_agent] error: {e}")

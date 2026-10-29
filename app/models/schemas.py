@@ -141,6 +141,7 @@ class RecipeOperationResponse(BaseModel):
 # ========================================
 
 class ShoppingListItemCreate(BaseModel):
+    id: Optional[str] = Field(None, max_length=64)
     ingredient_name: str
     required_amount: float = 1
     unit: str = "份"
@@ -176,6 +177,7 @@ class ShoppingListItemResponse(BaseModel):
 class ShoppingListResponse(BaseModel):
     id: str
     created_at: int
+    updated_at: int
     source_recipes: List[str]
     source_recipe_names: List[str]
     items: List[ShoppingListItemResponse]
