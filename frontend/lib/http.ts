@@ -27,9 +27,14 @@ export function apiPort(): string {
   try { return new URL(getBase()).port || "8001"; } catch { return "8001"; }
 }
 
-/** 鉴权过期处理：清 token + 跳登录页 */
+/** 防重入：并发多个 401 只触发一次跳转（跳转后整页重载，标志自动重置） */
+let _authExpiredHandling = false;
+
+/** 鉴权过期处理：提示 + 清 token + 跳登录页 */
 export function handleAuthExpired(): void {
   if (typeof window === "undefined") return;
+  if (_authExpiredHandling) return;
+  _authExpiredHandling = true;
   localStorage.removeItem("auth_token");
   document.cookie = "auth_status=; path=/; max-age=0";
   window.location.href = "/login?reason=expired";

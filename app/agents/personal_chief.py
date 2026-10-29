@@ -5,27 +5,59 @@ from langgraph.graph import StateGraph, MessagesState, START, END
 from langgraph.prebuilt import ToolNode
 import base64
 from app.common.logger import logger
+from app.common.preference_context import (
+    DIET_TYPE_LABELS,
+    GOAL_TYPE_LABELS,
+    build_training_schedule_context,
+)
 import os
 import time
 from app.common.checkpoint_saver import MySQLSaver
 import json
+import math
 import requests
 from dotenv import load_dotenv
 load_dotenv()
 
+MAX_REMOTE_IMAGE_SIZE = 10 * 1024 * 1024
+
+
 def _image_url_to_data_url(url: str) -> str:
-    if url.startswith("data:"):
-        return url
+    if url[:5].lower() == "data:":
+        return url if url[:11].lower() == "data:image/" else ""
+    from app.api.v1.oss import is_safe_image_url
+
+    if not is_safe_image_url(url):
+        logger.warning("拒绝读取不安全的图片 URL")
+        return ""
+
     try:
-        resp = requests.get(url, timeout=15)
-        resp.raise_for_status()
-        ct = resp.headers.get("content-type", "image/jpeg")
-        b64 = base64.b64encode(resp.content).decode()
-        return f"data:{ct};base64,{b64}"
+        with requests.get(url, timeout=15, stream=True, allow_redirects=False) as resp:
+            if resp.status_code != 200:
+                return ""
+            content_type = resp.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+            if not content_type.startswith("image/"):
+                return ""
+            content_length = resp.headers.get("content-length")
+            if content_length and int(content_length) > MAX_REMOTE_IMAGE_SIZE:
+                return ""
+
+            image_data = bytearray()
+            for chunk in resp.iter_content(64 * 1024):
+                if not chunk:
+                    continue
+                image_data.extend(chunk)
+                if len(image_data) > MAX_REMOTE_IMAGE_SIZE:
+                    return ""
+
+        if not image_data:
+            return ""
+        b64 = base64.b64encode(image_data).decode()
+        return f"data:{content_type};base64,{b64}"
     except Exception as e:
-        logger.warning(f"图片转Base64失败: {e}")
-        return url
-from app.agents.image_agent import fetch_dish_image
+        logger.warning(f"图片转Base64失败 ({type(e).__name__})")
+        return ""
+from app.agents.image_agent import fetch_dish_image, _DISH_NAME_MAP
 from app.rag.vector_store import rag_store
 
 
@@ -87,13 +119,13 @@ def bilibili_search(query: str):
 
 @tool
 def rag_search(query: str, knowledge_type: str = "auto"):
-    """搜索专业知识库获取准确的营养数据、菜谱知识或运动营养学建议。
+    """搜索内置参考资料，返回营养、菜谱或运动营养相关的匹配片段。
 
     参数：
     - query: 搜索查询，如"鸡胸肉的营养成分"或"增肌期碳水摄入建议"
     - knowledge_type: 知识库类型，可选 "nutrition"（营养数据）、"recipe"（菜谱知识）、"fitness"（运动营养学）、"auto"（自动判断）
 
-    返回匹配的专业知识片段，包含权威营养数据和菜谱信息。
+    返回内容可能来自内置样例或项目数据文件；匹配结果不等同于权威结论。
     """
     nutrition_keywords = ["热量", "营养", "蛋白质", "碳水", "脂肪", "卡路里", "成分",
                           "每100克", "kcal", "多少克", "含量"]
@@ -182,11 +214,15 @@ def agent_node(state: AgentState):
     messages = state["messages"]
     if system_prompt:
         messages = [{"role": "system", "content": system_prompt}] + messages
-    if _has_image(messages):
-        response = vision_model_with_tools.invoke(messages)
-    else:
-        response = model_with_tools.invoke(messages)
-    return {"messages": [response]}
+    bound = vision_model_with_tools if _has_image(messages) else model_with_tools
+    # 流式消费：触发 on_llm_new_token 回调，LangGraph stream_mode="messages"
+    # 才能把 token 实时转发给前端；invoke 模式下要等完整响应生成完才有输出
+    final = None
+    for chunk in bound.stream(messages):
+        final = chunk if final is None else final + chunk
+    if final is None:
+        final = bound.invoke(messages)
+    return {"messages": [final]}
 
 def should_continue(state: AgentState):
     messages = state["messages"]
@@ -216,12 +252,38 @@ def _build_preference_context(preference: dict) -> str:
         parts.append(f"🚫 过敏源（严禁使用，违反将危害健康）：{', '.join(allergies)}")
     
     diet_type = preference.get("diet_type", "")
-    diet_map = {
-        "normal": "普通饮食", "vegan": "纯素食", "vegetarian": "蛋奶素",
-        "keto": "生酮饮食", "fitness": "健身增肌", "low_calorie": "低卡减脂",
-    }
     if diet_type and diet_type != "normal":
-        parts.append(f"饮食类型：{diet_map.get(diet_type, diet_type)}")
+        parts.append(f"饮食类型：{DIET_TYPE_LABELS.get(diet_type, diet_type)}")
+
+    training_context = build_training_schedule_context(preference)
+    if training_context:
+        parts.append(training_context)
+
+    targets = preference.get("nutrition_targets")
+    if isinstance(targets, dict):
+        target_parts = []
+        goal_type = targets.get("goal_type")
+        if isinstance(goal_type, str) and goal_type in GOAL_TYPE_LABELS:
+            target_parts.append(f"目标：{GOAL_TYPE_LABELS[goal_type]}")
+
+        target_fields = (
+            ("daily_calories", "每日热量", "kcal", 10000),
+            ("protein_target", "蛋白质", "g", 500),
+            ("carbs_target", "碳水", "g", 1000),
+            ("fat_target", "脂肪", "g", 500),
+            ("fiber_target", "膳食纤维", "g", 200),
+        )
+        for key, label, unit, maximum in target_fields:
+            value = targets.get(key)
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                continue
+            if value <= 0 or value > maximum or not math.isfinite(value):
+                continue
+            target_parts.append(f"{label}{value:g}{unit}")
+
+        if target_parts:
+            parts.append("用户设定的营养目标（规划参考）：" + "，".join(target_parts))
+            parts.append("营养数值按常见份量估算；建议应围绕用户目标，不作医疗诊断或治疗建议")
     
     taste = preference.get("taste", {})
     if taste:
@@ -259,7 +321,7 @@ def _build_preference_context(preference: dict) -> str:
             parts.append("注意：有儿童或老人，请推荐软烂、少刺、低盐的菜品")
         has_baby = any(m.get("role") == "baby" for m in members)
         if has_baby:
-            parts.append("注意：有婴儿，请推荐辅食类")
+            parts.append("注意：家庭成员中有婴儿；如需给具体辅食建议，先确认月龄和当前需求，不要仅凭此标签直接推荐食材")
     
     if not parts:
         return ""
@@ -288,49 +350,65 @@ def search_recipes(prompt: str, image: str, thread_id: str, preference: dict = N
     potential_dishes = _re.findall(r'[一-鿿]{1,6}(?:炒|烧|炖|蒸|煮|炸|煎|焖|煲|烤|拌|烩|煨|熘|爆|焗|汤|羹|面|饭|粥|饼|饺|包|卷|丝|片|丁|块|丸|球)[一-鿿]{0,4}', prompt)
     simple_dishes = _re.findall(r'(?:做[个份道]?|来[个份道]?|要[个份道]?|想吃)([一-鿿]{2,10})', prompt)
     all_hints = list(set(potential_dishes + [m for m in simple_dishes if m]))
+    # 词库菜名优先：命中已知菜名直接采用，保证图片缓存 key 干净统一
+    # （否则"我想学习番茄炒蛋"这类整句会变成脏 key，同一道菜换个问法就重复生成）
+    _known = sorted(_DISH_NAME_MAP.keys(), key=len, reverse=True)
+    _canonical = next((n for n in _known if n in prompt), None)
+    if _canonical:
+        all_hints = [_canonical]
     if all_hints:
         dish = all_hints[0].strip()
+        # 剥离菜名杂质：前导助词与"图片"类后缀（避免"的可乐鸡翅图片"式脏缓存 key）
+        dish = _re.sub(r'^[的了]+', '', dish.strip())
+        dish = _re.sub(r'(图片|照片|配图|图像)$', '', dish)
         for suffix in ['怎么做', '怎么烧', '怎么炖', '怎么煮', '如何做', '怎样做', '的做法', '的视频', '教程', '的做法教程']:
             if dish.endswith(suffix):
                 dish = dish[:-len(suffix)]
                 break
         if len(dish) >= 2:
-            from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
-            def _run_image_gen(d):
-                try: return json.loads(fetch_dish_image.invoke(d))
+            # 用户明确要求重新生成/换图时，预生成也走强制重新生成（跳过缓存），新图由 LLM 工具兜底
+            force_regen = bool(_re.search(r'重新生成|重新画|重新配图|换一张|换张图|再来一张|不一样的图|不同的图|新的图片|另出一张', prompt))
+            from concurrent.futures import ThreadPoolExecutor
+            def _run_image_gen(d, force=False):
+                try: return json.loads(fetch_dish_image.invoke({"query": d, "force_regenerate": force}))
                 except Exception: return None
             def _run_video_search(d):
                 try: return json.loads(bilibili_search.invoke({"query": d}))
                 except Exception: return None
             executor = ThreadPoolExecutor(max_workers=2)
-            img_future = executor.submit(_run_image_gen, dish)
+            img_future = executor.submit(_run_image_gen, dish, force_regen)
             video_future = executor.submit(_run_video_search, dish)
+            # 并行等待：两个 future 共享一次 3s 总预算（原先串行 5s+5s 最多阻塞 10s）
+            from concurrent.futures import wait as _fwait
+            _fwait([img_future, video_future], timeout=3)
             try:
-                result = img_future.result(timeout=5)
-                if result and isinstance(result, list):
-                    img_url = result[0].get("url", "")
-                    if img_url and (img_url.startswith("/api/") or img_url.startswith("http://") or img_url.startswith("https://")):
-                        pregen_context = f"\n【预生成图片】{dish}: {img_url}\n请在菜谱中使用此图片URL。\n"
-                        logger.info(f"[pregen] 图片成功: {img_url[:60]}")
-            except FutureTimeoutError:
-                logger.info(f"[pregen] 图片超时，交给 LLM 工具调用兜底")
+                if img_future.done():
+                    result = img_future.result()
+                    if result and isinstance(result, list):
+                        img_url = result[0].get("url", "")
+                        if img_url and (img_url.startswith("/api/") or img_url.startswith("http://") or img_url.startswith("https://")):
+                            pregen_context = f"\n【预生成图片】{dish}: {img_url}\n请在菜谱中使用此图片URL。\n"
+                            logger.info(f"[pregen] 图片成功: {img_url[:60]}")
+                else:
+                    logger.info(f"[pregen] 图片超时，交给 LLM 工具调用兜底")
             except Exception as e:
                 logger.warning(f"[pregen] 图片异常: {e}")
             try:
-                video_result = video_future.result(timeout=5)
-                if video_result and isinstance(video_result, list) and video_result[0].get("url"):
-                    has_exact = any(dish in str(v.get("title", "")) for v in video_result)
-                    video_lines = "\n".join(
-                        f'- [{v.get("title", "教学视频")}]({v.get("url", "")})'
-                        for v in video_result[:3]
-                    )
-                    if has_exact:
-                        pregen_context += f"\n【预搜索视频】已找到「{dish}」的教学视频，直接列出（不要加说明文字）：\n{video_lines}\n"
-                    else:
-                        pregen_context += f"\n【预搜索视频】未找到「{dish}」的精准视频，以下是相似菜品视频（先说明未找到，再列出）：\n{video_lines}\n"
-                    logger.info(f"[pregen] 视频成功: {len(video_result)} 个")
-            except FutureTimeoutError:
-                logger.info(f"[pregen] 视频超时，交给 LLM 工具调用兜底")
+                if video_future.done():
+                    video_result = video_future.result()
+                    if video_result and isinstance(video_result, list) and video_result[0].get("url"):
+                        has_exact = any(dish in str(v.get("title", "")) for v in video_result)
+                        video_lines = "\n".join(
+                            f'- [{v.get("title", "教学视频")}]({v.get("url", "")})'
+                            for v in video_result[:3]
+                        )
+                        if has_exact:
+                            pregen_context += f"\n【预搜索视频】已找到「{dish}」的教学视频，直接列出（不要加说明文字）：\n{video_lines}\n"
+                        else:
+                            pregen_context += f"\n【预搜索视频】未找到「{dish}」的精准视频，以下是相似菜品视频（先说明未找到，再列出）：\n{video_lines}\n"
+                        logger.info(f"[pregen] 视频成功: {len(video_result)} 个")
+                else:
+                    logger.info(f"[pregen] 视频超时，交给 LLM 工具调用兜底")
             except Exception as e:
                 logger.warning(f"[pregen] 视频异常: {e}")
             executor.shutdown(wait=False)
@@ -353,10 +431,14 @@ def search_recipes(prompt: str, image: str, thread_id: str, preference: dict = N
             messages.append(HumanMessage(content=prompt))
         else:
             data_url = _image_url_to_data_url(image)
-            messages.append(HumanMessage(content=[
-                {"type": "image_url", "image_url": {"url": data_url}},
-                {"type": "text", "text": prompt}
-            ]))
+            if data_url:
+                messages.append(HumanMessage(content=[
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                    {"type": "text", "text": prompt}
+                ]))
+            else:
+                messages.append(SystemMessage(content="用户图片未能安全读取；请基于文字回答，并提示用户重新上传图片。"))
+                messages.append(HumanMessage(content=prompt))
 
         filter = _ThinkFilter()
 
@@ -431,7 +513,9 @@ def get_messages(thread_id: str) -> list[dict[str, str]]:
     result = []
     for msg in messages:
         text = _extract_text(msg.content)
-        if not text:
+        # 过滤空白消息：工具调用跳的 AIMessage 常只含 '\n' 等空白（stream 聚合产物），
+        # 不过滤会被前端渲染成永久的"加载中"点动画
+        if not text or not text.strip():
             continue
 
         if isinstance(msg, HumanMessage):

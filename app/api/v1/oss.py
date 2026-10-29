@@ -47,6 +47,7 @@ TRUSTED_DOMAINS = {
     "ark-cn-beijing.volces.com",
     "volces.com",
     "volcengine.com",
+    "agnes-ai.space",
 }
 BLOCKED_NETWORKS = [
     ipaddress.ip_network("127.0.0.0/8"),
